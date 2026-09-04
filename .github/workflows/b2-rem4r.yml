@@ -2,6 +2,7 @@
 # Drives the B2 acceptance fixture re-run on a disposable Ubuntu runner:
 # fixture up -> preflight gates -> unit proof -> run -> assertions -> teardown.
 # Dispatched manually (workflow_dispatch) by the supervisor; no schedule.
+# v2: re-parse bump (workflow_dispatch trigger index).
 
 name: b2-rem4r
 

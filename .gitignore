@@ -17,3 +17,9 @@ wordlists/forge/custom-subdomains.txt
 wordlists/forge/counts.log
 resolvers/forge/*
 !resolvers/forge/.gitkeep
+
+# CI/REM4-R runtime artifacts (regenerated per run; never commit)
+ci/rem4r_verdict.txt
+ci/rem4r_run_console.log
+ci/rem4r_assertions_console.log
+ci/rem4r_run_exit.txt

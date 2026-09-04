@@ -32,3 +32,8 @@ class Params:
         if image and tag:
             return f"{image}:{tag}"
         return str(self.require("dashboard_image"))
+
+    def expand_user_path(self, name: str) -> Path:
+        raw = str(self.require(name))
+        return Path(raw).expanduser()
+

@@ -8,6 +8,7 @@ services:
       - "${DASHBOARD_BIND_HOST:-127.0.0.1}:${DASHBOARD_BIND_PORT:-8080}:8080"
     volumes:
       - ${RECON_VOLUME:-./recon}:/recon
+      - ${SECLISTS_HOST_PATH:-${HOME}/seclists}:${SECLISTS_CONTAINER_PATH:-/usr/share/seclists}:ro
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       DASHBOARD_TOKEN: ${DASHBOARD_TOKEN:-}

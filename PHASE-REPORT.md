@@ -96,9 +96,127 @@ exit=0
 
 `./recon.sh status` → all modules `pending`. Layout created: `00_scope`, `00_assets`, `10_subdomains/{ffuf,passive/sources}`, `15_vhosts/ffuf`, `20_dns/dnsx`, `30_ports/{naabu-light,naabu-full}`, `40_services`, `50_web`, `60_screenshots`, `90_report`, `history`, `logs/raw`, `sources`.
 
-### Compose
+### Compose / operator environment (completed on WSL2 Linux FS)
 
-`docker compose config` was **not** executed: Docker is not installed on this Windows PATH or the default WSL distro. File `docker-compose.yml` is present; interpolation defaults were asserted equal to `tools.yaml` settings. Re-run `docker compose config` after the companion §0.5 sanity check (`wsl --version` → `docker run --rm hello-world` → `docker compose version`).
+Working copy (only): `/home/moirax/recon-pipeline`  
+Windows-accessible path: `\\wsl.localhost\Ubuntu\home\moirax\recon-pipeline`  
+The previous NTFS tree is backup only and is not the working copy.
+
+Runtime choice: native Docker Engine inside the WSL2 Ubuntu distro (not Docker Desktop). Build code does not depend on which supported runtime is used (master §2.7).
+
+Named parameter: `seclists_host_path` default `~/seclists`. Container mount: `${seclists_host_path}:/usr/share/seclists:ro` (compose `SECLISTS_HOST_PATH` + `SECLISTS_CONTAINER_PATH`). Consumer: FFUF-0 forge (B2). `~/seclists` files: 6253 (matched source).
+
+`./recon.sh status`:
+
+```
+example.com: 2026-09-03T23:40:49Z [ffuf=pending, dns-resolve=pending, port-check=pending, passive-recon=pending, merge=pending, port-sweep=pending]
+```
+
+`docker version`:
+
+```
+Client: Docker Engine - Community
+ Version:           29.8.0
+ API version:       1.56
+ Go version:        go1.26.8
+ Git commit:        88096ef
+ Built:             Thu Sep  3 21:50:20 2026
+ OS/Arch:           linux/amd64
+ Context:           default
+
+Server: Docker Engine - Community
+ Engine:
+  Version:          29.8.0
+  API version:      1.56 (minimum version 1.40)
+  Go version:       go1.26.8
+  Git commit:       3ce5872
+  Built:            Thu Sep  3 21:50:20 2026
+  OS/Arch:          linux/amd64
+  Experimental:     false
+ containerd:
+  Version:          v2.3.4
+  GitCommit:        db8809540e1a7a9da5d518876894933ff55692ab
+ runc:
+  Version:          1.5.1
+  GitCommit:        v1.5.1-0-g8f2685a4
+ docker-init:
+  Version:          0.19.0
+  GitCommit:        de40ad0
+```
+
+`docker compose version`:
+
+```
+Docker Compose version v5.5.1
+```
+
+`docker compose config` exit: `0`  
+(Default config omits the `dashboard` profile. `docker compose --profile dashboard config` interpolates the seclists bind.)
+
+```
+name: recon-pipeline
+services:
+  dashboard:
+    profiles:
+      - dashboard
+    command:
+      - sleep
+      - infinity
+    environment:
+      DASHBOARD_TOKEN: ""
+    image: busybox:1.36.1
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        host_ip: 127.0.0.1
+        target: 8080
+        published: "8080"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: /home/moirax/recon-pipeline/recon
+        target: /recon
+        bind: {}
+      - type: bind
+        source: /home/moirax/seclists
+        target: /usr/share/seclists
+        read_only: true
+        bind: {}
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        bind: {}
+networks:
+  default:
+    name: recon-pipeline_default
+```
+
+`docker run --rm hello-world` exit: `0`
+
+```
+Hello from Docker!
+This message shows that your installation appears to be working correctly.
+
+To generate this message, Docker took the following steps:
+ 1. The Docker client contacted the Docker daemon.
+ 2. The Docker daemon pulled the "hello-world" image from the Docker Hub.
+    (amd64)
+ 3. The Docker daemon created a new container from that image which runs the
+    executable that produces the output you are currently reading.
+ 4. The Docker daemon streamed that output to the Docker client, which sent it
+    to your terminal.
+
+To try something more ambitious, you can run an Ubuntu container with:
+ $ docker run -it ubuntu bash
+
+Share images, automate workflows, and more with a free Docker ID:
+ https://hub.docker.com/
+
+For more examples and ideas, visit:
+ https://docs.docker.com/get-started/
+```
 
 ## Out of scope for B0 (intentional)
 

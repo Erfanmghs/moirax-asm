@@ -11,6 +11,8 @@ settings:
   dashboard_bind_port: 8080
   dashboard_image: busybox:1.36.1
   recon_volume: ./recon
+  seclists_host_path: ~/seclists
+  seclists_container_path: /usr/share/seclists
   digest_threshold: 10
   scheduler_interval_minutes: 240
   scheduler_interval_min_minutes: 10

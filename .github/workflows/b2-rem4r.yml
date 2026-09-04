@@ -63,9 +63,8 @@ jobs:
       - name: Assertions (REM4-R acceptance table)
         id: assertions
         run: |
-          set +e
           PYTHONPATH=. python3 ci/rem4r_assertions.py 2>&1 | tee ci/rem4r_assertions_console.log
-          echo "assertions exit=${PIPESTATUS[0]}"
+          exit "${PIPESTATUS[0]}"
 
       - name: Teardown (always)
         if: always()

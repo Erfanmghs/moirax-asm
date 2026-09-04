@@ -221,3 +221,50 @@ For more examples and ideas, visit:
 ## Out of scope for B0 (intentional)
 
 Adapter layer, pipeline engine, MERGE, modules, dashboard app, reporting, supervisor agent — later phases.
+
+## Environment — wordlist map (pre-B1)
+
+SecLists audited at `~/seclists` (container path `seclists_root` = `/usr/share/seclists`). Registry: `wordlists.yaml`. Named parameter source (master §5.6): `wordlists_registry` in `tools.yaml`; modules resolve **keys only** via `pipeline.wordlists.WordlistRegistry`. Content-discovery lists were not registered (companion §7 NARROW). Rejected as junk/wrong-shape: `dns-Jhaddix.txt` (`.`, `@`, `*`, binary), `tlds.txt` (leading-dot TLDs), `shubs-stackoverflow.txt` (URLs/CSV junk), `subdomains-top1million-full.7z` (archive), locale lists, `Discovery/Web-Content/**`.
+
+Hygiene: `git check-ignore scope.yaml` → `.gitignore:5:scope.yaml`; `git ls-files` does not track `scope.yaml`. No gitignore change required.
+
+| Task | Registry key | File (relative to `/usr/share/seclists`) | Entries (`wc -l`) | Role | Rationale |
+|---|---|---|---:|---|---|
+| DNSR-1 | `dns_fast_top5000` | Discovery/DNS/subdomains-top1million-5000.txt | 5000 | fast default | Cloudflare Radar top-5000 labels; compact DNS brute default. |
+| DNSR-1 | `dns_fast_fierce` | Discovery/DNS/fierce-hostlist.txt | 2280 | fast | Classic Fierce hostname list for the short default set. |
+| DNSR-1 | `dns_fast_services` | Discovery/DNS/services-names.txt | 1419 | fast | Service/product host labels, hostname charset only. |
+| DNSR-1 | `dns_fast_deepmagic500` | Discovery/DNS/deepmagic.com-prefixes-top500.txt | 500 | fast | Short deepmagic prefixes; extra fast-default coverage. |
+| DNSR-1 | `dns_exp_top20000` | Discovery/DNS/subdomains-top1million-20000.txt | 20000 | forge expansion | Radar 20k; not the fast default. |
+| DNSR-1 | `dns_exp_top110000` | Discovery/DNS/subdomains-top1million-110000.txt | 110000 | forge expansion | Radar 110k hostname labels. |
+| DNSR-1 | `dns_exp_bitquark` | Discovery/DNS/bitquark-subdomains-top100000.txt | 100000 | forge expansion | Bitquark ranked labels; too large for fast brute. |
+| DNSR-1 | `dns_exp_namelist` | Discovery/DNS/namelist.txt | 151265 | forge expansion | Large DNS namelist of hostname labels. |
+| DNSR-1 | `dns_exp_shubs` | Discovery/DNS/shubs-subdomains.txt | 484699 | forge expansion | Shub crawled subdomain labels. |
+| DNSR-1 | `dns_exp_combined` | Discovery/DNS/combined_subdomains.txt | 653920 | forge expansion | Union of bitquark + shubs + Radar 110k. |
+| DNSR-1 | `dns_exp_sortedcombined` | Discovery/DNS/sortedcombined-knock-dnsrecon-fierce-reconng.txt | 102582 | forge expansion | Merged knock/dnsrecon/fierce/recon-ng labels. |
+| DNSR-1 | `dns_exp_deepmagic50k` | Discovery/DNS/deepmagic.com-prefixes-top50000.txt | 49928 | forge expansion | Deeper prefixes; not for HTTP vhost. |
+| DNSR-1 | `dns_exp_n0kovo` | Discovery/DNS/n0kovo_subdomains.txt | 3000001 | forge expansion | n0kovo 3M labels; expansion only. |
+| DNSR-1 | `dns_exp_fuzzsubs1` | Discovery/DNS/FUZZSUBS_CYFARE_1.txt | 5605156 | forge expansion | CYFARE list 1; multi-million expansion. |
+| DNSR-1 | `dns_exp_fuzzsubs2` | Discovery/DNS/FUZZSUBS_CYFARE_2.txt | 4850604 | forge expansion | CYFARE list 2; complementary expansion. |
+| DNSR-1 | `dns_exp_trickest` | Discovery/DNS/bug-bounty-program-subdomains-trickest-inventory.txt | 1613291 | forge expansion | Trickest program host labels. |
+| FFUF-0 | `dns_exp_combined` | Discovery/DNS/combined_subdomains.txt | 653920 | forge seed (default) | Primary upstream union for WORDLIST FORGE. |
+| FFUF-0 | `dns_exp_bitquark` | Discovery/DNS/bitquark-subdomains-top100000.txt | 100000 | forge seed | Upstream subdomain list. |
+| FFUF-0 | `dns_exp_shubs` | Discovery/DNS/shubs-subdomains.txt | 484699 | forge seed | Upstream subdomain list. |
+| FFUF-0 | `dns_exp_top110000` | Discovery/DNS/subdomains-top1million-110000.txt | 110000 | forge seed | Upstream subdomain list. |
+| FFUF-0 | `dns_exp_top20000` | Discovery/DNS/subdomains-top1million-20000.txt | 20000 | forge seed | Upstream subdomain list. |
+| FFUF-0 | `dns_fast_top5000` | Discovery/DNS/subdomains-top1million-5000.txt | 5000 | forge seed | Upstream subdomain list. |
+| FFUF-0 | `dns_exp_namelist` | Discovery/DNS/namelist.txt | 151265 | forge seed | Upstream subdomain list. |
+| FFUF-0 | `dns_fast_fierce` | Discovery/DNS/fierce-hostlist.txt | 2280 | forge seed | Upstream subdomain list. |
+| FFUF-0 | `dns_fast_services` | Discovery/DNS/services-names.txt | 1419 | forge seed | Upstream subdomain list. |
+| FFUF-0 | `dns_fast_deepmagic500` | Discovery/DNS/deepmagic.com-prefixes-top500.txt | 500 | forge seed | Upstream subdomain list. |
+| FFUF-0 | `dns_exp_deepmagic50k` | Discovery/DNS/deepmagic.com-prefixes-top50000.txt | 49928 | forge seed | Upstream subdomain list. |
+| FFUF-0 | `dns_exp_sortedcombined` | Discovery/DNS/sortedcombined-knock-dnsrecon-fierce-reconng.txt | 102582 | forge seed | Upstream subdomain list. |
+| FFUF-0 | `dns_exp_n0kovo` | Discovery/DNS/n0kovo_subdomains.txt | 3000001 | forge seed | Deep expansion source. |
+| FFUF-0 | `dns_exp_fuzzsubs1` | Discovery/DNS/FUZZSUBS_CYFARE_1.txt | 5605156 | forge seed | Deep expansion source. |
+| FFUF-0 | `dns_exp_fuzzsubs2` | Discovery/DNS/FUZZSUBS_CYFARE_2.txt | 4850604 | forge seed | Deep expansion source. |
+| FFUF-0 | `dns_exp_trickest` | Discovery/DNS/bug-bounty-program-subdomains-trickest-inventory.txt | 1613291 | forge seed | Program-inventory host labels. |
+| FFUF-2 | `vhost_top5000` | Discovery/DNS/subdomains-top1million-5000.txt | 5000 | vhost default | Compact hostname list for Host-header fuzz. |
+| FFUF-2 | `vhost_fierce` | Discovery/DNS/fierce-hostlist.txt | 2280 | vhost | Short hostname list for vhost probing. |
+| FFUF-2 | `vhost_services` | Discovery/DNS/services-names.txt | 1419 | vhost | Service names as virtual-host labels. |
+| FFUF-2 | `vhost_env` | Fuzzing/environment-identifiers.txt | 54 | vhost | Env identifiers (dev/staging/uat); not content-discovery. |
+
+Named settings: `wordlists_registry`, `seclists_root`, `wordlist_forge_output`, `dnsr_1_wordlist_key`, `dnsr_1_fast_keys`, `dnsr_1_expansion_keys`, `ffuf_0_source_keys`, `ffuf_2_wordlist_key`, `ffuf_2_source_keys`. Defaults: DNSR-1 → `dns_fast_top5000`; FFUF-0 → `dns_exp_combined`; FFUF-2 → `vhost_top5000`.

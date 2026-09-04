@@ -1,0 +1,155 @@
+schema_version: 1
+# Curated SecLists registry for WIDE-phase hostname tasks only (master §5.6 + §8).
+# Paths are relative to seclists_root (/usr/share/seclists in containers).
+# Module code MUST look up keys here; raw filesystem paths are forbidden.
+# Content-discovery lists (directories/files/parameters/extensions) are excluded (companion §7 NARROW).
+
+lists:
+  dns_fast_top5000:
+    path: Discovery/DNS/subdomains-top1million-5000.txt
+    entries: 5000
+    shape: hostname
+    rationale: "Cloudflare Radar top-5000 subdomain labels; compact high-signal DNS brute default."
+  dns_fast_fierce:
+    path: Discovery/DNS/fierce-hostlist.txt
+    entries: 2280
+    shape: hostname
+    rationale: "Classic Fierce DNS host labels; short enough for the fast DNSR-1 default set."
+  dns_fast_services:
+    path: Discovery/DNS/services-names.txt
+    entries: 1419
+    shape: hostname
+    rationale: "Service and product host labels (api, gitlab, grafana) with hostname charset only."
+  dns_fast_deepmagic500:
+    path: Discovery/DNS/deepmagic.com-prefixes-top500.txt
+    entries: 500
+    shape: hostname
+    rationale: "Short deepmagic prefix list; extra fast-default coverage without path or URL junk."
+  dns_exp_top20000:
+    path: Discovery/DNS/subdomains-top1million-20000.txt
+    entries: 20000
+    shape: hostname
+    rationale: "Same Radar corpus at 20k; forge expansion only, not the DNSR-1 fast default."
+  dns_exp_top110000:
+    path: Discovery/DNS/subdomains-top1million-110000.txt
+    entries: 110000
+    shape: hostname
+    rationale: "Radar 110k hostname labels; forge expansion source for deeper DNS candidate volume."
+  dns_exp_bitquark:
+    path: Discovery/DNS/bitquark-subdomains-top100000.txt
+    entries: 100000
+    shape: hostname
+    rationale: "Bitquark ranked subdomain labels; hostname-shaped forge seed, too large for fast brute."
+  dns_exp_namelist:
+    path: Discovery/DNS/namelist.txt
+    entries: 151265
+    shape: hostname
+    rationale: "Large DNS namelist of hostname labels; forge expansion (not a fast default)."
+  dns_exp_shubs:
+    path: Discovery/DNS/shubs-subdomains.txt
+    entries: 484699
+    shape: hostname
+    rationale: "Shub's crawled subdomain labels; hostname-shaped forge seed."
+  dns_exp_combined:
+    path: Discovery/DNS/combined_subdomains.txt
+    entries: 653920
+    shape: hostname
+    rationale: "Documented union of bitquark + shubs + Radar 110k; primary FFUF-0 upstream seed."
+  dns_exp_sortedcombined:
+    path: Discovery/DNS/sortedcombined-knock-dnsrecon-fierce-reconng.txt
+    entries: 102582
+    shape: hostname
+    rationale: "Merged knock/dnsrecon/fierce/recon-ng host labels; forge expansion only."
+  dns_exp_deepmagic50k:
+    path: Discovery/DNS/deepmagic.com-prefixes-top50000.txt
+    entries: 49928
+    shape: hostname
+    rationale: "Deeper deepmagic prefixes; forge expansion, not HTTP vhost (ISP-style labels)."
+  dns_exp_n0kovo:
+    path: Discovery/DNS/n0kovo_subdomains.txt
+    entries: 3000001
+    shape: hostname
+    rationale: "n0kovo 3M hostname labels; forge expansion source only."
+  dns_exp_fuzzsubs1:
+    path: Discovery/DNS/FUZZSUBS_CYFARE_1.txt
+    entries: 5605156
+    shape: hostname
+    rationale: "CYFARE fuzz-sub list 1; multi-million hostname labels for forge expansion only."
+  dns_exp_fuzzsubs2:
+    path: Discovery/DNS/FUZZSUBS_CYFARE_2.txt
+    entries: 4850604
+    shape: hostname
+    rationale: "CYFARE fuzz-sub list 2; complementary multi-million forge expansion source."
+  dns_exp_trickest:
+    path: Discovery/DNS/bug-bounty-program-subdomains-trickest-inventory.txt
+    entries: 1613291
+    shape: hostname
+    rationale: "Trickest bug-bounty program host labels; hostname-shaped forge expansion."
+  vhost_top5000:
+    path: Discovery/DNS/subdomains-top1million-5000.txt
+    entries: 5000
+    shape: hostname
+    rationale: "Same compact Radar labels; sized for per-host FFUF-2 Host-header vhost probing."
+  vhost_fierce:
+    path: Discovery/DNS/fierce-hostlist.txt
+    entries: 2280
+    shape: hostname
+    rationale: "Short hostname list suitable as an alternate FFUF-2 vhost wordlist."
+  vhost_services:
+    path: Discovery/DNS/services-names.txt
+    entries: 1419
+    shape: hostname
+    rationale: "Service names as virtual-host labels (api, grafana) without paths or URLs."
+  vhost_env:
+    path: Fuzzing/environment-identifiers.txt
+    entries: 54
+    shape: hostname
+    rationale: "Env identifiers (dev, staging, uat); classic vhost Host values, not content-discovery."
+
+tasks:
+  DNSR-1:
+    default_key: dns_fast_top5000
+    fast:
+      - dns_fast_top5000
+      - dns_fast_fierce
+      - dns_fast_services
+      - dns_fast_deepmagic500
+    expansion:
+      - dns_exp_top20000
+      - dns_exp_top110000
+      - dns_exp_bitquark
+      - dns_exp_namelist
+      - dns_exp_shubs
+      - dns_exp_combined
+      - dns_exp_sortedcombined
+      - dns_exp_deepmagic50k
+      - dns_exp_n0kovo
+      - dns_exp_fuzzsubs1
+      - dns_exp_fuzzsubs2
+      - dns_exp_trickest
+  FFUF-0:
+    default_key: dns_exp_combined
+    sources:
+      - dns_exp_combined
+      - dns_exp_bitquark
+      - dns_exp_shubs
+      - dns_exp_top110000
+      - dns_exp_top20000
+      - dns_fast_top5000
+      - dns_exp_namelist
+      - dns_fast_fierce
+      - dns_fast_services
+      - dns_fast_deepmagic500
+      - dns_exp_deepmagic50k
+      - dns_exp_sortedcombined
+      - dns_exp_n0kovo
+      - dns_exp_fuzzsubs1
+      - dns_exp_fuzzsubs2
+      - dns_exp_trickest
+  FFUF-2:
+    default_key: vhost_top5000
+    sources:
+      - vhost_top5000
+      - vhost_fierce
+      - vhost_services
+      - vhost_env

@@ -121,5 +121,50 @@ settings:
   httpx_threads: 200
   passive_httpx_probe: true
   github_search_req_per_min: 30
+  wordlists_registry: wordlists.yaml
+  seclists_root: /usr/share/seclists
+  wordlist_forge_output: wordlists/forge/custom-subdomains.txt
+  dnsr_1_wordlist_key: dns_fast_top5000
+  dnsr_1_fast_keys:
+    - dns_fast_top5000
+    - dns_fast_fierce
+    - dns_fast_services
+    - dns_fast_deepmagic500
+  dnsr_1_expansion_keys:
+    - dns_exp_top20000
+    - dns_exp_top110000
+    - dns_exp_bitquark
+    - dns_exp_namelist
+    - dns_exp_shubs
+    - dns_exp_combined
+    - dns_exp_sortedcombined
+    - dns_exp_deepmagic50k
+    - dns_exp_n0kovo
+    - dns_exp_fuzzsubs1
+    - dns_exp_fuzzsubs2
+    - dns_exp_trickest
+  ffuf_0_source_keys:
+    - dns_exp_combined
+    - dns_exp_bitquark
+    - dns_exp_shubs
+    - dns_exp_top110000
+    - dns_exp_top20000
+    - dns_fast_top5000
+    - dns_exp_namelist
+    - dns_fast_fierce
+    - dns_fast_services
+    - dns_fast_deepmagic500
+    - dns_exp_deepmagic50k
+    - dns_exp_sortedcombined
+    - dns_exp_n0kovo
+    - dns_exp_fuzzsubs1
+    - dns_exp_fuzzsubs2
+    - dns_exp_trickest
+  ffuf_2_wordlist_key: vhost_top5000
+  ffuf_2_source_keys:
+    - vhost_top5000
+    - vhost_fierce
+    - vhost_services
+    - vhost_env
 
 tools: {}

@@ -1,0 +1,97 @@
+# TEST FIXTURE (B2 acceptance smoke) — REM4-R executor workflow.
+# Drives the B2 acceptance fixture re-run on a disposable Ubuntu runner:
+# fixture up -> preflight gates -> unit proof -> run -> assertions -> teardown.
+# Dispatched manually (workflow_dispatch) by the supervisor; no schedule.
+
+name: b2-rem4r
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: b2-rem4r
+  cancel-in-progress: false
+
+jobs:
+  rem4r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Checkout (branch: private)
+        uses: actions/checkout@v4
+        with:
+          ref: private
+
+      - name: Toolchain sanity (docker + python3 + sudo)
+        run: |
+          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          python3 --version
+          sudo -n true && echo "sudo-ok"
+
+      - name: Activate fixture (compose profile + /etc/hosts)
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.vhost-fixture.yml --profile vhost-fixture up -d --build
+          sudo -n python3 docker/vhost-fixture/hosts.py install
+          grep -n "recon-pipeline vhost-fixture" /etc/hosts
+          getent hosts app.fixture-target.test || resolveip_confirmed=1
+          python3 - <<'PY'
+          import socket
+          for name in ("fixture-target.test", "app.fixture-target.test", "www.fixture-target.test"):
+              print(name, "->", socket.gethostbyname(name))
+          PY
+
+      - name: Preflight gates (forge anchor, selection, scope, verify_b1)
+        run: PYTHONPATH=. python3 ci/rem4r_preflight.py
+
+      - name: R1 unit proof (bidirectional regression)
+        run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
+
+      - name: Reconcile stale live state (frozen stop path; expect EXIT 4 or usage)
+        run: |
+          set +e
+          ./recon.sh stop fixture-target.test
+          echo "stop exit=$?"
+
+      - name: Run isolated B2 fixture run (fixture-target.test)
+        id: run
+        run: |
+          set +e
+          ./recon.sh run fixture-target.test 2>&1 | tee ci/rem4r_run_console.log
+          echo "run exit=${PIPESTATUS[0]}" | tee ci/rem4r_run_exit.txt
+
+      - name: Assertions (REM4-R acceptance table)
+        id: assertions
+        run: |
+          set +e
+          PYTHONPATH=. python3 ci/rem4r_assertions.py 2>&1 | tee ci/rem4r_assertions_console.log
+          echo "assertions exit=${PIPESTATUS[0]}"
+
+      - name: Teardown (always)
+        if: always()
+        run: |
+          sudo -n python3 docker/vhost-fixture/hosts.py remove || true
+          docker compose -f docker-compose.yml -f docker-compose.vhost-fixture.yml --profile vhost-fixture down -v || true
+
+      - name: Upload evidence artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rem4r-evidence
+          path: |
+            ci/rem4r_verdict.txt
+            ci/rem4r_run_exit.txt
+            ci/rem4r_run_console.log
+            ci/rem4r_assertions_console.log
+            wordlists/forge/counts.log
+            wordlists/forge/custom-subdomains.txt
+            recon/fixture-target.test/state.json
+            recon/fixture-target.test/runs.json
+            recon/fixture-target.test/diff.json
+            recon/fixture-target.test/00_assets/summary.md
+            recon/fixture-target.test/10_subdomains/ffuf/summary.md
+            recon/fixture-target.test/10_subdomains/ffuf/data.json
+            recon/fixture-target.test/15_vhosts/ffuf/**
+            recon/fixture-target.test/20_dns/dnsx/summary.md
+            recon/fixture-target.test/20_dns/dnsx/data.json
+            recon/fixture-target.test/30_ports/**
+          if-no-files-found: warn

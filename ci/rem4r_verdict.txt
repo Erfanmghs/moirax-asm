@@ -1,0 +1,9 @@
+A3	MANDATORY	PASS	runs.json[2].status=completed ts=20260904T210009Z
+A4	MANDATORY	PASS	hosts=7 app=True www.alive=True partial=True
+A5	MANDATORY	PASS	suspect_on_app=5 ['dev', 'mail', 'staging', 'vpn', 'webmail'] records_on_www=0
+A6	DISCLOSURE	PASS	candidates={"brute": 200, "perms": 50277, "valid": 0} resolved_rows=52122 summary_present=True
+A7	MANDATORY	FAIL	port-check.status=pending unique_ips_checked=0 skipped_no_ip=52122
+A8	DISCLOSURE	PASS	assets=52122 suspect_assets=5 www_asset_alive=True
+A9	MANDATORY	PASS	post_sha=7ee5fd817b2f2581... full-log_GROW_lines=0 tail=[none] (GROWTH-0 judged on sha-unchanged + A3 completed)
+A10	MANDATORY	PASS	verify_b1 working-tree diff empty
+VERDICT	TEST 2 (FIXTURE, REM4-R): FAIL

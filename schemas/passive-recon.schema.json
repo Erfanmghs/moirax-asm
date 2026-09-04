@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recon.local/schemas/passive-recon.schema.json",
+  "title": "passive-recon data.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "module", "candidates", "passive_ips", "search_forge", "recursion", "counts"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "module": { "type": "string", "const": "passive-recon" },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["host", "sources"],
+        "properties": {
+          "host": { "type": "string" },
+          "sources": { "type": "array", "items": { "type": "string" } },
+          "alive": { "type": ["boolean", "null"] },
+          "tags": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "passive_ips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ip", "sources"],
+        "properties": {
+          "ip": { "type": "string" },
+          "sources": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "search_forge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engines_used", "cooldown", "isolated"],
+      "properties": {
+        "engines_used": { "type": "integer" },
+        "cooldown": { "type": "integer" },
+        "isolated": { "type": "integer" }
+      }
+    },
+    "recursion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["depth_used", "seeds_total"],
+      "properties": {
+        "depth_used": { "type": "integer" },
+        "seeds_total": { "type": "integer" }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidates", "alive"],
+      "properties": {
+        "candidates": { "type": "integer" },
+        "alive": { "type": "integer" }
+      }
+    }
+  }
+}

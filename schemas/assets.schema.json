@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recon.local/schemas/assets.schema.json",
+  "title": "assets.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "assets", "quarantine"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "target": { "type": "string" },
+    "assets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/asset" }
+    },
+    "quarantine": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/quarantine_item" }
+    }
+  },
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "attribution", "sources"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1 },
+        "ips": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "alive": { "type": ["boolean", "null"] },
+        "attribution": { "type": "string", "enum": ["passive", "active", "both"] },
+        "sources": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "misconfig_suspect": { "type": "boolean" },
+        "filtered_suspect": { "type": "boolean" },
+        "anomalous_open_suspect": { "type": "boolean" }
+      }
+    },
+    "quarantine_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "reason"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1 },
+        "ips": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "reason": { "type": "string", "enum": ["wildcard", "catchall"] }
+      }
+    }
+  }
+}

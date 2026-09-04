@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recon.local/schemas/diff.schema.json",
+  "title": "diff.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "added", "removed", "changed"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "from_run": { "type": ["string", "null"] },
+    "to_run": { "type": ["string", "null"] },
+    "added": { "$ref": "#/$defs/classes" },
+    "removed": { "$ref": "#/$defs/classes" },
+    "changed": { "$ref": "#/$defs/classes" }
+  },
+  "$defs": {
+    "classes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hosts", "vhosts", "ports", "services", "passive_ips"],
+      "properties": {
+        "hosts": { "type": "array" },
+        "vhosts": { "type": "array" },
+        "ports": { "type": "array" },
+        "services": { "type": "array" },
+        "passive_ips": { "type": "array" }
+      }
+    }
+  }
+}

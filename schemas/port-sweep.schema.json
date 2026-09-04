@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recon.local/schemas/port-sweep.schema.json",
+  "title": "port-sweep data.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "module", "scans", "services", "pace", "unique_ips_scanned", "duplicates_skipped"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "module": { "type": "string", "const": "port-sweep" },
+    "scans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ip", "hosts", "profile", "ports", "filtered_suspect", "anomalous_open_suspect"],
+        "properties": {
+          "ip": { "type": "string" },
+          "hosts": { "type": "array", "items": { "type": "string" } },
+          "profile": { "type": "string", "enum": ["light", "full", "custom"] },
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["port", "proto", "state"],
+              "properties": {
+                "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+                "proto": { "type": "string" },
+                "state": { "type": "string", "const": "open" }
+              }
+            }
+          },
+          "filtered_suspect": { "type": "boolean" },
+          "anomalous_open_suspect": { "type": "boolean" }
+        }
+      }
+    },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ip", "port", "proto", "product", "version"],
+        "properties": {
+          "ip": { "type": "string" },
+          "port": { "type": "integer" },
+          "proto": { "type": "string" },
+          "product": { "type": ["string", "null"] },
+          "version": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "pace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duration_hours", "effective_pps", "window_breached"],
+      "properties": {
+        "duration_hours": { "type": "number" },
+        "effective_pps": { "type": "number" },
+        "window_breached": { "type": "boolean" }
+      }
+    },
+    "unique_ips_scanned": { "type": "integer" },
+    "duplicates_skipped": { "type": "integer" }
+  }
+}

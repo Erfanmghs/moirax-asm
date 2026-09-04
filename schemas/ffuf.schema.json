@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recon.local/schemas/ffuf.schema.json",
+  "title": "ffuf data.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "module", "hosts", "vhosts"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "module": { "type": "string", "const": "ffuf" },
+    "hosts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fqdn", "level", "parent", "alive", "http_status", "length"],
+        "properties": {
+          "fqdn": { "type": "string" },
+          "level": { "type": "integer" },
+          "parent": { "type": ["string", "null"] },
+          "alive": { "type": ["boolean", "null"] },
+          "http_status": { "type": ["integer", "null"] },
+          "length": { "type": ["integer", "null"] }
+        }
+      }
+    },
+    "vhosts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["base_host", "vhost", "alive", "http_status", "length", "misconfig_suspect"],
+        "properties": {
+          "base_host": { "type": "string" },
+          "vhost": { "type": "string" },
+          "alive": { "type": ["boolean", "null"] },
+          "http_status": { "type": ["integer", "null"] },
+          "length": { "type": ["integer", "null"] },
+          "misconfig_suspect": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

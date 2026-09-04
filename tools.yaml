@@ -1,0 +1,123 @@
+schema_version: 1
+
+settings:
+  schema_version: 1
+  recon_root: recon
+  recon_container_mount: /recon
+  state_filename: state.json
+  runs_filename: runs.json
+  out_of_scope_log: logs/out_of_scope.log
+  dashboard_bind_host: "127.0.0.1"
+  dashboard_bind_port: 8080
+  dashboard_image: busybox:1.36.1
+  recon_volume: ./recon
+  digest_threshold: 10
+  scheduler_interval_minutes: 240
+  scheduler_interval_min_minutes: 10
+  agent_max_llm_calls: 20
+  circuit_breaker_error_ratio: 0.2
+  circuit_breaker_window_sec: 60
+  circuit_breaker_bad_windows: 2
+  resource_budget_ram_mb: 2048
+  resource_budget_cpu_cores: 2
+  resource_budget_ram_mb_max: 4096
+  canary_interval_sec: 30
+  canary_sentinel_count: 3
+  canary_latency_multiplier: 2
+  resolver_min_success_ratio: 0.8
+  resolver_min_healthy_count: 100
+  rfc1918_cidrs:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+  loopback_cidrs:
+    - "127.0.0.0/8"
+    - "::1/128"
+  link_local_cidrs:
+    - "169.254.0.0/16"
+    - "fe80::/10"
+  cloud_wildcard_suffixes:
+    - cloudfront.net
+    - azurewebsites.net
+    - herokuapp.com
+  keyword_tags:
+    - dev
+    - stage
+    - api
+    - admin
+  pipeline_modules:
+    - ffuf
+    - dns-resolve
+    - port-check
+    - passive-recon
+    - merge
+    - port-sweep
+  module_status_values:
+    - pending
+    - running
+    - done
+    - failed
+  recon_layout_dirs:
+    - 00_scope
+    - 00_assets
+    - 10_subdomains
+    - 10_subdomains/ffuf
+    - 10_subdomains/passive
+    - 10_subdomains/passive/sources
+    - 15_vhosts
+    - 15_vhosts/ffuf
+    - 20_dns
+    - 20_dns/dnsx
+    - 30_ports
+    - 30_ports/naabu-light
+    - 30_ports/naabu-full
+    - 40_services
+    - 50_web
+    - 60_screenshots
+    - 90_report
+    - history
+    - logs
+    - logs/raw
+    - sources
+  ffuf_depth: 1
+  ffuf_depth_min: 1
+  ffuf_depth_max: 5
+  max_hosts_per_level: 1000
+  max_total_requests: 5000000
+  ffuf_threads: 40
+  ffuf_timeout: 10
+  ffuf_rate: 150
+  ffuf_maxtime_job: 1800
+  ffuf_match_codes: all
+  ffuf_auto_calibrate: true
+  max_permutations_per_host: 50000
+  dnsx_max_qps: 5000
+  dnsx_ramp_start_qps: 1000
+  dnsx_ramp_step_qps: 1000
+  dnsx_ramp_interval_sec: 30
+  portcheck_top_ports: 50
+  portcheck_rate: 300
+  portsweep_scope: alive_only
+  portsweep_duration_hours: 24
+  portsweep_duration_hours_min: 1
+  portsweep_profile: full
+  portsweep_full_rate_cap: 1000
+  portsweep_ramp_start_pps: 100
+  portsweep_ramp_step_pps: 100
+  portsweep_retries: 2
+  portsweep_timeout_ms: 1000
+  portsweep_filtered_reprobe_divisor: 4
+  portsweep_anomalous_open_threshold: 1000
+  portsweep_nmap_sv: false
+  portsweep_nmap_max_rate: null
+  dork_timeout_sec: 60
+  crtsh_max_time_sec: 120
+  crtsh_retries: 3
+  amass_timeout_min: 20
+  passive_recursion_depth: 2
+  max_seeds_per_iteration: 100
+  httpx_threads: 200
+  passive_httpx_probe: true
+  github_search_req_per_min: 30
+
+tools: {}

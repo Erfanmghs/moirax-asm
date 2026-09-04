@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recon.local/schemas/dns-resolve.schema.json",
+  "title": "dns-resolve data.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "module", "resolved", "candidates", "wildcard_suspects"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "module": { "type": "string", "const": "dns-resolve" },
+    "resolved": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["host", "ips", "cname", "mx", "ns", "txt", "asn", "source"],
+        "properties": {
+          "host": { "type": "string" },
+          "ips": { "type": "array", "items": { "type": "string" } },
+          "cname": { "type": "array", "items": { "type": "string" } },
+          "mx": { "type": "array", "items": { "type": "string" } },
+          "ns": { "type": "array", "items": { "type": "string" } },
+          "txt": { "type": "array", "items": { "type": "string" } },
+          "asn": { "type": ["string", "integer", "null"] },
+          "source": { "type": "string", "enum": ["brute", "perm", "known"] }
+        }
+      }
+    },
+    "candidates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["brute", "perms", "valid"],
+      "properties": {
+        "brute": { "type": "integer" },
+        "perms": { "type": "integer" },
+        "valid": { "type": "integer" }
+      }
+    },
+    "wildcard_suspects": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

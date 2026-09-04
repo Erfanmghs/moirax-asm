@@ -1,0 +1,8 @@
+engagement:
+  name: authorized-test-engagement
+  authorization_date: "2026-01-01"
+includes:
+  - example.com
+  - "*.example.com"
+excludes:
+  - out.example.com

@@ -1,0 +1,13 @@
+recon/
+lists/
+dashboard/config.json
+.env
+scope.yaml
+compose.env
+*.tmp
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/

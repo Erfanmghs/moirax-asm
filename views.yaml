@@ -1,0 +1,15 @@
+schema_version: 1
+modules:
+  ffuf:
+    fields: [fqdn, level, parent, alive, http_status, length]
+    vhost_fields: [base_host, vhost, alive, http_status, length, misconfig_suspect]
+  dns-resolve:
+    fields: [host, ips, cname, mx, ns, txt, asn, source]
+  port-check:
+    fields: [host, ip, ports]
+  port-sweep:
+    fields: [ip, hosts, profile, ports, filtered_suspect, anomalous_open_suspect]
+  passive-recon:
+    fields: [host, sources, alive, tags]
+  assets:
+    fields: [host, ips, alive, attribution, sources, tags]

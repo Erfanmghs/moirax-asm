@@ -1,0 +1,14 @@
+schema_version: 1
+engines:
+  - name: google_cse
+    enabled: true
+  - name: serper
+    enabled: true
+  - name: serpapi
+    enabled: true
+  - name: brave
+    enabled: true
+  - name: yandex_xml
+    enabled: true
+  - name: duckduckgo
+    enabled: true

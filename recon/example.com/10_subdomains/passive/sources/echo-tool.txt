@@ -1,0 +1,3 @@
+www.example.com
+mail.example.com
+evil.com

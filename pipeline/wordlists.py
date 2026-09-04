@@ -44,7 +44,7 @@ class WordlistRegistry:
         if not isinstance(spec, dict):
             raise WordlistError(f"unknown wordlist task {task}")
         keys: set[str] = set()
-        for field in ("fast", "expansion", "sources"):
+        for field in ("fast", "expansion", "sources", "selection", "default_selection"):
             rows = spec.get(field) or []
             if isinstance(rows, list):
                 keys.update(str(item) for item in rows)

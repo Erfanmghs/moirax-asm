@@ -69,6 +69,8 @@ def merge_branches(
         }
         if row["tags"]:
             asset["tags"] = sorted(row["tags"])
+        if row.get("misconfig_suspect"):
+            asset["misconfig_suspect"] = True
         assets.append(asset)
 
     payload = {
@@ -114,6 +116,7 @@ def _ingest(buckets: dict[str, dict[str, Any]], doc: dict[str, Any], branch: str
                 "ips": [],
                 "alive": None,
                 "tags": set(),
+                "misconfig_suspect": False,
             }
             buckets[host] = row
         else:
@@ -133,6 +136,8 @@ def _ingest(buckets: dict[str, dict[str, Any]], doc: dict[str, Any], branch: str
             row["alive"] = False
         for tag in meta.get("tags") or []:
             row["tags"].add(str(tag))
+        if meta.get("misconfig_suspect") is True:
+            row["misconfig_suspect"] = True
 
 
 def _iter_assets(doc: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:

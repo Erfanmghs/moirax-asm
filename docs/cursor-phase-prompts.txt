@@ -1,0 +1,132 @@
+# بسته پرامپت‌های فاز‌به‌فاز برای Cursor — نسخه v1.9
+# پیش‌نیاز: دو فایل spec — master v1.8 + companion v1.9 — در .cursor/rules/ قرار دارند (خودکار لود می‌شوند)
+# یادآوری: قابلیت انتخاب واژه‌نامه با تیک در dashboard (§8 SHARED COMPONENT جدید) در فاز B6 ساخته می‌شود؛ B2 از طریق config مصرفش می‌کند
+# قانون طلایی: هر فاز = یک Chat تازه + پرامپت شروع + پرامپت تست (Cursor خودش تست می‌کند) + تحلیل من + پرامپت تأیید
+
+═══════════════════════════════════════════
+گام ۰ — صحت‌سنجی Setup (فقط یک بار، در اولین Chat)
+═══════════════════════════════════════════
+
+Read the two spec files in .cursor/rules fully and silently. Reply with ONLY: (1) the exact version number of each file, (2) the name of Phase B0 and its three acceptance checks from the companion guide. Do not write any code yet.
+
+→ اگر جواب درست بود، Setup سالم است. اگر نه، جای فایل‌ها را چک کنید.
+
+═══════════════════════════════════════════
+گام ۱ — Phase B0 (Scaffold & Contracts)
+═══════════════════════════════════════════
+
+Execute Phase B0 — Scaffold & Contracts ONLY, exactly per companion guide §4 B0 and the master prompt sections it cites (§2, §3, §6). Read both spec files fully first. Nothing beyond the spec (companion §7). Every value = named parameter (§5.6). Deliver: repo skeleton, compose skeleton, scope gate, recon/ dir factory, state.json engine, formal JSON Schemas under schemas/, tools.lock stub, PHASE-REPORT.md with acceptance evidence. Then STOP.
+
+✅ شما تست کنید: scope.yaml را حذف کنید → باید با پیام راهنما خارج شود و صفر ترافیک شبکه؛ یک host خارج از scope تزریق کنید → باید رد و لاگ شود؛ ./recon.sh status روی workspace خالی بدون خطا.
+
+═══════════════════════════════════════════
+گام ۲ — Phase B1 (Adapter & Orchestrator)
+═══════════════════════════════════════════
+
+Execute Phase B1 — Adapter & Orchestrator ONLY, exactly per companion guide §4 B1 and master prompt §4.3, §5, §6.6, §7, §11.4, §11.5. Read both spec files fully first. Nothing beyond the spec (§7). Deliver: adapter with named-parameter command assembly, fallback profiles, PASSIVE∥ACTIVE engine with branch budgets, MERGE with dedupe + attribution + re-validation + wildcard quarantine, circuit breaker, resource ceiling auto-derivation, run history & diff.json, PHASE-REPORT.md update. Then STOP.
+
+پرامپت تست (در همان Chat، بعد از تحویل B1 پیست کنید — Cursor خودش تست اجرا می‌کند و شواهد خام می‌دهد):
+
+Execute the Phase B1 ACCEPTANCE TESTS yourself now, exactly as written below. This is a test-only task: do NOT build new features, do NOT commit anything, do NOT modify spec files. Capture RAW EVIDENCE for every step (exact command, exit code, relevant file content or log lines). At the end, clean up all test artifacts and print a PASS/FAIL verdict per test. Append the final PASS/FAIL summary + evidence pointers to PHASE-REPORT.md — still no commit.
+
+TEST 1 — FAKE-TOOL HAPPY PATH (adapter→container→data.json):
+1. Temporarily register a fake tool `echo-probe` in tools.yaml as a trivial echo container (pinned image, writing one line to its declared output path), fully compliant with §5 (named parameters only, resource flags, JSON output contract).
+2. Run the pipeline so `echo-probe` executes.
+3. Evidence: the adapter-assembled command with every named parameter resolved; the container invocation; the resulting entry inside data.json with correct schema_version and attribution.
+
+TEST 2 — INJECTED ERRORS TRIP THE CIRCUIT BREAKER (§11.4):
+1. Change `echo-probe` to exit non-zero immediately, then run repeatedly until the breaker trips (>20% errors per 60s window, 2 windows → pause).
+2. Evidence: breaker transition logged with window counters; run state becomes ANOMALY in state.json + logs (Telegram is wired at B5 — state/log only); zero further invocations of the failing tool after pause.
+
+TEST 3 — TWO-RUN HISTORY & DIFF (§6.6):
+1. Reset breaker and run state to a clean baseline. Restore `echo-probe` to working order. Run once; then make the tool emit one detectably different asset and run again.
+2. Evidence: runs.json + history/<UTC-timestamp>/ entries for both runs; diff.json correctly classifies added / removed / changed between the two runs.
+
+CLEANUP (mandatory): remove `echo-probe` from tools.yaml; delete or clearly mark all test runs under recon/ and history/; `git status` must show only intentional test-evidence changes; NOTHING committed.
+
+FINAL OUTPUT: one PASS/FAIL line per test, each pointing to its evidence (file paths + log lines). If any test cannot run, report BLOCKED with the exact reason. Then STOP.
+
+✅ (دیگر لازم نیست خودت تست کنی — خروجی تست Cursor را برای من بفرست تا تحلیل کنم)
+
+پرامپت تأیید و رفتن به فاز بعد (فقط بعد از تأیید من):
+Phase B1 accepted — the acceptance evidence is recorded in PHASE-REPORT.md. Commit with a conventional message. STOP — I will open a new chat for Phase B2.
+
+═══════════════════════════════════════════
+گام ۳ — Phase B2 (Active Branch: FFUF → DNS-RESOLVE → PORT-CHECK)
+═══════════════════════════════════════════
+
+Execute Phase B2 — ACTIVE BRANCH ONLY, exactly per companion guide §4 B2 and master prompt §8 module specs, in strict sub-step order FFUF-0→1→2, then RESOLVER FORGE, then DNSR-1→2→3, then PORT-CHECK. Read both spec files fully first. Nothing beyond the spec (§7). IP-CENTRIC PORT SCANNING (§8) is in force: PORT-CHECK consumes UNIQUE resolved IPs only — ONE naabu invocation per unique IP with attribution to all hostnames sharing it. The dashboard does NOT exist yet (B6): FFUF-0/DNSR-1 consume the CONFIG-DEFAULT selection from wordlists.yaml (defaults dns_fast_top5000 / dns_exp_combined / vhost_top5000) — do NOT build any UI or checkbox code in this phase. Deliver: all sub-steps, LOAD BALANCE block (RAMP/CANARY/resolver diversity), feedback loops, PHASE-REPORT.md update. Then STOP.
+
+(تست‌های رسمی B2 به‌صورت زنده و یکی‌یکی بعد از تحویل تحویل داده می‌شوند — T1: رشد wordlist، T2: misconfig_suspect، T3: نقشه host→IP + dedup پورت، T4: قرنطینه resolver)
+
+═══════════════════════════════════════════
+گام ۴ — Phase B3 (Passive Branch: PSV-0…PSV-8)
+═══════════════════════════════════════════
+
+Execute Phase B3 — PASSIVE BRANCH ONLY, exactly per companion guide §4 B3 and master prompt §8 PASSIVE-RECON, in strict sub-step order PSV-0→PSV-8, executed in parallel per §7.2a. Read both spec files fully first. Nothing beyond the spec (§7). Deliver: SEARCH-FORGE pool + key rotation + COOLDOWN/ISOLATED + TTL cache, CT logs with fallback, per-tool source files (never shared), archives, recursion, httpx probe toggle, GITHUB-OSINT, PSV-8 IP-DISCOVERY, PHASE-REPORT.md update. Then STOP.
+
+✅ شما تست کنید: همه sources/<tool>.txt پر باشند؛ شبیه‌سازی 429 → مسیر COOLDOWN+reroute در لاگ؛ recursion در سقف بایستد؛ PSV-8 فقط با CIDR در scope فعال شود.
+
+═══════════════════════════════════════════
+گام ۵ — Phase B4 (PORT-SWEEP)
+═══════════════════════════════════════════
+
+Execute Phase B4 — PORT-SWEEP ONLY (post-MERGE), exactly per companion guide §4 B4 and master prompt §8 MODULE: PORT-SWEEP. Read both spec files fully first. Nothing beyond the spec (§7). Deliver: IP dedup (ONE scan command per unique IP), scan profiles light|full|custom as config layer, PACING portsweep_duration_hours with derived pps, no-overlap guard, filtering intelligence (filtered_suspect / anomalous_open_suspect), nmap -sV second stage as toggle DEFAULT OFF (VA hook — do NOT build a VA module), PHASE-REPORT.md update. Then STOP.
+
+✅ شما تست کنید: دو hostname روی یک IP → فقط یک دستور scan در لاگ؛ فرمول pacing درست؛ toggle خاموش → صفر کانتینر nmap.
+
+═══════════════════════════════════════════
+گام ۶ — Phase B5 (Notifications & Scheduler)
+═══════════════════════════════════════════
+
+Execute Phase B5 — Notifications & Scheduler ONLY, exactly per companion guide §4 B5 and master prompt §4.5, §4.6, §4.7. Read both spec files fully first. Nothing beyond the spec (§7). Deliver: end-of-run Telegram summary, instant new-subdomain/newly-opened-port alerts from PORT-CHECK/PORT-SWEEP diffs, digest threshold, alert-filter rules, FAILED/ANOMALY/STOPPED self-monitoring, scheduler with min-10-min interval + scheduler.json, PHASE-REPORT.md update. Then STOP.
+
+✅ شما تست کنید: خرابی ساختگی ماژول → پیام FAILED با نام ماژول؛ سیل asset جدید → فقط یک پیام Digest؛ diff فقط بستن پورت → هیچ پیامی.
+
+═══════════════════════════════════════════
+گام ۷ — Phase B6 (Dashboard)
+═══════════════════════════════════════════
+
+Execute Phase B6 — DASHBOARD ONLY, exactly per companion guide §4 B6 and master prompt §9 + §2.6 + §6.5. Read both spec files fully first. Nothing beyond the spec (§7). Deliver: FastAPI backend (ONLY docker.sock client) + React SPA, all five panels a–e, global result filters + coverage analytics, proxy fail-fast rule, cyber-security theme per §9.4, views.yaml-driven rendering, PHASE-REPORT.md update. Then STOP.
+
+✅ شما تست کنید: ویرایش یک flag در پنل Tools → در دستور اجرای بعدی دیده شود؛ فیلترها ترکیبی + حالت URL؛ پراکسی خراب → FAIL FAST با پیام واضح.
+
+═══════════════════════════════════════════
+گام ۸ — Phase B7 (Reporting)
+═══════════════════════════════════════════
+
+Execute Phase B7 — REPORTING ONLY, exactly per companion guide §4 B7 and master prompt §10. Read both spec files fully first. Nothing beyond the spec (§7). Deliver: report.md, report.html in the §9.4 theme, canonical data.json, export.csv, export.json, PDF — all rendered FROM canonical data.json only, embedding run timestamp + scope digest; generation on run end AND on demand from dashboard; PHASE-REPORT.md update. Then STOP.
+
+✅ شما تست کنید: شمارش‌ها در md/html/csv/pdf دقیقاً برابر data.json؛ دستکاری data.json → چک digest شکست بخورد.
+
+═══════════════════════════════════════════
+گام ۹ — Phase B8 (Supervisor Agent — همیشه آخر)
+═══════════════════════════════════════════
+
+Execute Phase B8 — SUPERVISOR AGENT ONLY (opt-in layer, built LAST), exactly per companion guide §4 B8 and master prompt §12. Read both spec files fully first. Nothing beyond the spec (§7). Deliver: agent-optional wiring, one-command autonomy, supervision loop (deterministic checks first → §4.3 → diagnose → ≤3 bounded remediations from remediation.yaml → Telegram escalation), resource frugality (event-driven, zero LLM on healthy runs, agent_max_llm_calls budget), autonomy levels observe|suggest|auto-fix, guardrails + append-only agent-journal.jsonl streamed to Run Control, PHASE-REPORT.md update. Then STOP.
+
+✅ شما تست کنید: agent خاموش → رگرسیون کامل B0–B7 سبز؛ agent روشن + خرابی ساختگی → ژورنال حلقه محدود را نشان دهد؛ اجرای سالم → صفر فراخوانی LLM.
+
+═══════════════════════════════════════════
+پرامپت‌های عمومی (در هر لحظه قابل استفاده)
+═══════════════════════════════════════════
+
+▸ تأیید فاز و رفتن به بعد:
+Phase <BX> accepted — I ran the §6 checks myself. Commit with a conventional message. STOP — I will open a new chat for the next phase.
+
+▸ اصلاح تخلف:
+Violation: <شرح>. This contradicts <شماره بند master prompt یا §7 companion>. Fix per spec only — no rewrites of frozen sections, no new features. Re-run the phase acceptance and update PHASE-REPORT.md.
+
+▸ باز-لنگر انداختن در Session های طولانی:
+Re-read both spec files in .cursor/rules verbatim before continuing. Then confirm: current phase, remaining steps of this phase, and what acceptance proof comes next. Do not start any other phase.
+
+▸ وقتی Cursor چیزی اضافه می‌سازد که در spec نیست:
+Not in spec. Remove it or file a change proposal in the format: [what] + [why] + [section touched] + [risk] — then WAIT for my approval (companion §8). Do not implement without it.
+
+═══════════════════════════════════════════
+یادآوری‌های WSL (master prompt §2.7)
+═══════════════════════════════════════════
+- مخزن داخل فایل‌سیستم لینوکسی (~/recon-pipeline) — هرگز /mnt/c
+- ترمینال Cursor: Default Profile را روی WSL بگذارید (یا خودتان wsl بزنید)
+- قبل از گام ۰: wsl --version ← docker run --rm hello-world ← docker compose version
+- scope.yaml واقعی هرگز Commit نشود

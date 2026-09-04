@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "module": "echo-probe",
+  "hosts": [
+    {
+      "host": "probe2.example.com",
+      "fqdn": "probe2.example.com"
+    }
+  ],
+  "candidates": [
+    {
+      "host": "probe2.example.com",
+      "sources": [
+        "echo-probe"
+      ]
+    }
+  ],
+  "sources": [
+    "echo-probe"
+  ],
+  "branch": "passive"
+}

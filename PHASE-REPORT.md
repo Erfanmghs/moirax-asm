@@ -389,3 +389,859 @@ All runs under `recon/example.com/` (and `history/`) so far are **TEST runs with
 
 `echo-probe` removed after T3. `echo-tool` / `echo-tool-fallback` / `echo-tool-active` / `echo-fail` remain as `# TEST FIXTURE (verify_b1)` until B2 cleanup. Test run data under `recon/example.com/` retained.
 
+---
+
+# PHASE-REPORT — B2 Active Branch
+
+Phase: **B2 — ACTIVE BRANCH** (companion §4). Stopped here; B3 not started. **Not committed.**
+
+## What was built
+
+Sub-steps in frozen order, wired through the B1 adapter, circuit breaker (§11.4), resource ceiling (§11.5), and `state.json` / `runs.json` bookkeeping:
+
+- **FFUF-0 WORDLIST FORGE** (`pipeline/wordlist_forge.py`): CONFIG-DEFAULT selection only (no dashboard/checkboxes — B6). Keys: FFUF-0 `dns_exp_combined`, DNSR-1 `dns_fast_top5000`, FFUF-2 `vhost_top5000`. Union + hostname-charset normalize + cache hashed by selection + source mtimes → `wordlists/forge/effective-<task>.txt`. Empty selection fail-fast. Self-growth: validated FFUF/DNSR host labels appended to `wordlists/forge/custom-subdomains.txt` (atomic).
+- **FFUF-1** recursive enum: wildcard seeds from `scope.yaml`, level loop `1..ffuf_depth`, explosion guards `max_hosts_per_level` / `max_total_requests` → PARTIAL. Artifacts under `10_subdomains/ffuf/`.
+- **FFUF-2** httpx tagging (alive/dead, never filters) then vhost ffuf on **every** host including dead; dead + HTTP hit → `misconfig_suspect=true`. Bounded feedback passes ≤ `ffuf_depth`. Artifacts under `15_vhosts/ffuf/`.
+- **RESOLVER FORGE** (`pipeline/resolver_forge.py`, `resolvers.yaml`, `resolvers/seed.txt`): fetch registered sources (capped by named `resolver_source_cap`) + seed → per-resolver dnsx probe against `resolver_validate_domains` → quarantine `< resolver_min_success_ratio` (0.8) into `resolvers/forge/quarantine.txt` → healthy list `resolvers/forge/custom-resolvers.txt` copied into the run tree. Target: ≥ `resolver_min_healthy_count` (100).
+- **DNSR-1/2/3** (`pipeline/modules/dns_resolve.py`): dnsx brute on CONFIG-DEFAULT wordlist; alterx permutations capped by `max_permutations_per_host`; resolve-all A/AAAA/CNAME/MX/NS/TXT + ASN + wildcard nonce probe. Every host gets `resolution_status` resolved or unresolved + reason. dnsx failure → massdns with adapted query files (module-handled, correct input shape).
+- **LOAD BALANCE** (`pipeline/load_balance.py`): RAMP `dnsx_ramp_start_qps` 1000 → +`dnsx_ramp_step_qps` 1000 / `dnsx_ramp_interval_sec` 30s up to `dnsx_max_qps`; CANARY every `canary_interval_sec` 30s against `canary_sentinel_hosts`; errors or latency > `canary_latency_multiplier` × baseline → halve qps; 2 bad windows → breaker pause + Telegram ANOMALY.
+- **PORT-CHECK** IP-centric (`pipeline/modules/port_check.py`): build IP→[hostnames] from DNSR-3; **one naabu `-host <ip>` invocation per unique IP**; results attributed to all sharing hostnames; no-IP hosts logged + counted in `skipped_no_ip` (never silent). Target set materialized at `30_ports/naabu-light/target-set.txt`. Schema updated to v1.8 per-IP rows.
+- Engine: `active_branch_modules: [ffuf, dns-resolve, port-check]` sequential; B1 echo fixtures **disabled** (still registered). `./recon.sh module <ffuf|dns-resolve|port-check> <target>` runs the full module.
+- Tools: httpx + alterx registered in `tools.yaml` / `tools.lock`. Named parameters only (including `dnsx_rl`, `naabu_host`, `proxy_url` optional `-x`).
+
+## How to run
+
+```bash
+cp scope.yaml.example scope.yaml   # authorized test target only
+./recon.sh run example.com
+# or one module:
+./recon.sh module ffuf example.com
+./recon.sh module dns-resolve example.com
+./recon.sh module port-check example.com
+./recon.sh status example.com
+```
+
+Evidence pointers (after a run): `recon/<target>/10_subdomains/ffuf/data.json`, `15_vhosts/ffuf/`, `20_dns/dnsx/data.json`, `30_ports/naabu-light/data.json` + `target-set.txt`, `logs/run.log` (`naabu-invoke ip=` lines), `wordlists/forge/custom-subdomains.txt`, `resolvers/forge/custom-resolvers.txt` + `quarantine.txt`.
+
+## Out of scope for B2 (intentional)
+
+Dashboard/UI checkboxes (B6 — CONFIG-DEFAULT keys only), PASSIVE PSV-0…8, PORT-SWEEP, reporting formats, supervisor agent.
+
+## Stop
+
+B2 code complete. Acceptance tests will be delivered live, one by one — do not commit until the operator accepts.
+
+---
+
+# B2 ACCEPTANCE — OFFICIAL TEST 1: WORDLIST FORGE
+
+Date: 2026-09-04. Commands run from `/home/moirax/recon-pipeline`. Nothing committed.
+
+## PART A — file sync (non-blocking)
+
+A1 candidates:
+
+| path | CR-stripped sha256 |
+|---|---|
+| `/mnt/c/Users/Erfan/Downloads/cursor-phase-prompts (1).txt` | `5ee24a99575f3073941dc473f5e52cb8744be7e529c1f3cb4e80c5f2e52198c3` |
+| `/mnt/c/Users/Erfan/Downloads/cursor-phase-prompts (2).txt` | `f6fa43ff4ed1de56a3491e73332396ae17dd89195085694e2809fdbfb2d72b22` |
+| `/mnt/c/Users/Erfan/Downloads/cursor-phase-prompts.txt` | `3c93ad23e6bc25f98a7561e6ceb5d8c4cb046916c7b66de8a307e527dc128eb5` |
+
+`/home/moirax/Downloads` and `/home/moirax/Desktop` do not exist. Erfan Desktop: no `cursor-phase-prompts*`.
+
+A2–A3: hash match on `(2).txt` → copied to `docs/cursor-phase-prompts.txt`. In-place:
+
+```
+f6fa43ff4ed1de56a3491e73332396ae17dd89195085694e2809fdbfb2d72b22  /home/moirax/recon-pipeline/docs/cursor-phase-prompts.txt
+```
+
+SYNC-OK
+
+A4 (report-only, files not modified):
+
+```
+e09c9bd40c48075257b7f177bd0156d1f9582ca5cf4c2d44f5c1c86da2dd5817  .cursor/rules/cursor-recon-agent-prompt.md
+653d65cc133fbd33e9320b2b2ef35c2a022d7e89f72caa98464c0d9f4ad25818  .cursor/rules/cursor-recon-companion-guide.md
+```
+
+MATCH agent-prompt (e09c9bd4…5817). MATCH companion (653d65cc…5818).
+
+## B0 regression — FAIL
+
+Command: `python3 -m pipeline.verify_b1`  
+Exit: `1`
+
+```
+CHECK assemble: not reached
+AssertionError
+  File pipeline/verify_b1.py, line 49, in check_assemble
+    assert str(params.require("dnsx_max_qps")) in dnsx
+```
+
+Per-check table:
+
+| check | result |
+|---|---|
+| assemble | FAIL (`dnsx_max_qps` 5000 no longer in dnsx argv; B2 uses named `dnsx_rl`) |
+| ceiling | not run |
+| breaker | not run |
+| merge_quarantine | not run |
+| diff | not run |
+| fallback | not run |
+| echo_path | not run |
+
+No `CHECK …: PASS` lines. No `B1 acceptance: PASS`.
+
+## B1 spec restatement (judgment basis)
+
+Master §8 FFUF-0 bullets (verbatim):
+
+- Aggregate subdomain wordlists from multiple registered sources (GitHub repos, public datasets — sources listed in `wordlists.yaml`); the ACTIVE input set = ONLY the registry keys the operator ticked in the dashboard (§8 WORDLIST REGISTRY & DASHBOARD SELECTION) → union + dedupe + normalize (lowercase, valid hostname charset) → `wordlists/forge/custom-subdomains.txt` (atomically updated).
+- SELF-GROWING: after every completed run, newly VALIDATED host labels from FFUF-1/FFUF-2 AND DNS-RESOLVE (DNSR) hits are appended to the forged list → the custom list becomes target-specific and increasingly complete over time.
+
+PHASE-REPORT B2 declared format (verbatim):
+
+- **FFUF-0 WORDLIST FORGE** (`pipeline/wordlist_forge.py`): CONFIG-DEFAULT selection only (no dashboard/checkboxes — B6). Keys: FFUF-0 `dns_exp_combined`, DNSR-1 `dns_fast_top5000`, FFUF-2 `vhost_top5000`. Union + hostname-charset normalize + cache hashed by selection + source mtimes → `wordlists/forge/effective-<task>.txt`. Empty selection fail-fast. Self-growth: validated FFUF/DNSR host labels appended to `wordlists/forge/custom-subdomains.txt` (atomic).
+
+Declared storage: **hostname labels** (not FQDNs) in `wordlists/forge/custom-subdomains.txt` and `wordlists/forge/effective-<task>.txt`.
+
+## B2 baseline (pre-run)
+
+| file | wc -l | sha256 |
+|---|---|---|
+| `wordlists/forge/effective-DNSR-1.txt` | 4860 | `a94ea1d5d791b6c105bbca2ec064d1a1396e8271d1c8ce6c857f39cef3c71695` |
+| `wordlists/forge/cache/DNSR-1-32c50984a8626fc8.txt` | 4860 | `a94ea1d5d791b6c105bbca2ec064d1a1396e8271d1c8ce6c857f39cef3c71695` |
+| `wordlists/forge/counts.log` | 1 | `fac21b8b661f5ed10e399e9780921b999ea281c0cc32810078c88e8cbdeb671d` |
+| `wordlists/forge/custom-subdomains.txt` | absent | — |
+| `wordlists/forge/effective-FFUF-0.txt` | absent | — |
+| `wordlists/forge/effective-FFUF-2.txt` | absent | — |
+
+Selection hash observed: DNSR-1 cache id `32c50984a8626fc8` (filename). FFUF-0/FFUF-2 hashes never materialized (modules did not run).
+
+CONFIG-DEFAULT keys consumed from config:
+
+```
+tools.yaml:128:  dnsr_1_wordlist_key: dns_fast_top5000
+tools.yaml:147:  ffuf_0_wordlist_key: dns_exp_combined
+tools.yaml:165:  ffuf_2_wordlist_key: vhost_top5000
+wordlists.yaml:111:    default_key: dns_fast_top5000
+wordlists.yaml:131:    default_key: dns_exp_combined
+wordlists.yaml:150:    default_key: vhost_top5000
+```
+
+Consumption log (`wordlists/forge/counts.log` line 1):
+
+```
+DNSR-1	keys=dns_fast_top5000	entries=4860
+```
+
+(That line is from a pre-test `materialize_effective(DNSR-1)` sanity call, not from `./recon.sh run`.) No FFUF-0 or FFUF-2 consumption log lines exist.
+
+No-UI grep (`*.{py,tsx,ts,jsx,js,html,vue,css,json}` for `checkbox|select-all|SELECT-ALL|type=checkbox`): only docstring `pipeline/wordlist_forge.py:19` (“B6 dashboard checkboxes are absent”). No `dashboard/` app tree. Zero selection UI.
+
+## B3 seed union — FAIL
+
+Per-list (host SecLists + same normalize as `pipeline/wordlist_forge._normalize_line`):
+
+| registry key | wc -l raw | normalized unique |
+|---|---:|---:|
+| `dns_fast_top5000` | 5000 | 4860 |
+| `dns_exp_combined` | 653920 | 541205 |
+| `vhost_top5000` (same file as top5000) | 5000 | 4860 |
+| **union of three** | — | **541356** |
+
+`fast_not_in_combined=151` (charset normalize dropped 140 raw top5000 lines: 5000→4860; plus 151 normalized labels in top5000 not in combined). `vhost_top5000` path equals `dns_fast_top5000` path.
+
+Forge `custom-subdomains.txt` **absent** (count 0). Does not equal union 541356. Implementation also selects **one key per task**, not a single three-key union for FFUF-0 (`selected_keys FFUF-0 == ['dns_exp_combined']` only). DNSR-1 effective 4860 **does** match normalized `dns_fast_top5000`.
+
+## B4 run — FAIL (crash); PASSIVE observation (no fix)
+
+Command: `./recon.sh run example.com`  
+CLI exit (printed `EXIT:`): **1**  
+`state.json` `run.status`: **failed** (reason `no branch produced assets`) — §4.7 mapping failed=1, matches CLI.
+
+Per-module:
+
+| module | status |
+|---|---|
+| ffuf | pending |
+| dns-resolve | pending |
+| port-check | pending |
+| passive-recon | pending |
+| merge | done |
+| port-sweep | pending |
+
+Traceback (verbatim): `AttributeError: 'CircuitBreaker' object has no attribute 'allow'` at `pipeline/engine.py` `_run_active_modules` / `adapter.breaker.allow`. Active branch crashed inside `_guard`; MERGE still ran; run classified `failed`.
+
+**OBSERVATION (not fixed):** PASSIVE is not a B2 module implementation. `passive_branch_tools: []` so zero passive tool containers. `passive-recon` stayed `pending` (not `failed`). No new `run.log` tool-fail lines for this crash (exception before adapter `_log_run`). Absent/skipped PASSIVE was **not** counted as a tool error. Engine treated empty passive as an empty doc list and still merged.
+
+## B5 growth — FAIL
+
+Pre vs post `./recon.sh run`: forge sha256s **unchanged** (same three files as baseline). ADDED lines: **none**.
+
+FFUF-1/FFUF-2/DNSR-3 outputs: `recon/example.com/10_subdomains/ffuf/data.json` **missing**; `20_dns/dnsx/data.json` **missing**. Complete validated-host list from those modules: **empty** (modules never started). No ingest log lines to quote.
+
+Not GROWTH-0/INCONCLUSIVE-TARGET: the target was not exercised; crash blocked ingest.
+
+## B6 cache — FAIL
+
+Command: `./recon.sh module ffuf example.com`  
+Exit: **1**  
+Same `AttributeError: 'CircuitBreaker' object has no attribute 'allow'` at `pipeline/engine.py:176` `breaker.allow`.
+
+No cache log line (`CACHE HIT` is not emitted by `wordlist_forge.py`; `_log_count` was not called). Forge sha256 unchanged because FFUF-0 never ran (not a cache hit).
+
+## Assertion summary
+
+| assertion | verdict |
+|---|---|
+| B0 regression (`verify_b1`) | **FAIL** |
+| B3 seed union | **FAIL** |
+| B5 growth | **FAIL** |
+| B6 cache | **FAIL** |
+| no-UI | **PASS** |
+
+Evidence pointers: this section; `pipeline/verify_b1.py:49`; `docs/cursor-phase-prompts.txt`; `wordlists/forge/counts.log:1`; `wordlists.yaml:111,131,150`; `tools.yaml:128,147,165`; `recon/example.com/state.json`; traceback in TEST1 capture; `pipeline/breaker.py` `force_pause` replaced `allow`.
+
+---
+
+# B2 REMEDIATION 1
+
+Date: 2026-09-04. Repo `/home/moirax/recon-pipeline`, branch `private`. Frozen spec text not edited. `pipeline/verify_b1.py` not edited (`git diff -- pipeline/verify_b1.py` empty). Nothing committed. Run data + forge left in place.
+
+## R1 — breaker gate API
+
+Choice: restore `allow()` as the **one canonical synchronous gate**. `force_pause()` is canary-only (LOAD BALANCE) and calls `_pause`; it is not a gate.
+
+### R1-a diffs
+
+`git diff -- pipeline/breaker.py` (exact):
+
+```
+diff --git a/pipeline/breaker.py b/pipeline/breaker.py
+index 62deb29..89e7710 100644
+--- a/pipeline/breaker.py
++++ b/pipeline/breaker.py
+@@ -102,6 +102,14 @@ class CircuitBreaker:
+             if isinstance(info, dict):
+                 row.pause_reason = str(info.get("reason") or "persisted pause")
+ 
++    def force_pause(self, module: str, reason: str) -> None:
++        with self._lock:
++            state = self._state(module)
++            if state.paused:
++                return
++            window_id = int(self.clock.time() // self.window_sec) if self.window_sec else 0
++            self._pause(module, state, reason, 0, 0, window_id)
++
+     def allow(self, module: str) -> bool:
+         with self._lock:
+             return not self._state(module).paused
+```
+
+`git diff -- pipeline/engine.py` and `pipeline/adapter.py` vs HEAD include B2 module wiring plus this remediation. Engine gate repair: `_run_active_modules` calls `adapter.breaker.allow(name)` (was the TEST 1 crash site). R3 empty-passive log is in `passive_branch()`. Adapter diff vs HEAD is B2 invoke/parse/optional_argv/binary/dnsx_rl — **no** gate-method rename; invoke still uses `self.breaker.allow(module)`.
+
+### R1-a / R1-b call sites (`rg -n 'def allow|def force_pause|\.allow\(|\.force_pause\(' pipeline --glob '*.py'`)
+
+| site | method |
+|---|---|
+| `pipeline/breaker.py:113` | `def allow` (canonical gate) |
+| `pipeline/breaker.py:105` | `def force_pause` (canary pause helper, not a gate) |
+| `pipeline/adapter.py:115` | `self.breaker.allow(module)` |
+| `pipeline/adapter.py:163` | `self.breaker.allow(module)` |
+| `pipeline/engine.py:183` | `breaker.allow(tool_name)` |
+| `pipeline/engine.py:311` | `breaker.allow(name)` |
+| `pipeline/engine.py:367` | `adapter.breaker.allow(name)` |
+| `pipeline/verify_b1.py:114,115,126,131` | `breaker.allow(...)` |
+| `pipeline/load_balance.py:105` | `self.adapter.breaker.force_pause(...)` |
+
+`wordlists.py:42` `allowed_keys` is unrelated. Zero callers of a missing method. Old name `allow` is restored; no leftover `can_run` / `is_open` gate.
+
+### R1-c §11.4 (unchanged semantics)
+
+`python3 -m pipeline.verify_b1` CHECK breaker: 60s window, error ratio >20% → throttle (`errors=1/1` then `errors=6/6` with window `[0,60)` / `[60,120)`); second window → pause + notify `('ANOMALY', 'echo-tool', 'error ratio exceeded circuit breaker windows')`. Exit map still completed=0 / failed=1 / anomaly=2 / partial=3 / stopped=4. Live B4: dns-resolve latency-drift throttle then pause, persisted in `state.json` `breaker.paused`, CLI **EXIT:2**. B6 `module ffuf` also **EXIT:2** because pause persisted (`run_module` → `breaker.any_paused()` → anomaly). Not a semantic change.
+
+### R1-d `python3 -m pipeline.verify_b1`
+
+Echo fixtures were **temporarily** enabled (HEAD B1 lists) for this harness only, then `tools.yaml` + `recon/example.com` restored so TESTS 2–4 keep B2 run/forge state. Harness output:
+
+```
+assemble: ok ['echo', 'www.example.com mail.example.com evil.com'] dnsx_qps_named=yes fallback massdns dnsx
+CHECK assemble: PASS
+ceiling: ok ContainerLimits(memory_mb=512, cpus=0.5, concurrency=4) ['--memory', '512m', '--cpus', '0.5']
+CHECK ceiling: PASS
+breaker: ok anomaly ('ANOMALY', 'echo-tool', 'error ratio exceeded circuit breaker windows')
+CHECK breaker: PASS
+merge-quarantine: ok {'a.example.com': 'catchall', 'b.example.com': 'catchall'}
+CHECK merge_quarantine: PASS
+diff: ok added ['new.example.com'] changed ['old.example.com']
+CHECK diff: PASS
+fallback: ok attempts 1 tool echo-tool
+CHECK fallback: PASS
+echo-path: ok docker=True assets ['api.example.com', 'mail.example.com', 'www.example.com'] exit 0
+CHECK echo_path: PASS
+B1 acceptance: PASS
+VERIFY_EXIT:0
+```
+
+`git diff -- pipeline/verify_b1.py` → empty. TEST 1 assemble failure (`dnsx_max_qps` in argv) was **not** an invalid harness check: `tools.yaml` dnsx `-rl` is `{dnsx_max_qps}` again. Check not patched.
+
+## R2 — FFUF-0 three-key union
+
+CONFIG-DEFAULT (no dashboard): `tools.yaml` `ffuf_0_selection_keys: [dns_fast_top5000, dns_exp_combined, vhost_top5000]`. `wordlist_forge.selected_keys("FFUF-0")` returns that list. `materialize_effective` unions + dedupes + hostname-charset normalize; cache `wordlists/forge/cache/FFUF-0-<hash>.txt` with hash in filename (`1a97f019b83d1096`). `forge_custom_subdomains()` writes spec path `wordlists/forge/custom-subdomains.txt` (`wordlist_forge_output`).
+
+### R2-c master §8 inputs (verbatim) + one implementing line each
+
+FFUF-1: `- Level 1: \`ffuf -u http://FUZZ.<seed-domain> -w <forged-list> <baseline_flags> -o level1.json -of json\``  
+Implement: `pipeline/modules/ffuf.py` `custom = forge_custom_subdomains(params)` then copy to `ffuf_target_wordlist_rel` (`wordlists/effective-FFUF-0.txt`) as `-w`.
+
+FFUF-2: `` `ffuf -u http://<host> -H "Host: FUZZ.<host>" -w <effective-vhost-list> ...` — the effective vhost list = union of the dashboard-selected Wordlist Registry keys for this task ``  
+Implement: `pipeline/modules/ffuf.py` `vhost_src = materialize_effective(params, "FFUF-2")` with `ffuf_2_wordlist_key: vhost_top5000`.
+
+DNSR-1: `` `dnsx -d <target-domain> -w <forged-wordlist> -r <forged-resolvers> -rl <qps> -a -resp -json` ``  
+Implement: `pipeline/modules/dns_resolve.py` `brute_src = materialize_effective(params, "DNSR-1")` with `dnsr_1_wordlist_key: dns_fast_top5000` → `dnsr_brute_wordlist_rel`.
+
+### R2-d / B3 seed numbers
+
+Same normalize as forge:
+
+| key | normalized unique |
+|---|---:|
+| dns_fast_top5000 | 4860 |
+| dns_exp_combined | 541205 |
+| vhost_top5000 | 4860 |
+| union | **541356** |
+
+`top5000_not_in_combined=151`, all 151 present in `custom-subdomains.txt`. `effective-FFUF-0.txt` and cache `FFUF-0-1a97f019b83d1096.txt` sha256 `b4e6c6bd90bd9a8653e4b46160994d20bacc7c493a77c41836f5e64d9dda6346`, **541356** lines. After B4 that was also the custom sha. After B6 GROW, custom is **541357** lines / sha `569460455028bd7ba14c6bb7e94708fd4d7a9de76994796259159a20b7656e3e` (label `xnrbibej`); seed cache unchanged.
+
+## R3 — empty passive branch
+
+`recon/example.com/logs/run.log` line 72 (status `ok`, code 0):
+
+```
+2026-09-04T11:40:42Z	passive	-	0	ok	passive branch: no tools registered (B3 pending) — skipped, not an error
+```
+
+Printed on stdout during `./recon.sh run`. Not a tool error; run status was set by breaker (anomaly), not by empty passive.
+
+## R4 — TEST 1 re-run
+
+### B0 — PASS
+
+R1-d table; EXIT 0; `verify_b1.py` diff empty.
+
+### B3 — PASS (seed)
+
+Per-key 4860 / 541205 / 4860, union 541356, 151 exclusive in union+custom. `custom-subdomains.txt` line count at seed time 541356; now 541357 after B6 GROW only.
+
+### B4 — FAIL vs completed+0
+
+Command: `./recon.sh run example.com`  
+Printed: `passive branch: no tools registered (B3 pending) — skipped, not an error`  
+Breaker:
+
+```
+2026-09-04T12:16:58Z	breaker	dns-resolve	throttle	errors=0/2	window=[1788524160,1788524220)	throttle_factor=0.5	reason=latency drift avg=7.041s baseline=1.524s
+2026-09-04T12:17:31Z	breaker	dns-resolve	throttle	errors=0/3	window=[1788524220,1788524280)	throttle_factor=0.25	reason=latency drift avg=15.390s baseline=1.524s
+2026-09-04T12:17:31Z	breaker	dns-resolve	pause	errors=0/3	window=[1788524220,1788524280)	throttle_factor=0.25	reason=latency drift exceeded circuit breaker windows
+```
+
+CLI **EXIT:2** (`run anomaly`). `state.json` `run.status=anomaly`, reason `latency drift exceeded circuit breaker windows`, `failing_module: dns-resolve`. Modules at end of that run: ffuf done, dns-resolve done, port-check done, passive-recon pending, merge done, port-sweep pending. Not `failed`. Not PARTIAL with §4.7 fields. Expected completed+0 not met (breaker behaved per §11.4).
+
+History snapshot `recon/example.com/history/20260904T123246Z/10_subdomains/ffuf/data.json`: `"hosts": []`, `"vhosts": []`.
+
+### B5 — GROWTH-0 / INCONCLUSIVE-TARGET (after B4 run, not B6)
+
+B4 validated hosts: FFUF-1/2 empty; DNSR `resolution_status=resolved` → only `www.example.com`. Label `www` already in forge. No `GROW` lines from that run. Zero new labels → **GROWTH-0**. Full validated-host list: `www.example.com`. **INCONCLUSIVE-TARGET** (sterile example.com; no fabrication).
+
+B6 later appended `GROW added=1` `xnrbibej` from a second FFUF-1 403 hit; that is B6, not the B4 growth tree.
+
+### B6 — cache HIT PASS; sha256-unchanged FAIL
+
+Command: `./recon.sh module ffuf example.com`  
+PRE sha256 `b4e6c6bd90bd9a8653e4b46160994d20bacc7c493a77c41836f5e64d9dda6346`  
+`counts.log` (this invocation):
+
+```
+FFUF-0	cache=HIT	hash=1a97f019b83d1096	keys=dns_fast_top5000,dns_exp_combined,vhost_top5000	entries=541356
+```
+
+Module stdout: `module ffuf data=/home/moirax/recon-pipeline/recon/example.com partial=[]` then **EXIT:2** (persisted dns-resolve pause).  
+POST sha256 `569460455028bd7ba14c6bb7e94708fd4d7a9de76994796259159a20b7656e3e` (GROW `xnrbibej`). Seed cache hash file still `b4e6c6bd…`.
+
+## R5 housekeeping
+
+`git status --porcelain` verbatim:
+
+```
+ M .gitignore
+ M PHASE-REPORT.md
+ M docs/tool-choices.md
+ M pipeline/adapter.py
+ M pipeline/breaker.py
+ M pipeline/engine.py
+ M resolvers.yaml
+ M schemas/dns-resolve.schema.json
+ M schemas/port-check.schema.json
+ M tools.lock
+ M tools.yaml
+ M wordlists.yaml
+?? docker/
+?? docs/cursor-phase-prompts.txt
+?? pipeline/hostsutil.py
+?? pipeline/load_balance.py
+?? pipeline/modules/
+?? pipeline/ndjson.py
+?? pipeline/resolver_forge.py
+?? pipeline/textio.py
+?? pipeline/wordlist_forge.py
+?? resolvers/seed.txt
+```
+
+Nothing committed. `recon/example.com/` and `wordlists/forge/` left for TESTS 2–4.
+
+---
+
+# B2 REMEDIATION 2 (final)
+
+Date: 2026-09-04. Smoke list for all remaining B2 tests. Frozen spec not edited. `git diff -- pipeline/verify_b1.py` empty. Nothing committed.
+
+## Verdicts
+
+| item | verdict |
+|---|---|
+| R0 smoke + cache isolation | **PASS** |
+| R1 growth gate + xnrbibej disclosure + module re-proof | **PASS** |
+| R2 breaker (B4 logs) | **FIXED** — §11.4 drift was pausing (spec violation); drift now THROTTLE-only |
+| R3 clean run (smoke) | **PASS** — `completed` EXIT 0, GROWTH-0 |
+
+## R0 — smoke wordlist
+
+`wordlists.yaml` lists `test_smoke_200` (path `wordlists/local/test-smoke-200.txt`, marked `# TEST FIXTURE (B2 acceptance smoke)`). File = first 200 **normalized** `dns_fast_top5000` labels.
+
+```
+9f71ed0193c28477a71469eba7e3e078ff97a05e38d732645cff4e937a453386  wordlists/local/test-smoke-200.txt
+```
+
+`wc -l` of file = 201 (1 header comment + 200 labels).
+
+§8 selection is `tasks.FFUF-0.selection` (no UI). **Committed/real-run default** is `default_selection: [dns_fast_top5000, dns_exp_combined, vhost_top5000]`. Working-tree **test mode** `selection: [test_smoke_200]` (also DNSR-1 / FFUF-2 for volume). TEST 4 restores the default.
+
+Materialize (smoke):
+
+```
+selection_keys ['test_smoke_200']
+FFUF-0	cache=MISS	hash=c5f3a04d4f80ac89	keys=test_smoke_200	entries=200
+custom_wc 200
+7ee5fd817b2f2581df41397d0d0a7ce9e8545b5cb3a91d1171e9b7af15979d3d  wordlists/forge/custom-subdomains.txt
+xnrbibej False
+```
+
+Isolation:
+
+| selection | hash | entries | cache |
+|---|---|---:|---|
+| three-key default | `1a97f019b83d1096` | 541356 | HIT |
+| smoke | `c5f3a04d4f80ac89` then `f727268a99f0d048` (mtime in hash) | 200 | MISS then HIT |
+
+Cache files coexist: `FFUF-0-1a97f019b83d1096.txt` (541356), `FFUF-0-c5f3a04d4f80ac89.txt` (200), plus earlier two-key `2071f12561a1d8f7` (4860). Smoke left active.
+
+## R1 — growth gating
+
+Engine `run_pipeline` finalization: `ingest_if_completed(...)` only if `run.status == completed`. Modules no longer call `append_validated_labels`. FFUF hits whose FUZZ label is **not** in the forged/effective wordlist are dropped (autocalibration probes).
+
+**xnrbibej origin (B6 module ffuf, 541k era):** FFUF-1 `-ac` autocalibration, **not** a wordlist label, **not** DNSR, **not** canary.
+
+Raw `10_subdomains/ffuf/level1_example.com.json` (prior capture): `"FUZZ":"XnRbiBeJ"`, `"position":1`, `"status":403`, `"autocalibration":true`. Ingest treated it as host `xnrbibej.example.com` and `counts.log` recorded:
+
+```
+GROW	added=1
+GROW-LABEL	xnrbibej	host=xnrbibej.example.com
+```
+
+Same class still appears in smoke ffuf JSON (`"FUZZ":"GvGqmuSN"`) but **`data.json` hosts=[]** (not in the 200-label set) and the forge was not mutated.
+
+**R1-c** (pause persisted on `dns-resolve`, smoke selection):
+
+```
+CMD: ./recon.sh module ffuf example.com
+EXIT:2
+run.status=anomaly reason=latency drift exceeded circuit breaker windows failing_module=dns-resolve
+FFUF-0	cache=HIT	hash=f727268a99f0d048	keys=test_smoke_200	entries=200
+PRE  7ee5fd817b2f2581df41397d0d0a7ce9e8545b5cb3a91d1171e9b7af15979d3d
+POST 7ee5fd817b2f2581df41397d0d0a7ce9e8545b5cb3a91d1171e9b7af15979d3d
+```
+
+UNCHANGED. Non-completed path did not grow.
+
+## R2 — B4 breaker (already-captured logs; no 541k re-run)
+
+**Master §11.4 (verbatim):**
+
+> 11.4 STABILITY-FIRST CONTRACT (ethical pentest guarantee): a run must NEVER degrade target availability and must NEVER let a tool die silently. Per-target circuit breaker: monitor timeout/error ratio per module; ratio > 20% over a 60s window → auto-throttle (halve rate + threads); persists 2 consecutive windows → pause module + Telegram ANOMALY alert. The breaker is ALWAYS on — `--aggressive` raises caps but can never disable it. Load signal: also track per-host response-latency drift; sustained latency growth on a host → throttle that module even without errors (never heat up the target).
+
+**Master §8 LOAD BALANCE CANARY (verbatim):**
+
+> CANARY: every 30s re-resolve 3 known-good sentinel hosts through the same path; latency > 2× baseline or errors → halve rate immediately; 2 consecutive bad windows → pause + Telegram ANOMALY (§4.7).
+
+**Detector:** `CircuitBreaker._evaluate_latency` (adapter `record(..., latency_sec=duration)` on `dns-resolve` invokes). **Not** CANARY 2-bad-windows. B4 canary had one later `canary bad window=1` (line 727); pause already happened at 12:17:31 with **errors=0**.
+
+```
+2026-09-04T12:16:58Z	breaker	dns-resolve	throttle	errors=0/2	window=[1788524160,1788524220)	throttle_factor=0.5	reason=latency drift avg=7.041s baseline=1.524s
+2026-09-04T12:17:31Z	breaker	dns-resolve	throttle	errors=0/3	window=[1788524220,1788524280)	throttle_factor=0.25	reason=latency drift avg=15.390s baseline=1.524s
+2026-09-04T12:17:31Z	breaker	dns-resolve	pause	errors=0/3	window=[1788524220,1788524280)	throttle_factor=0.25	reason=latency drift exceeded circuit breaker windows
+```
+
+Named parameters (tools.yaml defaults): `circuit_breaker_error_ratio=0.2`, `circuit_breaker_window_sec=60`, `circuit_breaker_bad_windows=2`, `throttle_divisor=2`, `canary_latency_multiplier=2` (also the drift multiplier — no extra magic), `canary_interval_sec=30`, `canary_sentinel_count=3`, `dnsx_ramp_start_qps=1000`, `dnsx_ramp_step_qps=1000`, `dnsx_ramp_interval_sec=30`, `dnsx_max_qps=5000`.
+
+**Conformance:** pause via §11.4 **drift** = **spec violation**. Wiring fixed: `_evaluate_latency` throttles only; pause remains error-ratio × 2 windows (and CANARY `force_pause`). Smoke R3 confirmed drift throttle without pause (`resolver-forge` / `dns-resolve` throttle lines; run completed).
+
+**R2-d B4 DNSR-1 consumed:** `wc -l` of `recon/example.com/wordlists/effective-DNSR-1.txt` at B4 was **4860** (`dns_fast_top5000` CONFIG-DEFAULT), not the 541356 FFUF-0 union. Master `-w <forged-wordlist>` is now the §8 selection (smoke 200 for tests).
+
+## R3 — clean run (smoke)
+
+```
+./recon.sh reset-breaker example.com
+reset-breaker: cleared [] for example.com; paused_now=[]
+RESET_EXIT:0
+CMD: ./recon.sh run example.com
+passive branch: no tools registered (B3 pending) — skipped, not an error
+run completed: ...
+EXIT:0
+```
+
+`run.status=completed` reason=null. Modules: ffuf/dns-resolve/port-check/merge **done**; passive-recon/port-sweep **pending**. Skip line: `2026-09-04T15:17:02Z	passive	-	0	ok	passive branch: no tools registered (B3 pending) — skipped, not an error`
+
+**Growth:** FFUF hosts/vhosts empty. DNSR `resolution_status=resolved`: `example.com`, `www.example.com`. Label `www` already in smoke forge. No new `GROW` lines. **GROWTH-0**. Validated-host list: `example.com`, `www.example.com`. Custom still 200 / sha `7ee5fd81…9d3d`.
+
+**Volume (this run, log ts ≥ 15:17:02Z):** `cmd=ffuf` **1** (wordlist 200); `cmd=dnsx` **1277** (resolver-forge per-resolver probes dominate; DNSR-1 brute wordlist **200** lines, `candidates.brute=200`, `perms=0`). Wordlist-plane = hundreds; resolver-forge still walks the full resolver set.
+
+## R4 housekeeping
+
+`git status --porcelain` (after this section; verify_b1.py absent = untouched):
+
+```
+ M .gitignore
+ M PHASE-REPORT.md
+ M docs/tool-choices.md
+ M pipeline/adapter.py
+ M pipeline/breaker.py
+ M pipeline/engine.py
+ M pipeline/wordlists.py
+ M resolvers.yaml
+ M schemas/dns-resolve.schema.json
+ M schemas/port-check.schema.json
+ M tools.lock
+ M tools.yaml
+ M wordlists.yaml
+?? docker/
+?? docs/cursor-phase-prompts.txt
+?? pipeline/hostsutil.py
+?? pipeline/load_balance.py
+?? pipeline/modules/
+?? pipeline/ndjson.py
+?? pipeline/resolver_forge.py
+?? pipeline/textio.py
+?? pipeline/wordlist_forge.py
+?? resolvers/seed.txt
+?? wordlists/local/
+```
+
+Nothing committed. Smoke selection + run data left for TESTS 2–4.
+
+---
+
+# TEST 2 — MISCONFIG_SUSPECT
+
+Date: 2026-09-04. **TEST, not a build.** No code/spec edits. `verify_b1.py` diff empty.
+
+## Final verdict
+
+**T0-STOP** (T0.2 `verify_b1` did not finish ALL-green EXIT 0). T1–T4 not executed.
+
+## Per-assertion
+
+| id | verdict | evidence |
+|---|---|---|
+| T0.1 | **PASS** | `git status --porcelain` matches REM2 list in this file (R4 housekeeping). |
+| T0.2 | **FAIL** | `git diff -- pipeline/verify_b1.py` empty. `python3 -m pipeline.verify_b1`: assemble/ceiling/breaker/merge/diff/fallback PASS, then `echo_path` printed `passive branch: no tools registered` and started **real B2** (`ffuf` done, `dns-resolve` running) because `echo-tool` `enabled: false` and `passive_branch_tools: []` / `active_branch_tools: []` (`tools.yaml:282-283,291+`). Harness killed after ~55s to avoid another long resolver-forge DNS load. No `B1 acceptance: PASS`, no VERIFY_EXIT 0. Re-enabling echo would be a tools.yaml edit — forbidden this TEST. |
+| T0.3 | **PASS** | `wordlists.yaml` `default_selection: [dns_fast_top5000, dns_exp_combined, vhost_top5000]`; working `selection: [test_smoke_200]` (FFUF-0:144-150). |
+| T0.4 | **PASS** | `7ee5fd817b2f2581df41397d0d0a7ce9e8545b5cb3a91d1171e9b7af15979d3d` + `wc -l` 200 (still after the aborted harness). |
+| T0.5 | **FAIL** (after T0.2) | Pre-T0.2: `run.status=completed` (15:30:15Z). Post-aborted `echo_path`: `run.status=running`, `dns-resolve=running`. |
+| T1.1–T5.2 | **BLOCKED** | T0 hard STOP. |
+
+R3 leftover: `15_vhosts/ffuf/` has only `vhost_xnrbibej.example.com_p1.json` (old B6); R3 `10_subdomains/ffuf/data.json` `"vhosts": []` — FFUF-2 did not probe in the last completed run (queue empty: no FFUF-1 hosts). Not scored (blocked).
+
+## RECOVERY (T0-STOP re-run) — 2026-09-04
+
+No code or spec changes. `pipeline/verify_b1.py` unmodified. Nothing committed. Fixture toggle on `tools.yaml` only, then restored byte-exact.
+
+### Official B2+ procedure for `python3 -m pipeline.verify_b1` (R2)
+
+1. Snapshot `tools.yaml` (sha256) and `git diff --stat -- tools.yaml`.
+2. Enable B1-era echo fixtures: `passive_branch_tools: [echo-tool]`, `active_branch_tools: [echo-tool-active]`, and `enabled: true` on `echo-tool` / `echo-tool-fallback` / `echo-tool-active` / `echo-fail`.
+3. Run `python3 -m pipeline.verify_b1`. Expect ALL CHECKs green, `B1 acceptance: PASS`, EXIT 0, duration ~seconds. If `echo_path` prints `passive branch: no tools registered` or starts ffuf/dns-resolve against resolvers → kill within 10s; do not leave a real B2 run.
+4. Restore `tools.yaml` from the snapshot (byte-match). Confirm `git diff --stat -- tools.yaml` equals the pre-toggle stat and `git diff -- pipeline/verify_b1.py` is empty.
+
+**Operating constraint (disclosure, no code change):** the frozen B1 harness `echo_path` falls through to a real B2 run when B2 operational config has echo fixtures disabled (`passive_branch_tools: []`, `active_branch_tools: []`, `echo-tool*.enabled: false`). That is why TEST 2 T0.2 aborted. Recorded for the operator; harness remains frozen.
+
+PHASE-REPORT REMEDIATION 1 R1-d recorded the same protocol as: “Echo fixtures were **temporarily** enabled (HEAD B1 lists) for this harness only, then `tools.yaml` + `recon/example.com` restored.” Exact YAML values were not listed there; B1-era lists derived from `git show HEAD:tools.yaml` (`passive_branch_tools: [echo-tool]`, `active_branch_tools: [echo-tool-active]`, echo tools `enabled: true`).
+
+### R1 — aborted-run reconcile
+
+- **R1.1** Aborted live `run.status=running` (`updated_at=2026-09-04T16:28:07Z`); modules `ffuf=done`, `dns-resolve=running`.
+- **R1.2** `./recon.sh stop example.com` → `stop requested for: dns-resolve; containers=0`; EXIT 4 (`exit_code_stopped`). Terminal `run.status=stopped`, `reason=operator stop`. Module row `dns-resolve` stayed `running` (stop does not flip module rows).
+- **R1.3** After stop: zero `run.status=running`. History `20260904T153015Z` (R3 completed) preserved. Subsequent R2.3 echo_path and T1.3 overwrite live `state.json` (not a hand-edit).
+- **R1.4** Aborted wrote `10_subdomains/ffuf/{data.json,level1_example.com.json,summary.md}` (~16:28Z). `20_dns/dnsx/data.json` was not rewritten by the abort (dns-resolve killed mid-module). Kept (append-only). Later runs **overwrite** live module `data.json` under `recon/<target>/` (§6.1 live tree); §6.6 snapshots stay in `history/`.
+- **R1.5** Forge still `7ee5fd817b2f2581df41397d0d0a7ce9e8545b5cb3a91d1171e9b7af15979d3d` / 200. **No `GROW-SKIP` line:** `ingest_if_completed` runs only at engine finalization (`pipeline/wordlist_forge.py`); the kill never reached it. Growth therefore did not ingest a non-completed run. Last `GROW` in `counts.log` remains B6 `xnrbibej`.
+
+### R2 — harness fixture toggle
+
+- Pre-R2 B2 lines: `passive_branch_tools: []`, `active_branch_tools: []`, echo-tool family `enabled: false`. Snapshot sha256 `adb68be62b40e1db9371a14afb98a7c5b921ec47f05572c8a6aee52a8bf387af`. `git diff --stat -- tools.yaml`: `289 +276 −13`.
+- R2.3: fixtures enabled → `python3 -m pipeline.verify_b1` ALL green, `B1 acceptance: PASS`, `VERIFY_EXIT:0` (~2.5s, fake echo_path only).
+- R2.4: restored snapshot; `cmp` byte-match; diff-stat identical; `git diff -- pipeline/verify_b1.py` empty.
+
+### R3 re-run TEST 2
+
+T1.3: `./recon.sh reset-breaker example.com` (cleared `[]`); `./recon.sh run example.com` **EXIT 0**, `run.status=completed` (`20260904T165225Z`). History + `runs.json` appended.
+
+**T4:** FFUF-1 discovered **zero** hosts → FFUF-2 queue empty → **zero vhost jobs**, zero non-filtered hits. Not fabricated.
+
+### Final verdict
+
+**INCONCLUSIVE-TARGET (vhost)** — sterile FFUF-1 on example.com (smoke 200) produced no discovered hosts, so FFUF-2 never probed. Recovery R1/R2 **PASS**. Operator decides fallback.
+
+### Per-assertion (recovery + re-run)
+
+| id | verdict | evidence |
+|---|---|---|
+| R1.1 | **PASS** | Aborted `state.json` `run.status=running`; ffuf done / dns-resolve running. |
+| R1.2 | **PASS** | `./recon.sh stop example.com` EXIT 4; `run.status=stopped` `reason=operator stop`. |
+| R1.3 | **PASS** | After stop: no `run.status=running`; history `20260904T153015Z` kept. |
+| R1.4 | **PASS** | FFUF-1 outputs listed; dnsx live file not from abort; kept; later overwrite of live tree. |
+| R1.5 | **PASS** | Forge sha/200; ingest not invoked (no `GROW-SKIP`); forge unchanged. |
+| R2.1 | **PASS** | Current B2 echo lines printed; B1-era from `HEAD:tools.yaml` + REM1 R1-d. |
+| R2.2 | **PASS** | Echo lists + `enabled: true` applied. |
+| R2.3 | **PASS** | verify_b1 ALL green EXIT 0; fake path only. |
+| R2.4 | **PASS** | tools.yaml restored sha `adb68be6…`; diff-stat `289 +276 −13`; verify_b1 diff empty. |
+| R2.5 | **PASS** | This subsection: procedure + fallthrough disclosure. |
+| T0.1 | **PASS** | Porcelain matches REM2 list; ★ later `state.json` from stop/verify/run (gitignored). |
+| T0.2 | **PASS** | R2.3–R2.4 evidence. |
+| T0.3 | **PASS** | `wordlists.yaml` 144–150: `default_selection` three keys; `selection: [test_smoke_200]`. |
+| T0.4 | **PASS** | Forge `7ee5fd81…9d3d` / 200. |
+| T0.5 | **PASS** | No `run.status=running`. Live completed `165225Z`. R1 STOPPED overwritten by echo_path `164211Z` then T1.3 (disclosed). R3 `153015Z` in history. |
+| T1.1 | **PASS** | §8 FFUF-2 input quoted; `materialize_effective(FFUF-2)` → `wordlists/forge/effective-FFUF-2.txt` 200 / sha `7ee5fd81…`; `-w {ffuf_wordlist}` template `tools.yaml` ffuf-vhost. No FFUF-2 argv this run (queue empty). |
+| T1.2 | **PASS** | Disclosed **before** T1.3: queue = FFUF-1 `hosts`; empty; named cap `ffuf_depth: 1`; no skip-FFUF-2 flag. §8 “For EVERY **discovered** host”. |
+| T1.3 | **PASS** | reset-breaker EXIT 0; `./recon.sh run example.com` EXIT 0 `completed`. |
+| T1.4 | **PASS** (shape disclose) | Zero FFUF-2 job lines this run. Expected 200–400 not observed. Governs: §8 “For EVERY discovered host”. Observed: 0 discovered × 200. |
+| T2.1 | **PASS** | Smoke 200 prefixes: DNS-alive `www.example.com` only; 199 `unresolved`/`no A/AAAA`. Apex `example.com` also `resolved` (DNSR-3 known, not a smoke prefix). `candidates.brute=200` `valid=2`. Live `resolved[]` still 4860 rows (prior dns_fast residual in same file). |
+| T2.2 | **BLOCKED** | No FFUF-2 jobs this run; no response distribution. Leftover `15_vhosts/ffuf/vhost_xnrbibej.example.com_p1.json` is B6 (mtime 16:34 +0330), not R3. |
+| T2.3 | **FAIL** (T4 hatch) | `10_subdomains/ffuf/data.json` `"vhosts": []` — no `misconfig_suspect=true`. |
+| T2.4 | **PASS** | No vhost records for `example.com` / `www.example.com` (field absent). |
+| T2.5 | **PASS** | No misconfig record this run. Spec §8: flag on vhost JSON, not confirmed asset. `assets.json` `example.com` / `www.example.com`: `alive: null`, sources `["dns-resolve"]`. No `xnrbibej` in assets. |
+| T2.6 | **BLOCKED** | No misconfig_suspect records. |
+| T3.1 | **PASS** | Forge sha identical before/after T1.3: `7ee5fd81…9d3d`. |
+| T3.2 | **PASS** | No FFUF-2 label ingested. `vhosts=[]`; no new `GROW`/`GROW-LABEL`. §8 SELF-GROWING: validated FFUF-2 labels only. |
+| T3.3 | **PASS** | **GROWTH-0** (honest). |
+| T3.4 | **PASS** | §8: valid vhosts re-enter queue, passes ≤ `ffuf_depth`. This run: 0 labels, cap `ffuf_depth=1`, queue empty at `vpass` start. |
+| T4 | **INCONCLUSIVE-TARGET (vhost)** | Zero non-filtered hits (zero jobs). No fabrication. |
+| T5.1 | **PASS** | This RECOVERY subsection. |
+| T5.2 | **PASS** | Nothing committed; verify_b1 diff empty; tools.yaml diff-stat identical to pre-recovery. Artifacts left for TEST 3. |
+
+---
+
+# B2 REMEDIATION 3 — FFUF-2 QUEUE CONFORMANCE
+
+Date: 2026-09-04. **Adjudication, not a silent fix.** No code/spec/config edits. `pipeline/verify_b1.py` diff empty. `git diff --stat -- tools.yaml` still `289 +276 −13`. Nothing committed. TEST 2 remains **BLOCKED-pending-operator**. B2 acceptance is **not** closed.
+
+Companion §1.2 (verbatim): `If this guide and the master prompt ever disagree, the MASTER PROMPT wins. Stop and flag the conflict — do not improvise.`
+
+## R1 — full-text disclosure
+
+### R1.1 Master §8 FFUF-2 (verbatim, `cursor-recon-agent-prompt.md` 85–97)
+
+```
+FFUF-2 VHOST ENUM (ordered sub-step 2, runs AFTER the depth loop completes — the module does NOT end at depth):
+- BEFORE fuzzing: a lightweight HTTP probe (e.g., httpx via tools.yaml) tags every discovered host `alive | dead` (status, title, server). TAGGING ONLY — it never filters hosts out.
+- For EVERY discovered host — INCLUDING DNS-dead ones (a dead hostname still answering via Host header = vhost misconfiguration class → flagged `"misconfig_suspect": true`): `ffuf -u http://<host> -H "Host: FUZZ.<host>" -w <effective-vhost-list> <baseline_flags> -o vhost_<host>.json -of json` — the effective vhost list = union of the dashboard-selected Wordlist Registry keys for this task (§8 WORDLIST REGISTRY & DASHBOARD SELECTION)
+- Valid vhost hostnames are recorded as host assets (source: active) and re-enter the FFUF-2 queue for one bounded feedback pass (passes ≤ `ffuf_depth`; caps apply).
+
+Baseline flags (mandatory on EVERY ffuf call):
+`-mc all -ac -t <threads:40> -timeout 10 -rate <rps:150> -maxtime-job <sec:1800>` + `-o <path> -of json` + `-x <proxy>` only when proxy is set (§9.3). ALL load parameters (threads/rate/timeout/maxtime/depth/caps) are dashboard-editable via the Tools panel → tools.yaml overrides (§5.4–5.5); `--aggressive` raises caps but never disables the circuit breaker (§11.4).
+
+Inputs: scope.yaml (wildcard includes) | `ffuf_depth` + load caps from dashboard | forged wordlist (FFUF-0 — union of dashboard-selected registry keys, §8; seclists mounted at `/usr/share/seclists` as one of the forge sources) | proxy setting.
+Tools: ffuf via tools.yaml adapter (image per §2.2).
+Output schema (data.json): `{"schema_version":1,"module":"ffuf","hosts":[{"fqdn","level","parent","alive","http_status","length"}],"vhosts":[{"base_host","vhost","alive","http_status","length","misconfig_suspect"}]}`
+Output paths: FFUF-1 → `recon/<target>/10_subdomains/ffuf/` ; FFUF-2 → `recon/<target>/15_vhosts/ffuf/` (filenames embed level+parent so future sub-steps never collide).
+Failure handling: §4.3 defaults; a failed level keeps all previously found hosts; vhost stage runs for every host that has a completed enum record.
+```
+
+Governing sentences marked:
+
+- **(a) queue:** `For EVERY discovered host — INCLUDING DNS-dead ones` ; `tags every discovered host \`alive | dead\`` ; `TAGGING ONLY — it never filters hosts out` ; `vhost stage runs for every host that has a completed enum record`.
+- **(b) command:** `ffuf -u http://<host> -H "Host: FUZZ.<host>" -w <effective-vhost-list> <baseline_flags> -o vhost_<host>.json -of json`
+- **(c) misconfig_suspect:** `(a dead hostname still answering via Host header = vhost misconfiguration class → flagged \`"misconfig_suspect": true\`)`
+- **(d) feedback:** `Valid vhost hostnames are recorded as host assets (source: active) and re-enter the FFUF-2 queue for one bounded feedback pass (passes ≤ \`ffuf_depth\`; caps apply).`
+
+MODULE header (verbatim, line 71): `### MODULE: FFUF — branch: ACTIVE | order: 1 | ordered module: sub-steps are APPEND-ONLY, never reorder existing ones (user will extend later)`
+
+DNS-RESOLVE header (verbatim): `### MODULE: DNS-RESOLVE — branch: ACTIVE | order: 2`
+
+### R1.2 Implementation paths
+
+Queue: `pipeline/modules/ffuf.py:101-111`
+
+```
+host_list = sorted(hosts.values(), key=lambda r: r["fqdn"])
+...
+queue = [row["fqdn"] for row in host_list]
+```
+
+`hosts` is filled only from FFUF-1 hits (`ffuf.py:73-90`). Empty `hosts` → `_probe_alive` returns immediately (`ffuf.py:259-260`: `if not hosts: return`).
+
+Flag: `pipeline/modules/ffuf.py:122-123,154-161`
+
+```
+dead = meta.get("alive") is False
+...
+alive_hit = status is not None
+...
+"misconfig_suspect": bool(dead and alive_hit),
+```
+
+`alive` is set by httpx (`ffuf.py:297-301`), not by DNSR-3.
+
+DNSR-3 cross-check of answered vhost vs unresolved candidates: **absent**. `ffuf.py` does not read `dnsr_data_json`. Engine order: FFUF module completes before DNS-RESOLVE (`tools.yaml` `active_branch_modules: [ffuf, dns-resolve, port-check]`; master FFUF order 1, DNS-RESOLVE order 2).
+
+### R1.3 Last-run candidate universe (T1.3 `20260904T165225Z`)
+
+| source | count |
+|---|---:|
+| FFUF-1 hits (`10_subdomains/ffuf/data.json` `hosts`) | 0 |
+| DNSR-1 brute candidates (`candidates.brute`) | 200 |
+| DNSR-3 valid (`candidates.valid` / `resolution_status=resolved`) | 2 (`example.com`, `www.example.com`) |
+| smoke prefixes unresolved | 199 (apex is not a smoke prefix) |
+
+### R1.4 Interpretation matrix (frozen quotes only; no paraphrase as the rule)
+
+| reading | Frozen sentences cited | Acceptance `"a dead-host vhost hit lands flagged misconfig_suspect=true"` (companion §4 B2; companion yields to master per §1.2) satisfiable on ANY target? | Code change if this reading were chosen |
+|---|---|---|---|
+| **(i) FFUF-1 hits only (current)** | `vhost stage runs for every host that has a completed enum record.` `runs AFTER the depth loop completes`. FFUF-1: `discovered hosts become parents of level N+1`. | True DNS-dead: **no** — FFUF-1 `ffuf -u http://FUZZ.<seed-domain>` only records HTTP hits. HTTP-dead among those hits: **maybe** (httpx `alive=false` + later vhost hit). Companion glossary `misconfig_suspect (dead DNS but answers vhost fuzz)` would still not match (i). | None — current `queue = [row["fqdn"] for row in host_list]`. |
+| **(ii) All active-branch candidates including DNSR-1 unresolved labels** | `INCLUDING DNS-dead ones`. Companion B2 build (non-master): `FFUF-2 vhost enum on ALL hosts (alive AND dead → misconfig_suspect)`. | **Only if** DNS-dead names are queued **and** a probe can answer. Master also says FFUF is **order: 1** and DNS-RESOLVE **order: 2**, and `sub-steps are APPEND-ONLY, never reorder existing ones`. FFUF-2 therefore **cannot** consume DNSR-3 output without a spec append. | Would require a new post-DNSR vhost pass or reorder — **not authorized** without an approved §8.1 append. Probe HOW is also missing (below). |
+| **(iii) HTTP-dead among FFUF-1 discovered (httpx tag), with the parenthetical “DNS-dead” untreated as a separate DNSR set** | `tags every discovered host \`alive \| dead\``. PSV-6: `mirrors the FFUF-2 pre-probe semantics` (HTTP tagging). Flag today: `dead = meta.get("alive") is False`. | Satisfiable only if FFUF-1 first discovers ≥1 host that httpx tags dead and a vhost response is not filtered. Still **not** companion “dead DNS”. | None for queue; flag already uses httpx `alive`. |
+| **(iv) Probe DNS-dead labels via a live server IP + Host header (not `-u http://<dead-host>`)** | **No master sentence states this.** Command shape is only `ffuf -u http://<host> -H "Host: FUZZ.<host>"`. | Would make companion dead-DNS acceptance reachable **if specified**. | Not implementable from frozen text (gap → R2-B). |
+
+**HOW gap (verbatim command vs DNS-dead):** the only probe form is `ffuf -u http://<host>`. There is no frozen sentence that says to bind `-u` to an alive IP/apex while setting `Host:` to a DNS-dead name. Connecting to `http://<dead-host>` fails to resolve. Per the operator rule for this remediation: text silent on HOW → **R2-B**, not R2-A.
+
+R2-A is refused: the frozen text does **not** unambiguously require the queue to include DNSR candidates the implementation excludes; it also names `completed enum record` and forbids reordering FFUF ahead of DNSR.
+
+### R1.5 State warts (no fixes)
+
+**(a) stop leaves module row `running`.** `pipeline/cli.py:141-160` `cmd_stop` lists modules with `status=="running"` then calls `stop_target`. `pipeline/engine.py:243-266` `stop_target` stops containers and `set_run_status(..., run_status_stopped, reason="operator stop")`. It does **not** call `state.set_status` on the module. `pipeline/state.py:93-108` `set_status` is the only module-row writer (`running` / `done` / `failed`). `module_status_values` has no `stopped`.
+
+**(b) live `resolved[]` = 4860.** Composition now: `resolution_status` unresolved 4858 / resolved 2; `ips` nonempty 2 (`example.com`, `www.example.com`); `source` brute 4859 / known 1. First history stamp with 4860 rows: `20260904T123246Z` (`candidates.brute=4860`). Smoke runs from `20260904T152855Z` onward still write 4860 rows while `candidates.brute=200`. Mechanism: `20_dns/dnsx/brute_chunk_0.txt` is 200 lines this run; `brute_chunk_0.json` is 10319 NDJSON rows / 4860 unique hosts (dnsx `-o` did not replace the pre-smoke file). Consumers: `pipeline/modules/port_check.py:26-42` (skips no-IP / unresolved); `pipeline/merge.py:156-163` and `:188` (all `resolved` hosts into MERGE, so 4858 unresolved names still become assets); `pipeline/wordlist_forge.py:140-141` (ingest only `resolution_status==resolved`).
+
+## R2 — branch B-STOP
+
+No code change.
+
+### CHANGE PROPOSAL (companion §8.1 format)
+
+**Option (1) — queue / probe spec append (interpretation (ii)+(iv))**
+
+- **[what]** Append to master §8 FFUF-2 (do not rewrite frozen lines): define the FFUF-2 base-host set as the union of (FFUF-1 completed enum records) **and** DNSR-3 hosts with `resolution_status=unresolved` (or DNSR-1 brute labels that failed A/AAAA), and define the probe as `ffuf -u http://<alive-base>` (named parameter: apex or a DNS-alive sibling IP) `-H "Host: FUZZ.<dead-host>"` (or equivalent Host of the dead name). Place the extra pass **after** DNS-RESOLVE (new ordered sub-step appended to FFUF **or** a new ACTIVE-order step after order 2) so it does not reorder existing FFUF-1/FFUF-2 sub-steps. Keep `"misconfig_suspect": true` = dead DNS **and** non-filtered vhost hit. Cap jobs with existing `max_total_requests` / `ffuf_depth`.
+- **[why]** Companion §4 B2 Accept `a dead-host vhost hit lands flagged misconfig_suspect=true` and glossary `misconfig_suspect (dead DNS but answers vhost fuzz)` are unreachable if the queue is FFUF-1 hits only; current `-u http://<dead-host>` cannot connect.
+- **[master-prompt section touched]** §8 MODULE FFUF (append-only sub-step after current FFUF-2 **or** new ACTIVE module order after DNS-RESOLVE); possibly §8 DNS-RESOLVE hand-off; companion §4 B2 Accept stays but would then be mechanically reachable.
+- **[risk]** Volume: up to N unresolved labels × vhost list (smoke 199×200). Wrong `-u` IP → false positives / scanning the wrong server. MERGE already promotes unresolved DNSR rows into `assets.json` (`merge.py:156-163`) — expanding vhost jobs multiplies HTTP to names that are not confirmed hosts.
+
+**Option (2) — controlled local wildcard fixture (echo-tool precedent)**
+
+- **[what]** Register a **disabled** local wildcard/vhost fixture server (config-only `enabled: true`, same class as `echo-tool` `# TEST FIXTURE (verify_b1)`): one container answering HTTP on a loopback/RFC1918 name **in scope for tests only**, with a DNS-dead Host header that returns a non-calibrated body. TEST 2 would enable it only for the harness/run then restore (REMEDIATION 1 / TEST 2 R2 toggle protocol). No production `tools.yaml` default on.
+- **[why]** Exercises the **existing** flag path `dead and alive_hit` deterministically without claiming example.com must emit a vhost hit, and without silently expanding the live-target queue.
+- **[master-prompt section touched]** §8 FFUF-2 failure/test-fixture note (append); `tools.yaml` fixture tool (disabled). Does **not** by itself make companion “dead DNS” true unless the fixture is also DNS-unresolved.
+- **[risk]** Fixture-only green is not production-target evidence. If left `enabled: true`, same fallthrough class as TEST 2 T0.2 (real vs fake path). Scope gate must refuse the fixture host on real engagements.
+
+Operator decides. **STOP.**
+
+## R3 — outcome
+
+**R2-B.** TEST 2 stays BLOCKED-pending-operator. B2 acceptance not closed.
+
+| id | result | pointer |
+|---|---|---|
+| R1.1 | PASS | this section; master 85–97 |
+| R1.2 | PASS | `ffuf.py:111`, `ffuf.py:161`; DNSR cross-check absent |
+| R1.3 | PASS | 0 / 200 / 2 / 199 |
+| R1.4 | PASS | matrix (i)–(iv); HOW gap → not R2-A |
+| R1.5 | PASS | `engine.py:258-265`; 4860 brute json leftover; consumers listed |
+| R2 | B-STOP | two §8.1 options; zero code |
+| R3 | PASS | this section |
+
+---
+
+# TEST 2 — MISCONFIG_SUSPECT (FIXTURE VEHICLE)
+
+Date: 2026-09-04. Option 2 only. **No `pipeline/**` edits.** Frozen §8 not touched. Option 1 (post-DNSR vhost pass) approved for **after** the B2 acceptance commit (§8.2) — not implemented here.
+
+**Honest bound:** misconfig_suspect machinery proven via fixture; the production DNS-dead queue path is NOT implemented in B2 — covered by the approved REM3 Option 1 spec append (§8.2), to be implemented at B3 start.
+
+**Operator decision:** REM3 Option 1 approved (post-DNSR pass; base-host set = FFUF-1 completed records ∪ DNSR-unresolved; `-u` bound to alive-base IP; flag = DNS-dead(name) && non-filtered answer). Option 2 implemented here as the test vehicle.
+
+## Final verdict
+
+**FAIL** (P2.1 `partial`/`active_budget` not `completed`; P2.2 `www` not in FFUF-1 hosts; P2.7 MERGE copies vhost `alive=true` onto assets). Core flag path **did fire**: 199 `misconfig_suspect=true` records on httpx-dead `app.fixture-target.test`. Forge unchanged (GROW-SKIP).
+
+## P0
+
+P0.1 porcelain matched post-REM3 list. P0.2 `python3 -m pipeline.verify_b1` ALL green EXIT 0 then tools.yaml restored sha `adb68be6…`; `git diff --stat -- tools.yaml` still `289 +276 −13` at that moment; verify_b1.py empty. P0.3–P0.4 selection/forge as required. P0.5 example.com `completed` (no `running`).
+
+## P1 registration
+
+- `docker/vhost-fixture/{Dockerfile,server.py,hosts.py}`
+- `docker-compose.vhost-fixture.yml` (profile `vhost-fixture`; `docker-compose.yml` byte-unchanged)
+- `tools.yaml:352-368` `# TEST FIXTURE (B2 acceptance smoke)` `vhost-fixture` `enabled: false`
+- `tools.lock` image `recon-pipeline/vhost-fixture:b2-smoke` digest `sha256:5fab1e1a…3161dd`
+- `scope.yaml` (gitignored): `fixture-target.test`, `*.fixture-target.test`
+
+Activation:
+
+```
+docker compose -f docker-compose.yml -f docker-compose.vhost-fixture.yml --profile vhost-fixture up -d --build
+sudo -n python3 docker/vhost-fixture/hosts.py install
+```
+
+Deactivation: `… down` + `hosts.py remove`.
+
+Adapter ffuf/httpx use `--network host` (`pipeline/**` frozen). Compose `extra_hosts` apply to profile stub services; host-network `docker run` uses `hosts.py` → `172.28.100.10`. Fixture IP `172.28.100.10`. Default `docker compose config` sha identical pre/post (`d4fc546b…`).
+
+**P1.1 vs P2.2/P2.3:** exact names cannot both 200 (FFUF-1 discover) and stall (httpx-dead) on the same Host without a UA split. Server: `app` stalls unless User-Agent is ffuf; `www` always 200; apex always stalls. Mixed-case Host → 404 (ffuf `-ac`); lowercase vhost labels → 200 ~9kB.
+
+## Per-assertion
+
+| id | verdict | evidence |
+|---|---|---|
+| P0.1 | **PASS** | post-REM3 porcelain before P1 files. |
+| P0.2 | **PASS** | verify_b1 ALL green EXIT 0; tools.yaml restored. |
+| P0.3 | **PASS** | `wordlists.yaml` 144–150. |
+| P0.4 | **PASS** | forge `7ee5fd81…9d3d` / 200. |
+| P0.5 | **PASS** | no `run.status=running` at P0. |
+| P1.1–P1.5 | **PASS** | files above; compose profile; image build; activation cmds. |
+| P2.1 | **FAIL** | `./recon.sh run fixture-target.test` EXIT **3**, `run.status=partial` `reason=active_budget` (DNSR ~62 min after 199 vhosts fed alterx). Expected `completed`. |
+| P2.2 | **FAIL** (shape disclose) | Level-1 FFUF-1 host = **`app` only** (not www). `www` FFUF-1 hit recorded as calib FUZZ not in wordlist (`ffuf.py:73-76`). Also `level1_example.com` because scope still includes example.com (`hostsutil.py:55-78`). 199 vhost names also written into `hosts[]` (`ffuf.py:164-172`). |
+| P2.3 | **PASS** (www not probed) | httpx list = `app.fixture-target.test` only; `alive=false` (stall). `www` absent from queue. No `httpx.json` (httpx downloaded HuggingFace model; empty out). |
+| P2.4 | **PASS** (shape disclose) | One FFUF-2 job: `-u http://app.fixture-target.test -H Host: FUZZ.app.fixture-target.test -w …/effective-FFUF-2.txt` 200/200. Not 2×200 (only one discovered base). |
+| P2.5 | **PASS** | 199 records `misconfig_suspect=true`, base `app.fixture-target.test`, `http_status=200`. Sample: `{"base_host":"app.fixture-target.test","vhost":"mail.app.fixture-target.test","alive":true,"http_status":200,"length":9014,"misconfig_suspect":true}` |
+| P2.6 | **PASS** | Zero vhost records with `base_host=www.fixture-target.test`. |
+| P2.7 | **FAIL** | §8 vhost schema `alive` is the HTTP hit; MERGE `merge.py:129-131` sets asset `alive=true` from that. `mail.app.fixture-target.test` asset `alive: true`, `sources: ["dns-resolve","ffuf"]`. Base `app` stays `alive: false`. Spec “not confirmed from vhost hit alone” is **not** what MERGE does (no pipeline change authorized). |
+| P2.8 | **PASS** | Vhost JSON has no `sources[]`. Matching assets: `attribution: active`, `sources: ["dns-resolve","ffuf"]`. |
+| P2.9 | **PASS** | Forge sha identical before/after. `counts.log`: `GROW-SKIP	status=partial`. No new `GROW-LABEL`. |
+| P2.10 | **PASS** | **GROWTH-0** (ingest refused non-completed run). |
+| P2.11 | **PASS** (disclose) | DNSR-3 `valid=2` = `example.com`, `www.example.com` (second scope seed). **Fixture labels valid=0.** This run PORT-CHECK **did not start** (`pending`, budget). Prior fixture run 17:44Z: `target-set unique_ips=0 skipped_no_ip=891` (`run.log:1552`). |
+| P3.1 | **PASS** | Profile down; zero fixture containers; `docker compose config` sha match pre-P1; `docker-compose.yml` unchanged. |
+| P3.2 | **PASS** | `./recon.sh status fixture-target.test` prints state (partial). `scope.yaml` still has fixture includes (gitignored). |
+| P4.1–P4.2 | **PASS** | this section. |
+| P4.3 | **PASS** | Nothing committed; verify_b1 empty. tools.yaml stat **`306 +293 −13`** = pre-recovery `289 +276 −13` plus fixture block (~17 lines). New `?? docker-compose.vhost-fixture.yml`. |
+
+
+
+

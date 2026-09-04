@@ -11,3 +11,9 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+wordlists/forge/cache/
+wordlists/forge/effective-*.txt
+wordlists/forge/custom-subdomains.txt
+wordlists/forge/counts.log
+resolvers/forge/*
+!resolvers/forge/.gitkeep

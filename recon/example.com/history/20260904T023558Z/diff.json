@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "from_run": "20260904T022907Z",
+  "to_run": "20260904T023558Z",
+  "added": {
+    "hosts": [],
+    "vhosts": [],
+    "ports": [],
+    "services": [],
+    "passive_ips": []
+  },
+  "removed": {
+    "hosts": [
+      {
+        "host": "probe.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "passive",
+        "sources": [
+          "echo-probe"
+        ]
+      }
+    ],
+    "vhosts": [],
+    "ports": [],
+    "services": [],
+    "passive_ips": []
+  },
+  "changed": {
+    "hosts": [],
+    "vhosts": [],
+    "ports": [],
+    "services": [],
+    "passive_ips": []
+  }
+}

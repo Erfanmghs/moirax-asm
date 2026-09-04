@@ -1,0 +1,2 @@
+2026/09/04 13:03:25 INFO Model not found, downloading url=https://huggingface.co/datasets/happyhackingspace/dit/resolve/main/model.json dest=/root/.dit/model.json
+2026/09/04 13:03:55 INFO Model downloaded size=92.6MB

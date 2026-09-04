@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "from_run": "20260904T025404Z",
+  "to_run": "20260904T025426Z",
+  "added": {
+    "hosts": [
+      {
+        "host": "alt.probe2.example.com",
+        "ips": [
+          "203.0.113.50"
+        ],
+        "alive": null,
+        "attribution": "passive",
+        "sources": [
+          "echo-probe"
+        ]
+      }
+    ],
+    "vhosts": [],
+    "ports": [],
+    "services": [],
+    "passive_ips": []
+  },
+  "removed": {
+    "hosts": [],
+    "vhosts": [],
+    "ports": [],
+    "services": [],
+    "passive_ips": []
+  },
+  "changed": {
+    "hosts": [
+      {
+        "before": {
+          "host": "probe2.example.com",
+          "ips": [],
+          "alive": null,
+          "attribution": "passive",
+          "sources": [
+            "echo-probe"
+          ]
+        },
+        "after": {
+          "host": "probe2.example.com",
+          "ips": [
+            "203.0.113.50"
+          ],
+          "alive": null,
+          "attribution": "passive",
+          "sources": [
+            "echo-probe"
+          ]
+        }
+      }
+    ],
+    "vhosts": [],
+    "ports": [],
+    "services": [],
+    "passive_ips": []
+  }
+}

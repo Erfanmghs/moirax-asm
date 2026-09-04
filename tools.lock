@@ -20,8 +20,12 @@ images:
     image: busybox
     tag: "1.36.1"
     digest: ""
+  vhost-fixture:
+    image: recon-pipeline/vhost-fixture
+    tag: "b2-smoke"
+    digest: "sha256:a89838992141cb33491cbfd3fe0c252dab80376a39b49ccec16530725fa51a2e"
   ffuf:
-    image: ghcr.io/ffuf/ffuf
+    image: recon-pipeline/ffuf
     tag: "v2.1.0"
     digest: ""
   dnsx:
@@ -35,4 +39,12 @@ images:
   naabu:
     image: projectdiscovery/naabu
     tag: "v2.3.5"
+    digest: ""
+  httpx:
+    image: projectdiscovery/httpx
+    tag: "v1.10.0"
+    digest: "sha256:e2f89a700e535b3e0d5ccf95e3383ebb54c2faecd8e8100573455cd0cbe8e02d"
+  alterx:
+    image: projectdiscovery/alterx
+    tag: "v0.0.6"
     digest: ""

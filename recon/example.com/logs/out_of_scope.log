@@ -1,0 +1,54 @@
+2026-09-03T23:40:48Z	rejected	evil.com	host not in includes
+2026-09-03T23:40:48Z	rejected	out.example.com	excluded host
+2026-09-03T23:40:48Z	rejected	10.1.2.3	RFC1918 not listed in includes
+2026-09-03T23:40:48Z	rejected	127.0.0.1	loopback not listed in includes
+2026-09-03T23:40:48Z	rejected	169.254.1.1	link-local not listed in includes
+2026-09-03T23:40:48Z	rejected	foo.cloudfront.net	cloud wildcard cloudfront.net not explicitly authorized
+2026-09-03T23:40:48Z	rejected	https://evil.com/path	host not in includes
+2026-09-04T02:23:08Z	rejected	evil.com	host not in includes
+2026-09-04T02:29:07Z	rejected	evil.com	host not in includes
+2026-09-04T02:35:58Z	rejected	evil.com	host not in includes
+2026-09-04T02:45:22Z	rejected	evil.com	host not in includes
+2026-09-04T02:45:32Z	rejected	evil.com	host not in includes
+2026-09-04T02:47:47Z	rejected	evil.com	host not in includes
+2026-09-04T02:53:42Z	rejected	evil.com	host not in includes
+2026-09-04T02:54:04Z	rejected	evil.com	host not in includes
+2026-09-04T02:54:26Z	rejected	evil.com	host not in includes
+2026-09-04T02:54:58Z	rejected	evil.com	host not in includes
+2026-09-04T02:58:46Z	rejected	evil.com	host not in includes
+2026-09-04T02:58:50Z	rejected	evil.com	host not in includes
+2026-09-04T03:00:50Z	rejected	evil.com	host not in includes
+2026-09-04T03:00:51Z	rejected	evil.com	host not in includes
+2026-09-04T03:00:51Z	rejected	evil.com	host not in includes
+2026-09-04T03:04:13Z	rejected	evil.com	host not in includes
+2026-09-04T03:04:14Z	rejected	evil.com	host not in includes
+2026-09-04T11:39:11Z	rejected	evil.com	host not in includes
+2026-09-04T11:39:12Z	rejected	evil.com	host not in includes
+2026-09-04T12:16:58Z	rejected	out.example.com	excluded host
+2026-09-04T12:32:46Z	rejected	104.20.23.154	no IP includes
+2026-09-04T12:32:46Z	rejected	172.66.147.243	no IP includes
+2026-09-04T14:49:10Z	rejected	out.example.com	excluded host
+2026-09-04T14:49:11Z	rejected	out.example.com	excluded host
+2026-09-04T15:24:29Z	rejected	out.example.com	excluded host
+2026-09-04T15:24:30Z	rejected	out.example.com	excluded host
+2026-09-04T15:24:49Z	rejected	out.example.com	excluded host
+2026-09-04T15:24:50Z	rejected	out.example.com	excluded host
+2026-09-04T15:28:54Z	rejected	172.66.147.243	no IP includes
+2026-09-04T15:28:54Z	rejected	104.20.23.154	no IP includes
+2026-09-04T15:28:54Z	rejected	2606:4700:10::ac42:93f3	no IP includes
+2026-09-04T15:28:54Z	rejected	2606:4700:10::6814:179a	no IP includes
+2026-09-04T15:28:55Z	rejected	104.20.23.154	no IP includes
+2026-09-04T15:28:55Z	rejected	172.66.147.243	no IP includes
+2026-09-04T16:28:06Z	rejected	evil.com	host not in includes
+2026-09-04T16:42:09Z	rejected	evil.com	host not in includes
+2026-09-04T16:42:11Z	rejected	evil.com	host not in includes
+2026-09-04T16:48:17Z	rejected	out.example.com	excluded host
+2026-09-04T16:48:17Z	rejected	out.example.com	excluded host
+2026-09-04T16:52:24Z	rejected	104.20.23.154	no IP includes
+2026-09-04T16:52:24Z	rejected	172.66.147.243	no IP includes
+2026-09-04T16:52:24Z	rejected	2606:4700:10::6814:179a	no IP includes
+2026-09-04T16:52:24Z	rejected	2606:4700:10::ac42:93f3	no IP includes
+2026-09-04T16:52:25Z	rejected	104.20.23.154	no IP includes
+2026-09-04T16:52:25Z	rejected	172.66.147.243	no IP includes
+2026-09-04T17:36:50Z	rejected	evil.com	host not in includes
+2026-09-04T17:36:51Z	rejected	evil.com	host not in includes

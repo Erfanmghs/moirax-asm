@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "from_run": "20200102T000000Z",
+  "to_run": "20260904T113912Z",
+  "added": {
+    "hosts": [
+      {
+        "host": "api.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "echo-tool-active"
+        ]
+      },
+      {
+        "host": "mail.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "passive",
+        "sources": [
+          "echo-tool"
+        ]
+      },
+      {
+        "host": "www.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "both",
+        "sources": [
+          "echo-tool",
+          "echo-tool-active"
+        ]
+      }
+    ],
+    "vhosts": [],
+    "ports": [],
+    "services": [],
+    "passive_ips": []
+  },
+  "removed": {
+    "hosts": [
+      {
+        "host": "old.example.com",
+        "attribution": "both",
+        "sources": [
+          "echo-tool",
+          "echo-tool-active"
+        ],
+        "ips": [
+          "1.2.3.4"
+        ]
+      },
+      {
+        "host": "new.example.com",
+        "attribution": "active",
+        "sources": [
+          "echo-tool-active"
+        ],
+        "ips": []
+      }
+    ],
+    "vhosts": [],
+    "ports": [],
+    "services": [],
+    "passive_ips": []
+  },
+  "changed": {
+    "hosts": [],
+    "vhosts": [],
+    "ports": [],
+    "services": [],
+    "passive_ips": []
+  }
+}

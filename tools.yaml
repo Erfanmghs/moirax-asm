@@ -81,6 +81,7 @@ settings:
     - logs
     - logs/raw
     - sources
+    - wordlists
   ffuf_depth: 1
   ffuf_depth_min: 1
   ffuf_depth_max: 5
@@ -119,6 +120,8 @@ settings:
   passive_recursion_depth: 2
   max_seeds_per_iteration: 100
   httpx_threads: 200
+  httpx_disable_update_check: "-duc"
+  httpx_hf_hub_offline: "1"
   passive_httpx_probe: true
   github_search_req_per_min: 30
   wordlists_registry: wordlists.yaml
@@ -143,6 +146,11 @@ settings:
     - dns_exp_fuzzsubs1
     - dns_exp_fuzzsubs2
     - dns_exp_trickest
+  ffuf_0_wordlist_key: dns_exp_combined
+  ffuf_0_selection_keys:
+    - dns_fast_top5000
+    - dns_exp_combined
+    - vhost_top5000
   ffuf_0_source_keys:
     - dns_exp_combined
     - dns_exp_bitquark
@@ -169,7 +177,7 @@ settings:
   tool_retry_count: 2
   retry_backoff_base_sec: 1
   passive_branch_budget_sec: 1200
-  active_branch_budget_sec: 3600
+  active_branch_budget_sec: 7200
   run_log: logs/run.log
   history_dirname: history
   diff_filename: diff.json
@@ -219,15 +227,71 @@ settings:
   echo_passive_hosts: "www.example.com mail.example.com evil.com"
   echo_active_hosts: "www.example.com api.example.com"
   echo_fail_script: "exit 1"
-  passive_branch_tools:
-    - echo-tool
-  active_branch_tools:
-    - echo-tool-active
+  proxy_url: ""
+  ffuf_host_header: ""
+  ffuf_mode: host
+  ffuf_data_json: 10_subdomains/ffuf/data.json
+  ffuf_summary: 10_subdomains/ffuf/summary.md
+  ffuf_target_wordlist_rel: wordlists/effective-FFUF-0.txt
+  ffuf_vhost_wordlist_rel: wordlists/effective-FFUF-2.txt
+  ffuf_httpx_list_rel: 15_vhosts/ffuf/httpx-hosts.txt
+  ffuf_httpx_out_rel: 15_vhosts/ffuf/httpx.json
+  httpx_list: ""
+  httpx_output: ""
+  dnsx_resolvers: ""
+  dnsx_hosts: ""
+  dnsx_rl: 1000
+  dnsx_output: ""
+  dnsx_chunk_size: 30000
+  dnsx_canary_list_rel: 20_dns/dnsx/canary-hosts.txt
+  dnsr_brute_wordlist_rel: wordlists/effective-DNSR-1.txt
+  dnsr_all_hosts_rel: 20_dns/dnsx/all-hosts.txt
+  dnsr_resolve_out_rel: 20_dns/dnsx/resolve-all.json
+  dnsr_wildcard_list_rel: 20_dns/dnsx/wildcard-probe.txt
+  dnsr_wildcard_out_rel: 20_dns/dnsx/wildcard-probe.json
+  dnsr_data_json: 20_dns/dnsx/data.json
+  dnsr_summary: 20_dns/dnsx/summary.md
+  alterx_input: ""
+  alterx_output: ""
+  alterx_input_rel: 20_dns/dnsx/alterx-in.txt
+  alterx_output_rel: 20_dns/dnsx/alterx-out.txt
+  probe_domain: example.com
+  probe_resolver: 1.1.1.1
+  naabu_host: ""
+  massdns_output: ""
+  resolvers_registry: resolvers.yaml
+  resolver_seed_file: resolvers/seed.txt
+  resolver_quarantine_output: resolvers/forge/quarantine.txt
+  resolver_target_copy: 20_dns/resolvers.txt
+  resolver_probe_hosts_rel: 20_dns/dnsx/resolver-validate-hosts.txt
+  resolver_source_timeout_sec: 30
+  resolver_source_cap: 250
+  resolver_probe_timeout_sec: 20
+  resolver_validate_concurrency: 4
+  resolver_validate_domains:
+    - example.com
+    - cloudflare.com
+    - google.com
+    - wikipedia.org
+    - gnu.org
+  canary_sentinel_hosts:
+    - example.com
+    - cloudflare.com
+    - google.com
+  portcheck_data_json: 30_ports/naabu-light/data.json
+  portcheck_summary: 30_ports/naabu-light/summary.md
+  portcheck_target_set_rel: 30_ports/naabu-light/target-set.txt
+  passive_branch_tools: []
+  active_branch_tools: []
+  active_branch_modules:
+    - ffuf
+    - dns-resolve
+    - port-check
 
 tools:
   # TEST FIXTURE (verify_b1)
   echo-tool:
-    enabled: true
+    enabled: false
     branch: passive
     fallback: echo-tool-fallback
     image_ref: echo-tool
@@ -242,7 +306,7 @@ tools:
     output_summary: logs/raw/echo-tool/summary.md
     output_raw_dir: logs/raw/echo-tool
   echo-tool-fallback:
-    enabled: true
+    enabled: false
     branch: passive
     fallback: null
     image_ref: echo-tool-fallback
@@ -257,7 +321,7 @@ tools:
     output_summary: logs/raw/echo-tool-fallback/summary.md
     output_raw_dir: logs/raw/echo-tool-fallback
   echo-tool-active:
-    enabled: true
+    enabled: false
     branch: active
     fallback: null
     image_ref: echo-tool-active
@@ -287,11 +351,29 @@ tools:
     output_data_json: logs/raw/echo-fail/data.json
     output_summary: logs/raw/echo-fail/summary.md
     output_raw_dir: logs/raw/echo-fail
-  ffuf:
+  # TEST FIXTURE (B2 acceptance smoke)
+  vhost-fixture:
     enabled: false
     branch: active
     fallback: null
+    image_ref: vhost-fixture
+    network_host: false
+    argv_template:
+      - python3
+      - -u
+      - /usr/local/bin/vhost-fixture-server.py
+    output_mode: text
+    parser: host_lines
+    data_kind: active
+    output_data_json: logs/raw/vhost-fixture/data.json
+    output_summary: logs/raw/vhost-fixture/summary.md
+    output_raw_dir: logs/raw/vhost-fixture
+  ffuf:
+    enabled: true
+    branch: active
+    fallback: null
     image_ref: ffuf
+    binary: ffuf
     network_host: true
     argv_template:
       - ffuf
@@ -314,17 +396,93 @@ tools:
       - "{ffuf_output}"
       - -of
       - "{ffuf_output_format}"
+    optional_argv:
+      - when: proxy_url
+        argv:
+          - -x
+          - "{proxy_url}"
     output_mode: json
     parser: json
     data_kind: active
     output_data_json: 10_subdomains/ffuf/data.json
     output_summary: 10_subdomains/ffuf/summary.md
     output_raw_dir: logs/raw/ffuf
+  ffuf-vhost:
+    enabled: true
+    branch: active
+    fallback: null
+    image_ref: ffuf
+    binary: ffuf
+    network_host: true
+    argv_template:
+      - ffuf
+      - -u
+      - "{ffuf_url}"
+      - -w
+      - "{ffuf_wordlist}"
+      - -H
+      - "{ffuf_host_header}"
+      - -mc
+      - "{ffuf_match_codes}"
+      - -ac
+      - -t
+      - "{ffuf_threads}"
+      - -timeout
+      - "{ffuf_timeout}"
+      - -rate
+      - "{ffuf_rate}"
+      - -maxtime-job
+      - "{ffuf_maxtime_job}"
+      - -o
+      - "{ffuf_output}"
+      - -of
+      - "{ffuf_output_format}"
+    optional_argv:
+      - when: proxy_url
+        argv:
+          - -x
+          - "{proxy_url}"
+    output_mode: json
+    parser: json
+    data_kind: active
+    output_data_json: 15_vhosts/ffuf/data.json
+    output_summary: 15_vhosts/ffuf/summary.md
+    output_raw_dir: logs/raw/ffuf-vhost
+  httpx:
+    enabled: true
+    branch: active
+    fallback: null
+    image_ref: httpx
+    binary: httpx
+    network_host: true
+    argv_template:
+      - httpx
+      - -l
+      - "{httpx_list}"
+      - -silent
+      - -threads
+      - "{httpx_threads}"
+      - -json
+      - -o
+      - "{httpx_output}"
+    optional_argv:
+      - when: httpx_disable_update_check
+        argv:
+          - "{httpx_disable_update_check}"
+    docker_env:
+      - "HF_HUB_OFFLINE={httpx_hf_hub_offline}"
+    output_mode: json
+    parser: json
+    data_kind: active
+    output_data_json: 15_vhosts/ffuf/httpx.json
+    output_summary: 15_vhosts/ffuf/httpx-summary.md
+    output_raw_dir: logs/raw/httpx
   dnsx:
-    enabled: false
+    enabled: true
     branch: active
     fallback: massdns
     image_ref: dnsx
+    binary: dnsx
     network_host: false
     argv_template:
       - dnsx
@@ -333,7 +491,91 @@ tools:
       - -w
       - "{dnsx_wordlist}"
       - -r
-      - "{resolver_forge_output}"
+      - "{dnsx_resolvers}"
+      - -rl
+      - "{dnsx_max_qps}"
+      - -a
+      - -resp
+      - -json
+      - -o
+      - "{dnsx_output}"
+    output_mode: json
+    parser: json
+    data_kind: active
+    output_data_json: 20_dns/dnsx/data.json
+    output_summary: 20_dns/dnsx/summary.md
+    output_raw_dir: logs/raw/dnsx
+  dnsx-list:
+    enabled: true
+    branch: active
+    fallback: massdns
+    image_ref: dnsx
+    binary: dnsx
+    network_host: false
+    argv_template:
+      - dnsx
+      - -l
+      - "{dnsx_hosts}"
+      - -r
+      - "{dnsx_resolvers}"
+      - -rl
+      - "{dnsx_max_qps}"
+      - -a
+      - -resp
+      - -json
+      - -o
+      - "{dnsx_output}"
+    output_mode: json
+    parser: json
+    data_kind: active
+    output_data_json: 20_dns/dnsx/list.json
+    output_summary: 20_dns/dnsx/list-summary.md
+    output_raw_dir: logs/raw/dnsx-list
+  dnsx-resolve:
+    enabled: true
+    branch: active
+    fallback: massdns
+    image_ref: dnsx
+    binary: dnsx
+    network_host: false
+    argv_template:
+      - dnsx
+      - -l
+      - "{dnsx_hosts}"
+      - -r
+      - "{dnsx_resolvers}"
+      - -rl
+      - "{dnsx_max_qps}"
+      - -a
+      - -aaaa
+      - -cname
+      - -mx
+      - -ns
+      - -txt
+      - -asn
+      - -resp
+      - -json
+      - -o
+      - "{dnsx_output}"
+    output_mode: json
+    parser: json
+    data_kind: active
+    output_data_json: 20_dns/dnsx/resolve.json
+    output_summary: 20_dns/dnsx/resolve-summary.md
+    output_raw_dir: logs/raw/dnsx-resolve
+  dnsx-canary:
+    enabled: true
+    branch: active
+    fallback: massdns
+    image_ref: dnsx
+    binary: dnsx
+    network_host: false
+    argv_template:
+      - dnsx
+      - -l
+      - "{dnsx_hosts}"
+      - -r
+      - "{dnsx_resolvers}"
       - -rl
       - "{dnsx_max_qps}"
       - -a
@@ -342,19 +584,42 @@ tools:
     output_mode: json
     parser: json
     data_kind: active
-    output_data_json: 20_dns/dnsx/data.json
-    output_summary: 20_dns/dnsx/summary.md
-    output_raw_dir: logs/raw/dnsx
+    output_data_json: 20_dns/dnsx/canary.json
+    output_summary: 20_dns/dnsx/canary-summary.md
+    output_raw_dir: logs/raw/dnsx-canary
+  dnsx-probe:
+    enabled: true
+    branch: active
+    fallback: null
+    image_ref: dnsx
+    binary: dnsx
+    network_host: false
+    argv_template:
+      - dnsx
+      - -l
+      - "{dnsx_hosts}"
+      - -r
+      - "{probe_resolver}"
+      - -a
+      - -resp
+      - -json
+    output_mode: json
+    parser: json
+    data_kind: active
+    output_data_json: 20_dns/dnsx/probe.json
+    output_summary: 20_dns/dnsx/probe-summary.md
+    output_raw_dir: logs/raw/resolver-probe
   massdns:
-    enabled: false
+    enabled: true
     branch: active
     fallback: null
     image_ref: massdns
+    binary: massdns
     network_host: false
     argv_template:
       - massdns
       - -r
-      - "{resolver_forge_output}"
+      - "{dnsx_resolvers}"
       - -t
       - "{massdns_record_type}"
       - -o
@@ -368,14 +633,37 @@ tools:
     output_data_json: 20_dns/dnsx/data.json
     output_summary: 20_dns/dnsx/summary.md
     output_raw_dir: logs/raw/massdns
+  alterx:
+    enabled: true
+    branch: active
+    fallback: null
+    image_ref: alterx
+    binary: alterx
+    network_host: false
+    argv_template:
+      - alterx
+      - -l
+      - "{alterx_input}"
+      - -o
+      - "{alterx_output}"
+      - -silent
+    output_mode: text
+    parser: host_lines
+    data_kind: active
+    output_data_json: 20_dns/dnsx/alterx.json
+    output_summary: 20_dns/dnsx/alterx-summary.md
+    output_raw_dir: logs/raw/alterx
   naabu:
-    enabled: false
+    enabled: true
     branch: active
     fallback: null
     image_ref: naabu
+    binary: naabu
     network_host: true
     argv_template:
       - naabu
+      - -host
+      - "{naabu_host}"
       - -top-ports
       - "{portcheck_top_ports}"
       - -rate

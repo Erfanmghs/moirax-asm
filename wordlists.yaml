@@ -105,15 +105,25 @@ lists:
     entries: 54
     shape: hostname
     rationale: "Env identifiers (dev, staging, uat); classic vhost Host values, not content-discovery."
+  test_smoke_200:
+    # TEST FIXTURE (B2 acceptance smoke)
+    path: wordlists/local/test-smoke-200.txt
+    entries: 200
+    shape: hostname
+    rationale: "TEST FIXTURE (B2 acceptance smoke): first 200 normalized dns_fast_top5000 labels."
 
 tasks:
   DNSR-1:
     default_key: dns_fast_top5000
+    # B2 TEST MODE: smoke selection. Real-run default is default_key dns_fast_top5000.
+    selection:
+      - test_smoke_200
     fast:
       - dns_fast_top5000
       - dns_fast_fierce
       - dns_fast_services
       - dns_fast_deepmagic500
+      - test_smoke_200
     expansion:
       - dns_exp_top20000
       - dns_exp_top110000
@@ -129,8 +139,19 @@ tasks:
       - dns_exp_trickest
   FFUF-0:
     default_key: dns_exp_combined
-    sources:
+    # §8 operator ticks (B6 dashboard later). No UI in B2.
+    # Committed / real-run default_selection (unchanged):
+    default_selection:
+      - dns_fast_top5000
       - dns_exp_combined
+      - vhost_top5000
+    # B2 TEST MODE (until TEST 4 housekeeping restores default_selection):
+    selection:
+      - test_smoke_200
+    sources:
+      - test_smoke_200
+      - dns_exp_combined
+      - vhost_top5000
       - dns_exp_bitquark
       - dns_exp_shubs
       - dns_exp_top110000
@@ -148,7 +169,11 @@ tasks:
       - dns_exp_trickest
   FFUF-2:
     default_key: vhost_top5000
+    # B2 TEST MODE: smoke. Real-run default_key vhost_top5000.
+    selection:
+      - test_smoke_200
     sources:
+      - test_smoke_200
       - vhost_top5000
       - vhost_fierce
       - vhost_services

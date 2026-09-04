@@ -102,6 +102,14 @@ class CircuitBreaker:
             if isinstance(info, dict):
                 row.pause_reason = str(info.get("reason") or "persisted pause")
 
+    def force_pause(self, module: str, reason: str) -> None:
+        with self._lock:
+            state = self._state(module)
+            if state.paused:
+                return
+            window_id = int(self.clock.time() // self.window_sec) if self.window_sec else 0
+            self._pause(module, state, reason, 0, 0, window_id)
+
     def allow(self, module: str) -> bool:
         with self._lock:
             return not self._state(module).paused
@@ -209,15 +217,8 @@ class CircuitBreaker:
                     window_id,
                     f"latency drift avg={avg:.3f}s baseline={state.baseline_latency:.3f}s",
                 )
-            if state.consecutive_latency_bad >= self.bad_windows:
-                self._pause(
-                    module,
-                    state,
-                    "latency drift exceeded circuit breaker windows",
-                    errors,
-                    total,
-                    window_id,
-                )
+            # §11.4 load signal: latency drift → THROTTLE only. Pause is reserved
+            # for error-ratio > circuit_breaker_error_ratio across circuit_breaker_bad_windows.
         else:
             state.consecutive_latency_bad = 0
 

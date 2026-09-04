@@ -1,0 +1,1 @@
+{"schema_version":1,"module":"echo-probe","hosts":[{"host":"probe2.example.com","fqdn":"alt.probe2.example.com","ips":["203.0.113.50"]}],"candidates":[{"host":"probe2.example.com","sources":["echo-probe"],"ips":["203.0.113.50"]}],"sources":["echo-probe"],"branch":"passive"}

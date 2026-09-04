@@ -1,0 +1,8077 @@
+{
+  "schema_version": 1,
+  "from_run": null,
+  "to_run": "20260904T174459Z",
+  "added": {
+    "hosts": [
+      {
+        "host": "acc-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "acc.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "acc.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "access-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "access.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "access.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "acs.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ad.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "admin-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "admin.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "admin.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "admin.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "administrator-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "administrator.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "administrator.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ads-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ads.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ads.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ai.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "alumni.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "api-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "api.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "api.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "api.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-acc.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-access.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-admin.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-administrator.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-ads.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-api.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-asset.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-assets.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-atlas.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-backend.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-backup.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-beta.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-blog.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-blogs.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-build.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-builds.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-careers.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-cdn.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-client.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-cloud.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-cms.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-cms1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-code.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-compute.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-conf.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-content.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-core.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-corp.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-dashboard.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-data.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-db.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-dev.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-developer.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-developers.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-dmz.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-docs.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-drupal.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-eng.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-engineering.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-faq.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-final.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-forum.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-grafana.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-image.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-info.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-internal.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-ir.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-k8s.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-lab.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-ldap.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-legacy.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-live.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-local.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-log.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-login.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-logs.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-mail.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-manager.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-market.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-media.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-mobile.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-monitor.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-mssql.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-mta-sts.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-my.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-mysql.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-netlify.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-o1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-oauth.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-oauth2.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-office.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-origin.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-partner.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-pay.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-payment.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-plugins.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-private.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-prod.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-prometheus.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-promotion.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-proxy.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-public.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-qa.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-raw.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-review.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-role.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-s1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-s3.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-search.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-server.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-service.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-shop.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-shopify.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-stage.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-staging.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-stats.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-storage.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-stripe.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-tech.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-temp.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-test.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-v1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-v2.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-vpn.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-web.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-wordpress.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-wp.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-www.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-www1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app-www2.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.acc.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.access.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.admin.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.administrator.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.ads.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.api.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.asset.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.assets.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.atlas.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.backend.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.backup.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.beta.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.blog.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.blogs.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.build.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.builds.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.careers.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.cdn.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.client.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.cloud.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.cms.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.cms1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.code.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.compute.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.conf.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.content.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.core.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.corp.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.dashboard.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.data.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.db.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.dev.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.developer.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.developers.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.dmz.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.docs.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.drupal.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.eng.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.engineering.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.faq.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.final.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.fixture-target.test",
+        "ips": [],
+        "alive": false,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve",
+          "ffuf"
+        ]
+      },
+      {
+        "host": "app.forum.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.grafana.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.image.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.info.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.internal.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.ir.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.k8s.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.lab.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.ldap.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.legacy.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.live.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.local.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.log.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.login.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.logs.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.mail.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.manager.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.market.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.media.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.mobile.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.monitor.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.mssql.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.mta-sts.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.my.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.mysql.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.netlify.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.o1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.oauth.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.oauth2.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.office.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.origin.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.partner.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.pay.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.payment.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.plugins.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.private.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.prod.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.prometheus.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.promotion.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.proxy.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.public.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.qa.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.raw.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.review.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.role.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.s1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.s3.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.search.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.server.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.service.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.shop.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.shopify.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.stage.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.staging.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.stats.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.storage.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.stripe.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.tech.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.temp.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.test.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.v1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.v2.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.vpn.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.web.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.wordpress.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.wp.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.www.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.www1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app.www2.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app10.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app18.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app2.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app20.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app2017.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app2018.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app2019.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app2020.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app2021.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app2022.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app2023.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app2024.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app21.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app22.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app23.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app24.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app3.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app4.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app5.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app6.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app7.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app8.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "app9.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appacc.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appaccess.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appadmin.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appadministrator.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appads.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appapi.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appasset.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appassets.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appatlas.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appbackend.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appbackup.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appbeta.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appblog.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appblogs.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appbuild.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appbuilds.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appcareers.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appcdn.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appclient.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appcloud.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appcms.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appcms1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appcode.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appcompute.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appconf.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appcontent.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appcore.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appcorp.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appdashboard.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appdata.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appdb.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appdev.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appdeveloper.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appdevelopers.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appdmz.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appdocs.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appdrupal.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appeng.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appengineering.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appfaq.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appfinal.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appforum.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appgrafana.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appimage.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appinfo.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appinternal.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appir.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appk8s.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "applab.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appldap.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "applegacy.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "applive.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "applocal.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "applog.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "applogin.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "applogs.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appmail.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appmanager.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appmarket.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appmedia.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appmobile.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appmonitor.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appmssql.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appmta-sts.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appmy.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appmysql.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appnetlify.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appo1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appoauth.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appoauth2.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appoffice.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "apporigin.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "apppartner.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "apppay.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "apppayment.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appplugins.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appprivate.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appprod.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appprometheus.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "apppromotion.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appproxy.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "apppublic.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appqa.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appraw.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appreview.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "approle.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "apps.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "apps1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "apps3.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appsearch.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appserver.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appservice.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appshop.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appshopify.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appstage.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appstaging.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appstats.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appstorage.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appstripe.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "apptech.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "apptemp.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "apptest.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appv1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appv2.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appvpn.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appweb.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appwordpress.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appwp.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appwww.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appwww1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "appwww2.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "archive.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "asset-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "asset.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "asset.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "assets-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "assets.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "assets.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "atlas-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "atlas.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "atlas.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "auth.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "autoconfig.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "autodiscover.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "backend-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "backend.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "backend.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "backup-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "backup.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "backup.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "backup.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "beta-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "beta.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "beta.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "beta.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "billing.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "blog-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "blog.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "blog.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "blog.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "blogs-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "blogs.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "blogs.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "build-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "build.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "build.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "builds-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "builds.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "builds.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "c1.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "c2.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "c3.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ca.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cacti.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "calendar.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "careers-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "careers.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "careers.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cdn-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cdn.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cdn.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cdn.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cdni.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "chat.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "client-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "client.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "client.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cloud-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cloud.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cloud.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cloud.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cms-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cms.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cms.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cms.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cms1-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cms1.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cms1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "code-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "code.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "code.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "compute-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "compute.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "compute.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "conf-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "conf.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "conf.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "connect.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "content-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "content.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "content.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "content.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "core-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "core.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "core.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "corp-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "corp.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "corp.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cp.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cpanel.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cpcalendars.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cpcontacts.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "crm.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cs.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "css.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "cwp.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "d.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dashboard-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dashboard.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dashboard.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dashboard.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "data-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "data.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "data.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "data.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "db-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "db.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "db.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "db.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "demo.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dev-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dev.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dev.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dev.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "developer-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "developer.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "developer.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "developers-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "developers.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "developers.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dmz-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dmz.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dmz.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dns.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dns1.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dns2.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "dns3.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "docs-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "docs.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "docs.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "docs.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "download.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "drive.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "drupal-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "drupal.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "drupal.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "email.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "en.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "eng-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "eng.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "eng.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "engineering-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "engineering.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "engineering.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "enterpriseenrollment.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "enterpriseregistration.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "erp.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "eu-central-1.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "eu-east-1.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "example.com",
+        "ips": [
+          "104.20.23.154",
+          "172.66.147.243",
+          "2606:4700:10::ac42:93f3",
+          "2606:4700:10::6814:179a"
+        ],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "faq-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "faq.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "faq.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "files.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "final-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "final.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "final.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "forum-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "forum.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "forum.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "forum.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ftp.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "galleries.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "gateway.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "git.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "gitlab.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "go.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "grafana-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "grafana.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "grafana.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "grafana.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "gw.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "help.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "helpdesk.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "home.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "hosting.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "idp.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "image-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "image.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "image.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "images.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "imap.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "img.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "info-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "info.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "info.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "info.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "internal-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "internal.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "internal.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "intranet.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ip.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ipv4.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ipv6.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ir-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ir.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ir.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "irc.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "it.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "jobs.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "k8s-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "k8s.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "k8s.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "lab-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "lab.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "lab.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ldap-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ldap.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ldap.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ldap.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "legacy-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "legacy.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "legacy.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "lg.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "library.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "librenms.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "link.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "lists.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "live-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "live.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "live.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "live.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "lms.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "local-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "local.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "local.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "localhost.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "log-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "log.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "log.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "login-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "login.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "login.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "login.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "logs-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "logs.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "logs.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "lyncdiscover.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "m.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mail-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mail.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mail.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mail.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mail1.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mail2.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mail3.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "manager-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "manager.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "manager.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "market-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "market.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "market.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "matrix.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "media-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "media.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "media.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "media.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "meet.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mobile-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mobile.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mobile.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mobile.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "monitor-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "monitor.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "monitor.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "monitor.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "monitoring.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "moodle.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mrtg.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "msoid.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mssql-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mssql.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mssql.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mta-sts-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mta-sts.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mta-sts.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mx.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mx1.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mx2.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "my-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "my.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "my.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "my.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mysql-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mysql.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mysql.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "mysql.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "n8n.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "nagios.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "netbox.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "netlify-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "netlify.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "netlify.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "new.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "news.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "nextcloud.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "nms.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "noc.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ns.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ns0.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ns1.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ns2.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ns3.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ns4.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ns5.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ns6.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ntp.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ntp1.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "o1-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "o1.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "o1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "oauth-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "oauth.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "oauth.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "oauth2-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "oauth2.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "oauth2.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "office-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "office.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "office.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "office.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "old.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "online.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "origin-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "origin.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "origin.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "owncloud.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "partner-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "partner.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "partner.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "pay-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "pay.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "pay.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "payment-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "payment.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "payment.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "pbx.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "plugins-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "plugins.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "plugins.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "pop.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "pop3.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "portal.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "private-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "private.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "private.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "prod-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "prod.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "prod.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "prometheus-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "prometheus.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "prometheus.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "promotion-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "promotion.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "promotion.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "proxy-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "proxy.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "proxy.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "proxy.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "public-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "public.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "public.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "qa-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "qa.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "qa.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "radio.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "radius.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "raw-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "raw.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "raw.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "redmine.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "registry.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "relay.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "remote.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "review-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "review.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "review.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "role-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "role.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "role.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "rt.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "s.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "s1-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "s1.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "s1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "s3-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "s3.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "s3.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "search-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "search.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "search.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "search.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "secure.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "server-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "server.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "server.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "server.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "service-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "service.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "service.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "service.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "services.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "sftp.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "shop-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "shop.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "shop.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "shop.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "shopify-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "shopify.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "shopify.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "sip.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "sites.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "sms.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "smtp.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "smtp2.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "speed.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "speedtest.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ssl.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "sso.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "stage-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "stage.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "stage.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "staging-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "staging.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "staging.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "staging.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "static.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "stats-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "stats.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "stats.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "stats.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "status.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "storage-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "storage.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "storage.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "store.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "stream.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "stripe-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "stripe.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "stripe.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "support.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "survey.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "svn.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "tech-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "tech.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "tech.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "temp-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "temp.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "temp.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "test-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "test.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "test.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "test.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "test1.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "test2.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "thumbs.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ticket.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "time.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "tv.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "unifi.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "us-east-1.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "us-east-2.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "us-west-1.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "us-west-2.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "usa.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "uthumbs.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "uvideos.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "v1-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "v1.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "v1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "v2-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "v2.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "v2.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "video.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "voip.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "vpn-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "vpn.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "vpn.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "vpn.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "vpn2.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "web-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "web.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "web.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "web.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "web1.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "web2.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "webdisk.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "webmail.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "whm.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "wifi.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "wiki.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "wordpress-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "wordpress.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "wordpress.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "wp-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "wp.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "wp.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "ws.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "www-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "www.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "www.example.com",
+        "ips": [
+          "172.66.147.243",
+          "104.20.23.154",
+          "2606:4700:10::ac42:93f3",
+          "2606:4700:10::6814:179a"
+        ],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "www.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "www1-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "www1.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "www1.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "www1.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "www2-app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "www2.app.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "www2.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "www2.fixture-target.test",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "www3.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      },
+      {
+        "host": "zabbix.example.com",
+        "ips": [],
+        "alive": null,
+        "attribution": "active",
+        "sources": [
+          "dns-resolve"
+        ]
+      }
+    ],
+    "vhosts": [],
+    "ports": [],
+    "services": [],
+    "passive_ips": []
+  },
+  "removed": {
+    "hosts": [],
+    "vhosts": [],
+    "ports": [],
+    "services": [],
+    "passive_ips": []
+  },
+  "changed": {
+    "hosts": [],
+    "vhosts": [],
+    "ports": [],
+    "services": [],
+    "passive_ips": []
+  },
+  "baseline": "none",
+  "run_timestamp": "20260904T174459Z"
+}

@@ -22,7 +22,9 @@
           "ns": { "type": "array", "items": { "type": "string" } },
           "txt": { "type": "array", "items": { "type": "string" } },
           "asn": { "type": ["string", "integer", "null"] },
-          "source": { "type": "string", "enum": ["brute", "perm", "known"] }
+          "source": { "type": "string", "enum": ["brute", "perm", "known"] },
+          "resolution_status": { "type": "string", "enum": ["resolved", "unresolved"] },
+          "resolution_reason": { "type": ["string", "null"] }
         }
       }
     },

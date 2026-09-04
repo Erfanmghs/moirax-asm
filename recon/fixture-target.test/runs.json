@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "runs": [
+    {
+      "timestamp": "20260904T174459Z",
+      "status": "completed",
+      "counts": {
+        "passive_docs": 0,
+        "active_docs": 3,
+        "assets": 893,
+        "quarantine": 0
+      }
+    },
+    {
+      "timestamp": "20260904T185011Z",
+      "status": "partial",
+      "counts": {
+        "passive_docs": 0,
+        "active_docs": 2,
+        "assets": 45157,
+        "quarantine": 0
+      }
+    },
+    {
+      "timestamp": "20260904T210009Z",
+      "status": "completed",
+      "counts": {
+        "passive_docs": 0,
+        "active_docs": 3,
+        "assets": 52122,
+        "quarantine": 0
+      }
+    }
+  ]
+}

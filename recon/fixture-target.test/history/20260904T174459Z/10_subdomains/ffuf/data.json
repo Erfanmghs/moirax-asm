@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "module": "ffuf",
+  "hosts": [
+    {
+      "fqdn": "app.fixture-target.test",
+      "level": 1,
+      "parent": "fixture-target.test",
+      "alive": false,
+      "http_status": 200,
+      "length": 4106
+    }
+  ],
+  "vhosts": []
+}

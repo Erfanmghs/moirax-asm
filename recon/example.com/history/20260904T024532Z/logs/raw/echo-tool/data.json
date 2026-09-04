@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "module": "echo-tool",
+  "hosts": [
+    {
+      "host": "www.example.com",
+      "fqdn": "www.example.com"
+    },
+    {
+      "host": "mail.example.com",
+      "fqdn": "mail.example.com"
+    },
+    {
+      "host": "evil.com",
+      "fqdn": "evil.com"
+    }
+  ],
+  "candidates": [
+    {
+      "host": "www.example.com",
+      "sources": [
+        "echo-tool"
+      ]
+    },
+    {
+      "host": "mail.example.com",
+      "sources": [
+        "echo-tool"
+      ]
+    },
+    {
+      "host": "evil.com",
+      "sources": [
+        "echo-tool"
+      ]
+    }
+  ],
+  "vhosts": [],
+  "passive_ips": [],
+  "resolved": [],
+  "wildcard_suspects": [],
+  "branch": "passive",
+  "sources": [
+    "echo-tool"
+  ]
+}

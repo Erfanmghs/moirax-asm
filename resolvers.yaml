@@ -1,2 +1,8 @@
 schema_version: 1
-sources: []
+sources:
+  - name: trickest
+    url: https://raw.githubusercontent.com/trickest/resolvers/main/resolvers.txt
+  - name: proabiral
+    url: https://raw.githubusercontent.com/proabiral/Fresh-Resolvers/master/resolvers.txt
+manual_add: []
+manual_remove: []

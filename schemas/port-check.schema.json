@@ -4,7 +4,7 @@
   "title": "port-check data.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "module", "results", "unreachable"],
+  "required": ["schema_version", "module", "results", "unreachable", "unique_ips_checked", "duplicates_skipped"],
   "properties": {
     "schema_version": { "type": "integer", "const": 1 },
     "module": { "type": "string", "const": "port-check" },
@@ -13,10 +13,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["host", "ip", "ports"],
+        "required": ["ip", "hosts", "ports"],
         "properties": {
-          "host": { "type": "string" },
           "ip": { "type": "string" },
+          "hosts": { "type": "array", "items": { "type": "string" } },
           "ports": {
             "type": "array",
             "items": {
@@ -34,6 +34,12 @@
       }
     },
     "unreachable": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "unique_ips_checked": { "type": "integer", "minimum": 0 },
+    "duplicates_skipped": { "type": "integer", "minimum": 0 },
+    "skipped_no_ip": {
       "type": "array",
       "items": { "type": "string" }
     }

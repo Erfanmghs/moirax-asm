@@ -1,0 +1,68 @@
+
+        /'___\  /'___\           /'___\       
+       /\ \__/ /\ \__/  __  __  /\ \__/       
+       \ \ ,__\\ \ ,__\/\ \/\ \ \ \ ,__\      
+        \ \ \_/ \ \ \_/\ \ \_\ \ \ \ \_/      
+         \ \_\   \ \_\  \ \____/  \ \_\       
+          \/_/    \/_/   \/___/    \/_/       
+
+       v2.1.0-dev
+________________________________________________
+
+ :: Method           : GET
+ :: URL              : http://FUZZ.example.com
+ :: Wordlist         : FUZZ: /recon/example.com/wordlists/effective-FFUF-0.txt
+ :: Output file      : /recon/example.com/10_subdomains/ffuf/level1_example.com.json
+ :: File format      : json
+ :: Follow redirects : false
+ :: Calibration      : true
+ :: Timeout          : 10
+ :: Threads          : 40
+ :: Matcher          : Response status: all
+________________________________________________
+
+
+[2K:: Progress: [0/200] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: Errors: 0 ::
+[2K:: Progress: [19/200] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: Errors: 0 ::
+[2K:: Progress: [37/200] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: Errors: 0 ::
+[2K:: Progress: [40/200] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: Errors: 0 ::
+[2K:: Progress: [40/200] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: Errors: 0 ::
+[2K:: Progress: [42/200] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: Errors: 2 ::
+[2K:: Progress: [59/200] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: Errors: 21 ::
+[2K[ERR] Encountered an error while executing autocalibration request: Get "http://.htaccessAXlECHpRqwOiIuwC.example.com": dial tcp: lookup .htaccessAXlECHpRqwOiIuwC.example.com: no such host
+
+
+[2K[ERR] Encountered an error while executing autocalibration request: Get "http://.htaccessiNwnLvVN.example.com": dial tcp: lookup .htaccessiNwnLvVN.example.com: no such host
+
+
+[2K:: Progress: [70/200] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: Errors: 32 ::
+[2K:: Progress: [71/200] :: Job [1/1] :: 65 req/sec :: Duration: [0:00:01] :: Errors: 33 ::
+[2K:: Progress: [79/200] :: Job [1/1] :: 64 req/sec :: Duration: [0:00:01] :: Errors: 41 ::
+[2K:: Progress: [90/200] :: Job [1/1] :: 71 req/sec :: Duration: [0:00:01] :: Errors: 53 ::
+[2K:: Progress: [99/200] :: Job [1/1] :: 72 req/sec :: Duration: [0:00:01] :: Errors: 64 ::
+[2K[ERR] Encountered an error while executing autocalibration request: Get "http://admincHVMXRUHnfLHWzVO.example.com": dial tcp: lookup admincHVMXRUHnfLHWzVO.example.com on 10.255.255.254:53: no such host
+
+
+[2K:: Progress: [109/200] :: Job [1/1] :: 70 req/sec :: Duration: [0:00:01] :: Errors: 72 ::
+[2K:: Progress: [112/200] :: Job [1/1] :: 65 req/sec :: Duration: [0:00:01] :: Errors: 75 ::
+[2K:: Progress: [123/200] :: Job [1/1] :: 68 req/sec :: Duration: [0:00:01] :: Errors: 86 ::
+[2K[ERR] Encountered an error while executing autocalibration request: Get "http://adminvnsIyXvj.example.com": dial tcp: lookup adminvnsIyXvj.example.com on 10.255.255.254:53: no such host
+
+
+[2K:: Progress: [134/200] :: Job [1/1] :: 70 req/sec :: Duration: [0:00:01] :: Errors: 98 ::
+[2K:: Progress: [145/200] :: Job [1/1] :: 70 req/sec :: Duration: [0:00:02] :: Errors: 109 ::
+[2K:: Progress: [152/200] :: Job [1/1] :: 71 req/sec :: Duration: [0:00:02] :: Errors: 116 ::
+[2K:: Progress: [157/200] :: Job [1/1] :: 68 req/sec :: Duration: [0:00:02] :: Errors: 121 ::
+[2K[ERR] Encountered an error while executing autocalibration request: Get "http://SPGbGzeTxMdVacyV.example.com": dial tcp: lookup SPGbGzeTxMdVacyV.example.com on 10.255.255.254:53: no such host
+
+
+[2K:: Progress: [170/200] :: Job [1/1] :: 70 req/sec :: Duration: [0:00:02] :: Errors: 135 ::
+[2K:: Progress: [182/200] :: Job [1/1] :: 71 req/sec :: Duration: [0:00:02] :: Errors: 147 ::
+[2K:: Progress: [190/200] :: Job [1/1] :: 71 req/sec :: Duration: [0:00:02] :: Errors: 155 ::
+[2K:: Progress: [196/200] :: Job [1/1] :: 70 req/sec :: Duration: [0:00:02] :: Errors: 161 ::
+[2K[ERR] Encountered an error while executing autocalibration request: Get "http://olrcqcxp.example.com": dial tcp: lookup olrcqcxp.example.com on 10.255.255.254:53: no such host
+
+
+[2K:: Progress: [197/200] :: Job [1/1] :: 69 req/sec :: Duration: [0:00:02] :: Errors: 163 ::
+[2K:: Progress: [200/200] :: Job [1/1] :: 70 req/sec :: Duration: [0:00:02] :: Errors: 171 ::
+[2K:: Progress: [200/200] :: Job [1/1] :: 58 req/sec :: Duration: [0:00:03] :: Errors: 205 ::

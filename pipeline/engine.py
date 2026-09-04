@@ -14,9 +14,11 @@ from pipeline.factory import ensure_layout
 from pipeline.history import append_run, previous_timestamp, snapshot, utc_stamp, write_diff
 from pipeline.jsonio import read_json
 from pipeline.merge import load_tool_doc, merge_branches
+from pipeline.modules import RUNNERS
 from pipeline.notify import send_status
 from pipeline.params import Params
 from pipeline.scope import ScopeGate
+from pipeline.wordlist_forge import EmptyWordlistError, ingest_if_completed
 from pipeline import state as state_engine
 
 
@@ -76,6 +78,11 @@ def run_pipeline(
     active_docs: list[dict[str, Any]] = []
 
     def passive_branch() -> list[dict[str, Any]]:
+        if not passive_names:
+            msg = "passive branch: no tools registered (B3 pending) — skipped, not an error"
+            _append_note(params, target_dir, "passive", msg)
+            print(msg)
+            return []
         return _run_parallel(
             params,
             adapter,
@@ -91,7 +98,21 @@ def run_pipeline(
         )
 
     def active_branch() -> list[dict[str, Any]]:
-        return _run_sequential(
+        docs: list[dict[str, Any]] = []
+        if not _echo_fixture_mode(params):
+            docs = _run_active_modules(
+                params,
+                gate,
+                adapter,
+                target_dir,
+                target,
+                extra,
+                float(params.require("active_branch_budget_sec")),
+                clock,
+                planned,
+                partial,
+            )
+        tool_docs = _run_sequential(
             params,
             adapter,
             target_dir,
@@ -103,6 +124,7 @@ def run_pipeline(
             partial,
             "active",
         )
+        return docs + tool_docs
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         fut_p = pool.submit(_guard, passive_branch, partial, "passive")
@@ -135,6 +157,7 @@ def run_pipeline(
     counts = _counts(params, target_dir, passive_docs, active_docs)
     status, reason, failing_module = _classify_status(params, breaker, alerts, partial, failed, passive_docs, active_docs)
     state_engine.set_run_status(params, target_dir, target, status, reason=reason, failing_module=failing_module)
+    ingest_if_completed(params, gate, target_dir, target, status)
     snapshot(params, target_dir, stamp)
     prev = previous_timestamp(params, target_dir, stamp)
     append_run(params, target_dir, stamp, status, counts)
@@ -166,6 +189,37 @@ def run_module(
     ceiling = ResourceCeiling(params)
     adapter = Adapter(params, target_dir, breaker, ceiling, runner=runner, aggressive=aggressive)
     extra = {"target_domain": target}
+    if tool_name in RUNNERS:
+        partial: list[str] = []
+        state_engine.set_status(params, target_dir, tool_name, "running")
+        try:
+            doc = RUNNERS[tool_name](
+                params,
+                gate,
+                adapter,
+                target_dir,
+                target,
+                extra,
+                1,
+                None,
+                partial,
+            )
+        except EmptyWordlistError as exc:
+            state_engine.set_status(params, target_dir, tool_name, "failed")
+            print(f"fail-fast: {exc}")
+            return 1
+        except Exception as exc:
+            state_engine.set_status(params, target_dir, tool_name, "failed")
+            _append_log(params, target_dir, tool_name, tool_name, 1, str(exc))
+            print(f"module {tool_name} failed: {exc}")
+            return 1
+        state_engine.set_status(params, target_dir, tool_name, "done")
+        print(f"module {tool_name} data={target_dir} partial={partial}")
+        if doc:
+            merge_branches(params, gate, target_dir, target, [], [doc])
+        if breaker.any_paused():
+            return _exit_code(params, str(params.require("run_status_anomaly")))
+        return 0
     spec = adapter.spec(tool_name)
     module = str(spec.get("branch") or tool_name)
     result = adapter.invoke(tool_name, module=module, extra=extra, planned_concurrency=1)
@@ -277,6 +331,80 @@ def _branch_tools(params: Params, key: str) -> list[str]:
     return out
 
 
+def _run_active_modules(
+    params: Params,
+    gate: ScopeGate,
+    adapter: Adapter,
+    target_dir: Path,
+    target: str,
+    extra: dict[str, Any],
+    budget: float,
+    clock: Clock,
+    planned: int,
+    partial: list[str],
+) -> list[dict[str, Any]]:
+    names = params.require("active_branch_modules")
+    if not isinstance(names, list):
+        return []
+    deadline = clock.time() + budget
+    docs: list[dict[str, Any]] = []
+    st = state_engine.load_state(params, target_dir, target)
+    data_keys = {
+        "ffuf": "ffuf_data_json",
+        "dns-resolve": "dnsr_data_json",
+        "port-check": "portcheck_data_json",
+    }
+    for name in names:
+        name = str(name)
+        if name not in RUNNERS:
+            continue
+        if state_engine.skip_done(st, name):
+            key = data_keys.get(name)
+            if key:
+                doc = load_tool_doc(target_dir / str(params.require(key)))
+                if doc:
+                    docs.append(doc)
+            continue
+        if not adapter.breaker.allow(name):
+            reason = adapter.breaker.pause_reason(name) or "circuit breaker paused this module"
+            _append_log(params, target_dir, name, name, 0, f"skip: {reason}")
+            print(f"skip: module={name} reason={reason}")
+            continue
+        left = deadline - clock.time()
+        if left <= 0:
+            partial.append("active_budget")
+            break
+        state_engine.set_status(params, target_dir, name, "running")
+        try:
+            doc = RUNNERS[name](
+                params,
+                gate,
+                adapter,
+                target_dir,
+                target,
+                extra,
+                planned,
+                left,
+                partial,
+            )
+            if doc:
+                docs.append(doc)
+            state_engine.set_status(params, target_dir, name, "done")
+            st = state_engine.load_state(params, target_dir, target)
+        except EmptyWordlistError as exc:
+            state_engine.set_status(params, target_dir, name, "failed")
+            partial.append(f"empty_wordlist:{exc}")
+            print(f"fail-fast: {exc}")
+            break
+        except Exception as exc:
+            state_engine.set_status(params, target_dir, name, "failed")
+            _append_log(params, target_dir, name, name, 1, str(exc))
+            partial.append(f"active:{name}:{exc}")
+            traceback.print_exc()
+            continue
+    return docs
+
+
 def _run_parallel(
     params: Params,
     adapter: Adapter,
@@ -373,6 +501,14 @@ def _guard(fn, partial: list[str], branch: str):
         return exc
 
 
+def _echo_fixture_mode(params: Params) -> bool:
+    names = params.require("active_branch_tools")
+    if not isinstance(names, list) or "echo-tool-active" not in [str(item) for item in names]:
+        return False
+    spec = params.tools.get("echo-tool-active") or {}
+    return bool(isinstance(spec, dict) and spec.get("enabled", True))
+
+
 def _append_log(params: Params, target_dir: Path, module: str, tool: str, code: int, detail: str) -> None:
     path = target_dir / str(params.require("run_log"))
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -383,6 +519,16 @@ def _append_log(params: Params, target_dir: Path, module: str, tool: str, code: 
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     with path.open("a", encoding="utf-8") as handle:
         handle.write(f"{stamp}\t{module}\t{tool}\t{code}\tfail\t{tail}\n")
+
+
+def _append_note(params: Params, target_dir: Path, module: str, detail: str) -> None:
+    path = target_dir / str(params.require("run_log"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    from datetime import datetime, timezone
+
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"{stamp}\t{module}\t-\t0\tok\t{detail}\n")
 
 
 def _counts(

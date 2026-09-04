@@ -92,6 +92,14 @@ class Adapter:
         for token in template:
             rendered = _render_token(str(token), values)
             argv.append(rendered)
+        for block in spec.get("optional_argv") or []:
+            if not isinstance(block, dict):
+                continue
+            when = str(block.get("when") or "")
+            if when and not str(values.get(when) or "").strip():
+                continue
+            for token in block.get("argv") or []:
+                argv.append(_render_token(str(token), values))
         return argv
 
     def invoke(
@@ -207,8 +215,15 @@ class Adapter:
         self.breaker.record(module, success=success, latency_sec=duration, timeout=code == 124)
         self._log_run(module, spec.name, code, stderr, argv, success)
         data_path = None
-        if success:
-            data_path = self._parse(spec, stdout, argv, duration)
+        if extra.get("skip_parse"):
+            raw_rel = Path(str(extra.get("output_raw_dir") or spec.get("output_raw_dir") or f"logs/raw/{spec.name}"))
+            raw_dir = self.target_dir / raw_rel
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            (raw_dir / "stdout.txt").write_text(stdout, encoding="utf-8")
+            if stderr:
+                (raw_dir / "stderr.txt").write_text(stderr, encoding="utf-8")
+        elif success:
+            data_path = self._parse(spec, stdout, argv, duration, extra)
         return InvokeResult(
             tool=spec.name,
             argv=argv,
@@ -235,13 +250,13 @@ class Adapter:
         merged.update(extra)
         if self.aggressive:
             mult = float(self.params.require("aggressive_multiplier"))
-            for key in ("ffuf_threads", "ffuf_rate", "dnsx_max_qps", "portcheck_rate", "httpx_threads"):
+            for key in ("ffuf_threads", "ffuf_rate", "dnsx_max_qps", "dnsx_rl", "portcheck_rate", "httpx_threads"):
                 if key in merged and merged[key] is not None:
-                    merged[key] = float(merged[key]) * mult
+                    merged[key] = _as_number(merged[key]) * mult
         if module:
-            for key in ("ffuf_threads", "ffuf_rate", "dnsx_max_qps", "portcheck_rate", "httpx_threads"):
+            for key in ("ffuf_threads", "ffuf_rate", "dnsx_max_qps", "dnsx_rl", "portcheck_rate", "httpx_threads"):
                 if key in merged and merged[key] is not None:
-                    merged[key] = self.breaker.apply_limit(module, merged[key])
+                    merged[key] = self.breaker.apply_limit(module, _as_number(merged[key]))
         return merged
 
     def _image(self, image_ref: str) -> str:
@@ -291,15 +306,24 @@ class Adapter:
         env_file = self.params.root / str(self.params.require("env_filename"))
         if env_file.is_file():
             cmd.extend(["--env-file", str(env_file)])
+        for item in spec.get("docker_env") or []:
+            cmd.extend(["-e", _render_token(str(item), dict(self.params.settings))])
         if spec.get("network_host"):
             cmd.extend(["--network", "host"])
+        binary = spec.get("binary")
+        if binary:
+            cmd.extend(["--entrypoint", str(binary)])
         cmd.append(image)
-        cmd.extend(argv)
+        if binary and argv and argv[0] == str(binary):
+            cmd.extend(argv[1:])
+        else:
+            cmd.extend(argv)
         return cmd
 
-    def _parse(self, spec: ToolSpec, stdout: str, argv: list[str], duration: float) -> Path:
+    def _parse(self, spec: ToolSpec, stdout: str, argv: list[str], duration: float, extra: dict[str, Any] | None = None) -> Path:
+        extra = extra or {}
         parser = str(spec.get("parser") or "host_lines")
-        raw_rel = Path(str(spec.get("output_raw_dir") or f"logs/raw/{spec.name}"))
+        raw_rel = Path(str(extra.get("output_raw_dir") or spec.get("output_raw_dir") or f"logs/raw/{spec.name}"))
         raw_dir = self.target_dir / raw_rel
         raw_dir.mkdir(parents=True, exist_ok=True)
         (raw_dir / "stdout.txt").write_text(stdout, encoding="utf-8")
@@ -425,6 +449,17 @@ def _tool_label(docker_cmd: list[str]) -> str:
         if token == "--label" and i + 1 < len(docker_cmd) and "recon.tool=" in docker_cmd[i + 1]:
             return docker_cmd[i + 1].split("=", 1)[1]
     return ""
+
+
+def _as_number(value: Any) -> float | int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return value
+    text = str(value).strip()
+    if "." in text:
+        return float(text)
+    return int(text)
 
 
 def _render_token(token: str, values: dict[str, Any]) -> str:

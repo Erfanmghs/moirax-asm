@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "target": "example.com",
+  "updated_at": "2026-09-04T21:04:38Z",
+  "modules": {
+    "ffuf": {
+      "status": "pending",
+      "started_at": null,
+      "finished_at": null
+    },
+    "dns-resolve": {
+      "status": "pending",
+      "started_at": null,
+      "finished_at": null
+    },
+    "port-check": {
+      "status": "pending",
+      "started_at": null,
+      "finished_at": null
+    },
+    "passive-recon": {
+      "status": "pending",
+      "started_at": null,
+      "finished_at": null
+    },
+    "merge": {
+      "status": "done",
+      "started_at": "2026-09-04T17:36:51Z",
+      "finished_at": "2026-09-04T17:36:51Z"
+    },
+    "port-sweep": {
+      "status": "pending",
+      "started_at": null,
+      "finished_at": null
+    }
+  },
+  "run": {
+    "status": "stopped",
+    "reason": "operator stop",
+    "failing_module": null,
+    "updated_at": "2026-09-04T21:04:38Z"
+  },
+  "breaker": {
+    "paused": {}
+  }
+}

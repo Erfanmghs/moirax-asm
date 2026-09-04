@@ -1,4 +1,4 @@
-"""CLI: run | resume | stop | status | report — no network before a valid scope."""
+"""CLI: run | resume | stop | status | report | module | reset-breaker — no network before a valid scope."""
 
 from __future__ import annotations
 
@@ -13,11 +13,13 @@ from pipeline.scope import SETUP_INSTRUCTIONS, ScopeError, ScopeGate
 from pipeline import state as state_engine
 
 USAGE = """Usage:
-  ./recon.sh run <target>
-  ./recon.sh resume <target>
+  ./recon.sh run <target> [--aggressive]
+  ./recon.sh resume <target> [--aggressive]
   ./recon.sh stop <target>
   ./recon.sh status [target]
   ./recon.sh report <target>
+  ./recon.sh module <name> <target> [--aggressive]
+  ./recon.sh reset-breaker <target>
 """
 
 
@@ -36,21 +38,41 @@ def main(argv: list[str] | None = None) -> int:
     if command == "status":
         return cmd_status(params, args[1] if len(args) > 1 else None)
     if command == "run":
-        return cmd_run(params, _need_target(args))
+        target, aggressive = _target_and_aggressive(args, 1)
+        return cmd_run(params, target, aggressive)
     if command == "resume":
-        return cmd_resume(params, _need_target(args))
+        target, aggressive = _target_and_aggressive(args, 1)
+        return cmd_resume(params, target, aggressive)
     if command == "stop":
-        return cmd_stop(params, _need_target(args))
+        return cmd_stop(params, _need(args, 1))
     if command == "report":
-        return cmd_report(params, _need_target(args))
+        return cmd_report(params, _need(args, 1))
+    if command == "module":
+        name = _need(args, 1)
+        target, aggressive = _target_and_aggressive(args, 2)
+        return cmd_module(params, name, target, aggressive)
+    if command == "reset-breaker":
+        return cmd_reset_breaker(params, _need(args, 1))
     sys.stderr.write(USAGE)
     return 2
 
 
-def _need_target(args: list[str]) -> str:
-    if len(args) < 2:
+def _need(args: list[str], index: int) -> str:
+    if len(args) <= index or str(args[index]).startswith("--"):
         raise SystemExit(USAGE)
-    return args[1]
+    return args[index]
+
+
+def _target_and_aggressive(args: list[str], index: int) -> tuple[str, bool]:
+    target = _need(args, index)
+    aggressive = False
+    rest = args[index + 1 :]
+    for item in rest:
+        if item == "--aggressive":
+            aggressive = True
+        else:
+            raise SystemExit(USAGE)
+    return target, aggressive
 
 
 def cmd_status(params: Params, target: str | None) -> int:
@@ -75,13 +97,14 @@ def cmd_status(params: Params, target: str | None) -> int:
         data = json.loads(state_file.read_text(encoding="utf-8"))
         modules = data.get("modules") or {}
         summary = ", ".join(f"{name}={row.get('status')}" for name, row in modules.items())
-        print(f"{child.name}: {data.get('updated_at')} [{summary}]")
+        run = data.get("run") or {}
+        print(f"{child.name}: run={run.get('status')} {data.get('updated_at')} [{summary}]")
     if not found:
         print("status: empty workspace (no state.json files)")
     return 0
 
 
-def cmd_run(params: Params, target: str) -> int:
+def cmd_run(params: Params, target: str, aggressive: bool = False) -> int:
     target = sanitize_target(target)
     try:
         gate = _load_gate(params)
@@ -95,30 +118,24 @@ def cmd_run(params: Params, target: str) -> int:
         print(f"out of scope: {target} ({reason})")
         print(f"logged: {target_dir / log_rel}")
         return 1
-    target_dir = ensure_layout(params, target)
-    state_engine.init_state(params, target_dir, target)
-    print(f"scope ok; workspace ready: {target_dir}")
-    return 0
+    from pipeline.engine import run_pipeline
+
+    return run_pipeline(params, gate, target, aggressive=aggressive)
 
 
-def cmd_resume(params: Params, target: str) -> int:
+def cmd_resume(params: Params, target: str, aggressive: bool = False) -> int:
     target = sanitize_target(target)
     try:
-        _load_gate(params)
+        gate = _load_gate(params)
     except ScopeError as exc:
         return _fail_scope(exc)
     target_dir = target_root(params, target)
     if not state_engine.state_path(params, target_dir).exists():
         print(f"nothing to resume for {target}")
         return 1
-    st = state_engine.load_state(params, target_dir, target)
-    pending = [
-        name
-        for name in params.require("pipeline_modules")
-        if not state_engine.skip_done(st, str(name))
-    ]
-    print(f"resume: skip done; remaining: {', '.join(str(x) for x in pending) or '(none)'}")
-    return 0
+    from pipeline.engine import run_pipeline
+
+    return run_pipeline(params, gate, target, aggressive=aggressive, resume=True)
 
 
 def cmd_stop(params: Params, target: str) -> int:
@@ -133,11 +150,14 @@ def cmd_stop(params: Params, target: str) -> int:
         for name, row in (st.get("modules") or {}).items()
         if (row or {}).get("status") == "running"
     ]
-    if not running:
+    from pipeline.engine import stop_target
+
+    stopped = stop_target(params, target_dir)
+    if not running and not stopped:
         print(f"stop: no running modules for {target}")
         return 0
-    print(f"stop requested for: {', '.join(running)}")
-    return 0
+    print(f"stop requested for: {', '.join(running) or '(none)'}; containers={len(stopped)}")
+    return int(params.require("exit_code_stopped"))
 
 
 def cmd_report(params: Params, target: str) -> int:
@@ -153,6 +173,37 @@ def cmd_report(params: Params, target: str) -> int:
         return 0
     for item in artifacts:
         print(item)
+    return 0
+
+
+def cmd_module(params: Params, name: str, target: str, aggressive: bool = False) -> int:
+    target = sanitize_target(target)
+    try:
+        gate = _load_gate(params)
+    except ScopeError as exc:
+        return _fail_scope(exc)
+    allowed, reason = gate.validate_candidate(target)
+    if not allowed:
+        target_dir = ensure_layout(params, target)
+        log_rel = Path(str(params.require("out_of_scope_log")))
+        gate.log_rejection(target_dir / log_rel, target, reason)
+        print(f"out of scope: {target} ({reason})")
+        return 1
+    from pipeline.engine import run_module
+
+    return run_module(params, gate, name, target, aggressive=aggressive)
+
+
+def cmd_reset_breaker(params: Params, target: str) -> int:
+    target = sanitize_target(target)
+    target_dir = target_root(params, target)
+    if not state_engine.state_path(params, target_dir).exists():
+        print(f"reset-breaker: no state for {target}")
+        return 1
+    before = state_engine.paused_modules(params, target_dir, target)
+    state_engine.clear_breaker_pauses(params, target_dir, target)
+    after = state_engine.paused_modules(params, target_dir, target)
+    print(f"reset-breaker: cleared {sorted(before.keys())} for {target}; paused_now={sorted(after.keys())}")
     return 0
 
 

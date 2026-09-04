@@ -1,4 +1,4 @@
-"""state.json engine — pending|running|done|failed + timestamps (§6.4)."""
+"""state.json engine — modules + run-level status + breaker pauses (§6.4, §11.4)."""
 
 from __future__ import annotations
 
@@ -30,6 +30,13 @@ def empty_state(params: Params, target: str) -> dict[str, Any]:
         "target": target,
         "updated_at": _now(),
         "modules": modules,
+        "run": {
+            "status": str(params.require("run_status_running")),
+            "reason": None,
+            "failing_module": None,
+            "updated_at": _now(),
+        },
+        "breaker": {"paused": {}},
     }
 
 
@@ -41,6 +48,16 @@ def load_state(params: Params, target_dir: Path, target: str) -> dict[str, Any]:
         data = json.load(handle)
     if not isinstance(data, dict):
         return empty_state(params, target)
+    data.setdefault("breaker", {"paused": {}})
+    data.setdefault(
+        "run",
+        {
+            "status": str(params.require("run_status_running")),
+            "reason": None,
+            "failing_module": None,
+            "updated_at": _now(),
+        },
+    )
     return data
 
 
@@ -62,6 +79,17 @@ def init_state(params: Params, target_dir: Path, target: str) -> dict[str, Any]:
     return state
 
 
+def new_run_state(params: Params, target_dir: Path, target: str) -> dict[str, Any]:
+    """Reset module rows for a fresh run but KEEP persisted breaker pauses (§11.4)."""
+    previous = load_state(params, target_dir, target) if state_path(params, target_dir).exists() else {}
+    state = empty_state(params, target)
+    paused = ((previous.get("breaker") or {}).get("paused")) or {}
+    if isinstance(paused, dict) and paused:
+        state["breaker"] = {"paused": dict(paused)}
+    save_state(params, target_dir, state)
+    return state
+
+
 def set_status(params: Params, target_dir: Path, module: str, status: str) -> dict[str, Any]:
     allowed = tuple(params.require("module_status_values"))
     if status not in allowed:
@@ -76,6 +104,61 @@ def set_status(params: Params, target_dir: Path, module: str, status: str) -> di
         row["finished_at"] = _now()
     row["status"] = status
     modules[module] = row
+    save_state(params, target_dir, state)
+    return state
+
+
+def set_run_status(
+    params: Params,
+    target_dir: Path,
+    target: str,
+    status: str,
+    reason: str | None = None,
+    failing_module: str | None = None,
+) -> dict[str, Any]:
+    state = load_state(params, target_dir, target)
+    state["run"] = {
+        "status": status,
+        "reason": reason,
+        "failing_module": failing_module,
+        "updated_at": _now(),
+    }
+    save_state(params, target_dir, state)
+    return state
+
+
+def paused_modules(params: Params, target_dir: Path, target: str) -> dict[str, Any]:
+    state = load_state(params, target_dir, target)
+    paused = ((state.get("breaker") or {}).get("paused")) or {}
+    return paused if isinstance(paused, dict) else {}
+
+
+def persist_pause(params: Params, target_dir: Path, target: str, module: str, reason: str) -> None:
+    state = load_state(params, target_dir, target)
+    breaker = state.setdefault("breaker", {"paused": {}})
+    paused = breaker.setdefault("paused", {})
+    paused[module] = {"reason": reason, "paused_at": _now()}
+    # Mirror into run object immediately so ANOMALY is observable mid-run.
+    state["run"] = {
+        "status": str(params.require("run_status_anomaly")),
+        "reason": reason,
+        "failing_module": module,
+        "updated_at": _now(),
+    }
+    save_state(params, target_dir, state)
+
+
+def clear_breaker_pauses(params: Params, target_dir: Path, target: str) -> dict[str, Any]:
+    state = load_state(params, target_dir, target)
+    state["breaker"] = {"paused": {}}
+    run = state.get("run") or {}
+    if str(run.get("status") or "") == str(params.require("run_status_anomaly")):
+        state["run"] = {
+            "status": str(params.require("run_status_completed")),
+            "reason": "breaker reset",
+            "failing_module": None,
+            "updated_at": _now(),
+        }
     save_state(params, target_dir, state)
     return state
 

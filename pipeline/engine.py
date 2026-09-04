@@ -1,0 +1,403 @@
+"""WIDE pipeline engine: PASSIVE ∥ ACTIVE, branch budgets, MERGE, history (§7)."""
+
+from __future__ import annotations
+
+import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import Any
+
+from pipeline.adapter import Adapter, InvokeResult
+from pipeline.breaker import CircuitBreaker, Clock
+from pipeline.ceiling import ResourceCeiling
+from pipeline.factory import ensure_layout
+from pipeline.history import append_run, previous_timestamp, snapshot, utc_stamp, write_diff
+from pipeline.jsonio import read_json
+from pipeline.merge import load_tool_doc, merge_branches
+from pipeline.notify import send_status
+from pipeline.params import Params
+from pipeline.scope import ScopeGate
+from pipeline import state as state_engine
+
+
+def run_pipeline(
+    params: Params,
+    gate: ScopeGate,
+    target: str,
+    aggressive: bool = False,
+    clock: Clock | None = None,
+    runner: Any | None = None,
+    resume: bool = False,
+) -> int:
+    target_dir = ensure_layout(params, target)
+    if resume:
+        state_engine.init_state(params, target_dir, target)
+    else:
+        state_engine.new_run_state(params, target_dir, target)
+    state_engine.set_run_status(
+        params,
+        target_dir,
+        target,
+        str(params.require("run_status_running")),
+        reason=None,
+        failing_module=None,
+    )
+    clock = clock or Clock()
+    alerts: list[tuple[str, str, str]] = []
+
+    def _on_anomaly(status: str, module: str, reason: str) -> None:
+        alerts.append((status, module, reason))
+        send_status(params, status, module, reason)
+
+    breaker = CircuitBreaker(
+        params,
+        clock=clock,
+        notify=_on_anomaly,
+        target_dir=target_dir,
+        target=target,
+    )
+    ceiling = ResourceCeiling(params)
+    adapter = Adapter(params, target_dir, breaker, ceiling, clock=clock, runner=runner, aggressive=aggressive)
+    extra = {"target_domain": target}
+    partial: list[str] = []
+    failed = False
+
+    passive_names = _filter_paused(
+        params, target_dir, breaker, _branch_tools(params, "passive_branch_tools")
+    )
+    active_names = _filter_paused(
+        params, target_dir, breaker, _branch_tools(params, "active_branch_tools")
+    )
+    planned = max(1, len(passive_names) + (1 if active_names else 0))
+    limits = ceiling.plan(planned)
+    passive_workers = max(1, limits.concurrency - (1 if active_names else 0)) if planned > 1 else max(1, len(passive_names) or 1)
+
+    passive_docs: list[dict[str, Any]] = []
+    active_docs: list[dict[str, Any]] = []
+
+    def passive_branch() -> list[dict[str, Any]]:
+        return _run_parallel(
+            params,
+            adapter,
+            target_dir,
+            passive_names,
+            extra,
+            float(params.require("passive_branch_budget_sec")),
+            clock,
+            max(1, min(len(passive_names), passive_workers) or 1),
+            planned,
+            partial,
+            "passive",
+        )
+
+    def active_branch() -> list[dict[str, Any]]:
+        return _run_sequential(
+            params,
+            adapter,
+            target_dir,
+            active_names,
+            extra,
+            float(params.require("active_branch_budget_sec")),
+            clock,
+            planned,
+            partial,
+            "active",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        fut_p = pool.submit(_guard, passive_branch, partial, "passive")
+        fut_a = pool.submit(_guard, active_branch, partial, "active")
+        p_docs = fut_p.result()
+        a_docs = fut_a.result()
+        if isinstance(p_docs, list):
+            passive_docs = p_docs
+        else:
+            failed = True
+        if isinstance(a_docs, list):
+            active_docs = a_docs
+        else:
+            failed = True
+
+    merge_name = str(params.require("merge_module"))
+    st = state_engine.load_state(params, target_dir, target)
+    if not state_engine.skip_done(st, merge_name):
+        state_engine.set_status(params, target_dir, merge_name, "running")
+        try:
+            merge_branches(params, gate, target_dir, target, passive_docs, active_docs)
+            state_engine.set_status(params, target_dir, merge_name, "done")
+        except Exception as exc:
+            failed = True
+            partial.append(f"merge:{exc}")
+            _append_log(params, target_dir, merge_name, merge_name, 1, str(exc))
+            state_engine.set_status(params, target_dir, merge_name, "failed")
+
+    stamp = utc_stamp()
+    counts = _counts(params, target_dir, passive_docs, active_docs)
+    status, reason, failing_module = _classify_status(params, breaker, alerts, partial, failed, passive_docs, active_docs)
+    state_engine.set_run_status(params, target_dir, target, status, reason=reason, failing_module=failing_module)
+    snapshot(params, target_dir, stamp)
+    prev = previous_timestamp(params, target_dir, stamp)
+    append_run(params, target_dir, stamp, status, counts)
+    write_diff(params, target_dir, prev, stamp)
+    code = _exit_code(params, status)
+    print(f"run {status}: {target_dir}")
+    print(f"history: {target_dir / params.require('history_dirname') / stamp}")
+    print(f"diff: {target_dir / params.require('diff_filename')}")
+    if alerts:
+        print(f"anomaly: {alerts[-1]}")
+    return code
+
+
+def run_module(
+    params: Params,
+    gate: ScopeGate,
+    tool_name: str,
+    target: str,
+    aggressive: bool = False,
+    runner: Any | None = None,
+) -> int:
+    target_dir = ensure_layout(params, target)
+    breaker = CircuitBreaker(params, target_dir=target_dir, target=target)
+    if not breaker.allow(tool_name):
+        reason = breaker.pause_reason(tool_name) or "circuit breaker paused this module"
+        _append_log(params, target_dir, tool_name, tool_name, 0, f"skip: {reason}")
+        print(f"skip: module={tool_name} reason={reason}")
+        return _exit_code(params, str(params.require("run_status_anomaly")))
+    ceiling = ResourceCeiling(params)
+    adapter = Adapter(params, target_dir, breaker, ceiling, runner=runner, aggressive=aggressive)
+    extra = {"target_domain": target}
+    spec = adapter.spec(tool_name)
+    module = str(spec.get("branch") or tool_name)
+    result = adapter.invoke(tool_name, module=module, extra=extra, planned_concurrency=1)
+    print(f"module {tool_name} exit={result.exit_code} fallback={result.used_fallback} data={result.data_json}")
+    if result.exit_code == 0 and result.data_json:
+        kind = str(spec.get("data_kind") or "passive")
+        docs = [read_json(result.data_json)]
+        merge_branches(
+            params,
+            gate,
+            target_dir,
+            target,
+            docs if kind == "passive" else [],
+            docs if kind == "active" else [],
+        )
+    if breaker.any_paused():
+        return _exit_code(params, str(params.require("run_status_anomaly")))
+    return 0 if result.exit_code == 0 else 1
+
+
+def stop_target(params: Params, target_dir: Path) -> list[str]:
+    from pipeline.dockerbin import docker_prefix
+    import subprocess
+
+    prefix = docker_prefix(params)
+    label = str(params.require("docker_label_target"))
+    listed = subprocess.run(
+        [*prefix, "ps", "-q", "--filter", f"label={label}={target_dir.name}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    ids = [line.strip() for line in listed.stdout.splitlines() if line.strip()]
+    for cid in ids:
+        subprocess.run([*prefix, "stop", cid], capture_output=True, text=True, check=False)
+    state_engine.set_run_status(
+        params,
+        target_dir,
+        target_dir.name,
+        str(params.require("run_status_stopped")),
+        reason="operator stop",
+        failing_module=None,
+    )
+    return ids
+
+
+def _classify_status(
+    params: Params,
+    breaker: CircuitBreaker,
+    alerts: list[tuple[str, str, str]],
+    partial: list[str],
+    failed: bool,
+    passive_docs: list[dict[str, Any]],
+    active_docs: list[dict[str, Any]],
+) -> tuple[str, str | None, str | None]:
+    if alerts or breaker.any_paused():
+        if alerts:
+            _status, module, reason = alerts[-1]
+            return str(params.require("run_status_anomaly")), reason, module
+        names = breaker.paused_module_names()
+        module = names[0] if names else None
+        reason = breaker.pause_reason(module) if module else "circuit breaker paused"
+        return str(params.require("run_status_anomaly")), reason, module
+    if failed and not (passive_docs or active_docs):
+        return str(params.require("run_status_failed")), "no branch produced assets", None
+    if partial or failed:
+        return str(params.require("run_status_partial")), "; ".join(partial) if partial else "branch failure", None
+    return str(params.require("run_status_completed")), None, None
+
+
+def _exit_code(params: Params, status: str) -> int:
+    mapping = {
+        str(params.require("run_status_completed")): int(params.require("exit_code_completed")),
+        str(params.require("run_status_failed")): int(params.require("exit_code_failed")),
+        str(params.require("run_status_anomaly")): int(params.require("exit_code_anomaly")),
+        str(params.require("run_status_partial")): int(params.require("exit_code_partial")),
+        str(params.require("run_status_stopped")): int(params.require("exit_code_stopped")),
+    }
+    return mapping.get(status, 1)
+
+
+def _filter_paused(
+    params: Params,
+    target_dir: Path,
+    breaker: CircuitBreaker,
+    names: list[str],
+) -> list[str]:
+    kept: list[str] = []
+    for name in names:
+        if breaker.allow(name):
+            kept.append(name)
+            continue
+        reason = breaker.pause_reason(name) or "circuit breaker paused this module"
+        _append_log(params, target_dir, name, name, 0, f"skip: {reason}")
+        print(f"skip: module={name} reason={reason}")
+    return kept
+
+
+def _branch_tools(params: Params, key: str) -> list[str]:
+    names = params.require(key)
+    if not isinstance(names, list):
+        return []
+    tools = params.tools
+    out: list[str] = []
+    for name in names:
+        spec = tools.get(str(name)) or {}
+        if isinstance(spec, dict) and spec.get("enabled", True):
+            out.append(str(name))
+    return out
+
+
+def _run_parallel(
+    params: Params,
+    adapter: Adapter,
+    target_dir: Path,
+    names: list[str],
+    extra: dict[str, Any],
+    budget: float,
+    clock: Clock,
+    workers: int,
+    planned: int,
+    partial: list[str],
+    branch: str,
+) -> list[dict[str, Any]]:
+    deadline = clock.time() + budget
+    docs: list[dict[str, Any]] = []
+    if not names:
+        return docs
+    remaining = list(names)
+    workers = max(1, workers)
+
+    def one(name: str) -> InvokeResult | None:
+        left = deadline - clock.time()
+        if left <= 0:
+            return None
+        return adapter.invoke(name, module=name, extra=extra, planned_concurrency=planned, timeout_sec=left)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futs = {pool.submit(one, name): name for name in remaining}
+        for fut in as_completed(futs):
+            name = futs[fut]
+            if clock.time() >= deadline:
+                partial.append(f"{branch}_budget")
+                break
+            try:
+                result = fut.result()
+            except Exception as exc:
+                _append_log(params, target_dir, branch, name, 1, str(exc))
+                partial.append(f"{branch}:{name}:{exc}")
+                continue
+            if result is None:
+                partial.append(f"{branch}_budget")
+                continue
+            if result.data_json:
+                doc = load_tool_doc(result.data_json)
+                if doc:
+                    docs.append(doc)
+            elif result.exit_code != 0:
+                _append_log(params, target_dir, branch, name, result.exit_code, result.stderr)
+    if clock.time() >= deadline and f"{branch}_budget" not in partial:
+        partial.append(f"{branch}_budget")
+    return docs
+
+
+def _run_sequential(
+    params: Params,
+    adapter: Adapter,
+    target_dir: Path,
+    names: list[str],
+    extra: dict[str, Any],
+    budget: float,
+    clock: Clock,
+    planned: int,
+    partial: list[str],
+    branch: str,
+) -> list[dict[str, Any]]:
+    deadline = clock.time() + budget
+    docs: list[dict[str, Any]] = []
+    for name in names:
+        left = deadline - clock.time()
+        if left <= 0:
+            partial.append(f"{branch}_budget")
+            break
+        try:
+            result = adapter.invoke(name, module=name, extra=extra, planned_concurrency=planned, timeout_sec=left)
+        except Exception as exc:
+            _append_log(params, target_dir, branch, name, 1, str(exc))
+            partial.append(f"{branch}:{name}:{exc}")
+            continue
+        if result.data_json:
+            doc = load_tool_doc(result.data_json)
+            if doc:
+                docs.append(doc)
+        elif result.exit_code != 0:
+            _append_log(params, target_dir, branch, name, result.exit_code, result.stderr)
+    return docs
+
+
+def _guard(fn, partial: list[str], branch: str):
+    try:
+        return fn()
+    except Exception as exc:
+        partial.append(f"{branch}_crash:{exc}")
+        traceback.print_exc()
+        return exc
+
+
+def _append_log(params: Params, target_dir: Path, module: str, tool: str, code: int, detail: str) -> None:
+    path = target_dir / str(params.require("run_log"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tail_n = int(params.require("stderr_tail_lines"))
+    tail = " | ".join(detail.splitlines()[-tail_n:])
+    from datetime import datetime, timezone
+
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"{stamp}\t{module}\t{tool}\t{code}\tfail\t{tail}\n")
+
+
+def _counts(
+    params: Params,
+    target_dir: Path,
+    passive_docs: list[dict[str, Any]],
+    active_docs: list[dict[str, Any]],
+) -> dict[str, int]:
+    counts = {
+        "passive_docs": len(passive_docs),
+        "active_docs": len(active_docs),
+    }
+    assets_path = target_dir / str(params.require("assets_relpath"))
+    if assets_path.is_file():
+        doc = read_json(assets_path)
+        counts["assets"] = len(doc.get("assets") or [])
+        counts["quarantine"] = len(doc.get("quarantine") or [])
+    return counts

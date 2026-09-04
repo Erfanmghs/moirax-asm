@@ -268,3 +268,124 @@ Hygiene: `git check-ignore scope.yaml` → `.gitignore:5:scope.yaml`; `git ls-fi
 | FFUF-2 | `vhost_env` | Fuzzing/environment-identifiers.txt | 54 | vhost | Env identifiers (dev/staging/uat); not content-discovery. |
 
 Named settings: `wordlists_registry`, `seclists_root`, `wordlist_forge_output`, `dnsr_1_wordlist_key`, `dnsr_1_fast_keys`, `dnsr_1_expansion_keys`, `ffuf_0_source_keys`, `ffuf_2_wordlist_key`, `ffuf_2_source_keys`. Defaults: DNSR-1 → `dns_fast_top5000`; FFUF-0 → `dns_exp_combined`; FFUF-2 → `vhost_top5000`.
+
+---
+
+# PHASE-REPORT — B1 Adapter & Orchestrator
+
+Phase: **B1 — Adapter & Orchestrator** (companion §4). Stopped here; B2 not started.
+
+## What was built
+
+- Adapter (`pipeline/adapter.py`): `tools.yaml` load, command assembly only from named `{parameters}` + per-tool `flag_overrides`, pinned image from `tools.lock`, non-interactive `docker run --rm` with ceiling `--memory`/`--cpus`, recon volume mount, labels for stop. `--aggressive` multiplies named rate/thread caps; it cannot disable the breaker.
+- Fallback profiles (§4.3): retry × `tool_retry_count` with exponential `retry_backoff_base_sec`, then registered `fallback` tool, then degraded-continue. Failures append to `logs/run.log` (module, tool, exit, stderr tail).
+- Pipeline engine (`pipeline/engine.py`): PASSIVE tools in parallel ∥ ACTIVE tools sequential; branch time budgets `passive_branch_budget_sec` / `active_branch_budget_sec`; a crashed branch does not block the other; budget breach → PARTIAL, MERGE still runs. `./recon.sh run` resets module state (full pipeline); `resume` skips `done`.
+- MERGE (`pipeline/merge.py`): union, exact host dedupe, attribution `passive|active|both`, merge-time scope re-validation (drops logged), wildcard/catchall quarantine into `assets.json.quarantine`. No confidence scores.
+- Circuit breaker (§11.4): error ratio > `circuit_breaker_error_ratio` over `circuit_breaker_window_sec` → throttle (divide rate/threads by `throttle_divisor`); `circuit_breaker_bad_windows` consecutive windows → pause + Telegram `ANOMALY` (credentials unset → skip silently). Latency drift vs `canary_latency_multiplier` also throttles. Every throttle/pause emits a `breaker` line in `logs/run.log` with `errors=N/T`, window `[start,end)`, `throttle_factor`, and reason. Pause is **persisted** in `state.json` under `breaker.paused.<module>` and survives process exit; subsequent runs skip paused modules with a `skip:` log line until `./recon.sh reset-breaker <target>`.
+- Run-level status (§4.7 / §6.6): `state.json` carries `run:{status,reason,failing_module,updated_at}`. Terminal statuses and CLI exit codes:
+
+| status | CLI exit |
+|---|---|
+| `completed` | `0` (`exit_code_completed`) |
+| `failed` | `1` (`exit_code_failed`) |
+| `anomaly` | `2` (`exit_code_anomaly`) |
+| `partial` | `3` (`exit_code_partial`) |
+| `stopped` | `4` (`exit_code_stopped`) |
+
+  `runs.json` entries use the same status strings. A breaker pause classifies the run as `anomaly` (never `completed`).
+- Resource ceiling (§11.5): `resource_budget_ram_mb` (capped by `resource_budget_ram_mb_max`) and `resource_budget_cpu_cores` split across current concurrency; host `MemAvailable` de-concurrencys before OOM when `/proc/meminfo` exists.
+- History (§6.6): `runs.json` row, `history/<UTC-timestamp>/` snapshot of `data.json` + `assets.json`, `diff.json` with `added|removed|changed` per hosts/vhosts/ports/services/passive_ips. First-run diffs use empty baseline + `baseline:"none"`.
+- Fake echo-tool family in `tools.yaml` (busybox pin). dnsx→massdns fallback profile registered (enabled false until B2). Tool rationale: `docs/tool-choices.md`.
+- CLI: `./recon.sh module <name> <target>`, `--aggressive`, and `./recon.sh reset-breaker <target>`.
+
+## How to run
+
+```bash
+cp scope.yaml.example scope.yaml   # authorized test target only
+./recon.sh run example.com
+./recon.sh status example.com
+./recon.sh reset-breaker example.com   # clear persisted module pauses
+python -m pipeline.verify_b1
+```
+
+On this Windows session, Docker Engine is reached as `wsl -e docker` when `docker` is not on the Windows PATH (operator host is WSL2, master §2.7). Volume bind uses `/mnt/<drive>/...`.
+
+## Acceptance evidence
+
+### Fake echo-tool: adapter → container → data.json
+
+`python -m pipeline.verify_b1` with real Docker (`busybox:1.36.1` pulled):
+
+```
+echo-path: ok docker=True assets ['api.example.com', 'mail.example.com', 'www.example.com'] exit 0
+```
+
+Container argv (named `echo_passive_hosts` / `echo_active_hosts`): `echo www.example.com mail.example.com evil.com` and `echo www.example.com api.example.com`. Artifacts: `recon/example.com/logs/raw/echo-tool/data.json`, `logs/raw/echo-tool-active/data.json`, `10_subdomains/passive/sources/echo-tool.txt`. Docker run included `--memory` / `--cpus` (ceiling plan 4-way: `512m` / `0.5`).
+
+MERGE master list (`00_assets/assets.json`):
+
+| host | attribution |
+|---|---|
+| www.example.com | both |
+| mail.example.com | passive |
+| api.example.com | active |
+| evil.com | dropped + `logs/out_of_scope.log` (`host not in includes`) |
+
+FFUF / DNS-RESOLVE / PORT-CHECK / PORT-SWEEP remain `pending` (not B1). `merge=done`.
+
+Fallback: `echo-fail` (3 failing attempts) → registered `echo-tool` → `fallback: ok attempts 1 tool echo-tool`.
+
+### Injected error rate trips the breaker → ANOMALY
+
+Fake clock, 5 errors in window 0 → throttle (`throttle_factor=0.5`); 5 errors in the next `circuit_breaker_window_sec` window → pause + notify:
+
+```
+breaker: ok anomaly ('ANOMALY', 'echo-tool', 'error ratio exceeded circuit breaker windows')
+```
+
+Telegram send skipped (no `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`).
+
+### Two-run diff: added / removed / changed
+
+Synthetic history `20200101T000000Z` → `20200102T000000Z`:
+
+```
+diff: ok added ['new.example.com'] changed ['old.example.com']
+```
+
+Docker pipeline vs prior snapshot also wrote `recon/example.com/diff.json` (`added` api/mail/www, `removed` old/new from the synthetic snapshot, `changed` empty). `runs.json` appends timestamp, status, per-module counts. Snapshots under `history/<UTC-timestamp>/`.
+
+Wildcard/catchall MERGE check: hosts sharing wildcard IP `203.0.113.10` → `quarantine` reason `catchall`.
+
+## Out of scope for B1 (intentional)
+
+FFUF-0/1/2 loops, RESOLVER FORGE, DNSR-1/2/3, PORT-CHECK, PASSIVE PSV-0…8, PORT-SWEEP, dashboard app, reporting formats, supervisor agent.
+
+## Stop
+
+B1 complete. Do not start B2 until this phase is accepted.
+
+---
+
+# B1 ACCEPTANCE — OFFICIAL TESTS 1-3
+
+All runs under `recon/example.com/` (and `history/`) so far are **TEST runs with fixtures** on the authorized target `example.com` — keep them as evidence; no pointer breakage.
+
+- **T1 PASS** — fake-tool happy path (`echo-probe` adapter→container→data.json). Mid-test `write_diff` first-run crash (`prev=None` + `_empty_classes` lists) fixed in `pipeline/history.py` (empty-map baseline + `baseline:"none"`).
+- **T2 FAIL → REM2 → PASS** — injected errors tripped breaker (throttle→pause+ANOMALY), but ANOMALY was in-process-only, `runs.json` said `completed`, CLI exit 0. Remediation 2: persist `state.json` `run` + `breaker.paused`, classify `anomaly`, exit codes, transition logs, `./recon.sh reset-breaker <target>`.
+- **T3 PASS** — two-run history/diff taxonomy: RUN A restored probe host (`added`); RUN B `probe2` vs `probe` (`added`+`removed`); RUN C same host with `ips` (`changed` before/after). Note: `fqdn` is also used as a host key by MERGE (`hosts[].fqdn or host`), so `fqdn=alt.probe2.example.com` additionally appeared under `added` — host-row `changed` detection compares full `assets.json` rows (host/ips/alive/attribution/sources), not raw tool `fqdn` alone.
+
+### Exit-code mapping
+
+| status | CLI exit |
+|---|---|
+| `completed` | `0` |
+| `failed` | `1` |
+| `anomaly` | `2` |
+| `partial` | `3` |
+| `stopped` | `4` |
+
+### Fixture note
+
+`echo-probe` removed after T3. `echo-tool` / `echo-tool-fallback` / `echo-tool-active` / `echo-fail` remain as `# TEST FIXTURE (verify_b1)` until B2 cleanup. Test run data under `recon/example.com/` retained.
+

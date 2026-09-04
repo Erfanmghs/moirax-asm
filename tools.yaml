@@ -166,5 +166,224 @@ settings:
     - vhost_fierce
     - vhost_services
     - vhost_env
+  tool_retry_count: 2
+  retry_backoff_base_sec: 1
+  passive_branch_budget_sec: 1200
+  active_branch_budget_sec: 3600
+  run_log: logs/run.log
+  history_dirname: history
+  diff_filename: diff.json
+  assets_relpath: 00_assets/assets.json
+  assets_summary_relpath: 00_assets/summary.md
+  stderr_tail_lines: 20
+  throttle_divisor: 2
+  aggressive_multiplier: 2
+  telegram_timeout_sec: 10
+  telegram_bot_token_env: TELEGRAM_BOT_TOKEN
+  telegram_chat_id_env: TELEGRAM_CHAT_ID
+  docker_binary: docker
+  docker_label_pipeline: recon.pipeline
+  docker_label_target: recon.target
+  docker_label_tool: recon.tool
+  docker_label_module: recon.module
+  container_memory_unit: m
+  meminfo_path: /proc/meminfo
+  env_filename: ".env"
+  merge_module: merge
+  merge_wildcard_reason: wildcard
+  merge_catchall_reason: catchall
+  self_monitor_anomaly: ANOMALY
+  run_status_running: running
+  run_status_completed: completed
+  run_status_partial: partial
+  run_status_failed: failed
+  run_status_anomaly: anomaly
+  run_status_stopped: stopped
+  exit_code_completed: 0
+  exit_code_failed: 1
+  exit_code_anomaly: 2
+  exit_code_partial: 3
+  exit_code_stopped: 4
+  ffuf_output_format: json
+  ffuf_url: ""
+  ffuf_wordlist: ""
+  ffuf_output: ""
+  dnsx_wordlist: ""
+  target_domain: ""
+  dnsx_output_json: true
+  naabu_output_json: true
+  resolver_forge_output: resolvers/forge/custom-resolvers.txt
+  massdns_record_type: A
+  massdns_output_code: J
+  passive_sources_relpath: 10_subdomains/passive/sources
+  echo_passive_hosts: "www.example.com mail.example.com evil.com"
+  echo_active_hosts: "www.example.com api.example.com"
+  echo_fail_script: "exit 1"
+  passive_branch_tools:
+    - echo-tool
+  active_branch_tools:
+    - echo-tool-active
 
-tools: {}
+tools:
+  # TEST FIXTURE (verify_b1)
+  echo-tool:
+    enabled: true
+    branch: passive
+    fallback: echo-tool-fallback
+    image_ref: echo-tool
+    network_host: false
+    argv_template:
+      - echo
+      - "{echo_passive_hosts}"
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/echo-tool/data.json
+    output_summary: logs/raw/echo-tool/summary.md
+    output_raw_dir: logs/raw/echo-tool
+  echo-tool-fallback:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: echo-tool-fallback
+    network_host: false
+    argv_template:
+      - echo
+      - "{echo_passive_hosts}"
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/echo-tool-fallback/data.json
+    output_summary: logs/raw/echo-tool-fallback/summary.md
+    output_raw_dir: logs/raw/echo-tool-fallback
+  echo-tool-active:
+    enabled: true
+    branch: active
+    fallback: null
+    image_ref: echo-tool-active
+    network_host: false
+    argv_template:
+      - echo
+      - "{echo_active_hosts}"
+    output_mode: text
+    parser: host_lines
+    data_kind: active
+    output_data_json: logs/raw/echo-tool-active/data.json
+    output_summary: logs/raw/echo-tool-active/summary.md
+    output_raw_dir: logs/raw/echo-tool-active
+  echo-fail:
+    enabled: false
+    branch: passive
+    fallback: echo-tool
+    image_ref: echo-fail
+    network_host: false
+    argv_template:
+      - /bin/sh
+      - -c
+      - "{echo_fail_script}"
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/echo-fail/data.json
+    output_summary: logs/raw/echo-fail/summary.md
+    output_raw_dir: logs/raw/echo-fail
+  ffuf:
+    enabled: false
+    branch: active
+    fallback: null
+    image_ref: ffuf
+    network_host: true
+    argv_template:
+      - ffuf
+      - -u
+      - "{ffuf_url}"
+      - -w
+      - "{ffuf_wordlist}"
+      - -mc
+      - "{ffuf_match_codes}"
+      - -ac
+      - -t
+      - "{ffuf_threads}"
+      - -timeout
+      - "{ffuf_timeout}"
+      - -rate
+      - "{ffuf_rate}"
+      - -maxtime-job
+      - "{ffuf_maxtime_job}"
+      - -o
+      - "{ffuf_output}"
+      - -of
+      - "{ffuf_output_format}"
+    output_mode: json
+    parser: json
+    data_kind: active
+    output_data_json: 10_subdomains/ffuf/data.json
+    output_summary: 10_subdomains/ffuf/summary.md
+    output_raw_dir: logs/raw/ffuf
+  dnsx:
+    enabled: false
+    branch: active
+    fallback: massdns
+    image_ref: dnsx
+    network_host: false
+    argv_template:
+      - dnsx
+      - -d
+      - "{target_domain}"
+      - -w
+      - "{dnsx_wordlist}"
+      - -r
+      - "{resolver_forge_output}"
+      - -rl
+      - "{dnsx_max_qps}"
+      - -a
+      - -resp
+      - -json
+    output_mode: json
+    parser: json
+    data_kind: active
+    output_data_json: 20_dns/dnsx/data.json
+    output_summary: 20_dns/dnsx/summary.md
+    output_raw_dir: logs/raw/dnsx
+  massdns:
+    enabled: false
+    branch: active
+    fallback: null
+    image_ref: massdns
+    network_host: false
+    argv_template:
+      - massdns
+      - -r
+      - "{resolver_forge_output}"
+      - -t
+      - "{massdns_record_type}"
+      - -o
+      - "{massdns_output_code}"
+      - -s
+      - "{dnsx_max_qps}"
+      - "{dnsx_wordlist}"
+    output_mode: json
+    parser: json
+    data_kind: active
+    output_data_json: 20_dns/dnsx/data.json
+    output_summary: 20_dns/dnsx/summary.md
+    output_raw_dir: logs/raw/massdns
+  naabu:
+    enabled: false
+    branch: active
+    fallback: null
+    image_ref: naabu
+    network_host: true
+    argv_template:
+      - naabu
+      - -top-ports
+      - "{portcheck_top_ports}"
+      - -rate
+      - "{portcheck_rate}"
+      - -json
+    output_mode: json
+    parser: json
+    data_kind: active
+    output_data_json: 30_ports/naabu-light/data.json
+    output_summary: 30_ports/naabu-light/summary.md
+    output_raw_dir: logs/raw/naabu-light

@@ -4,3 +4,35 @@ images:
     image: busybox
     tag: "1.36.1"
     digest: ""
+  echo-tool:
+    image: busybox
+    tag: "1.36.1"
+    digest: ""
+  echo-tool-fallback:
+    image: busybox
+    tag: "1.36.1"
+    digest: ""
+  echo-tool-active:
+    image: busybox
+    tag: "1.36.1"
+    digest: ""
+  echo-fail:
+    image: busybox
+    tag: "1.36.1"
+    digest: ""
+  ffuf:
+    image: ghcr.io/ffuf/ffuf
+    tag: "v2.1.0"
+    digest: ""
+  dnsx:
+    image: projectdiscovery/dnsx
+    tag: "v1.2.2"
+    digest: ""
+  massdns:
+    image: c99tn/massdns
+    tag: "latest"
+    digest: ""
+  naabu:
+    image: projectdiscovery/naabu
+    tag: "v2.3.5"
+    digest: ""

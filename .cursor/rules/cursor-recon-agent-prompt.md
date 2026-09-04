@@ -1,5 +1,5 @@
 # RECON PIPELINE AGENT — Master Prompt (for Cursor)
-# Version: 1.7 | Updated: 2026-09-04
+# Version: 1.8 | Updated: 2026-09-04
 # Modules are appended iteratively. Never remove or rewrite completed sections — only append/refine.
 
 ## 1. ROLE
@@ -108,6 +108,12 @@ Failure handling: §4.3 defaults; a failed level keeps all previously found host
 - CACHE: the effective list is cached against a hash of (selection + source file mtimes); an unchanged selection reuses the cache instead of re-merging multi-million-entry lists every run (§11.5 frugality).
 - FAIL-FAST: an empty selection for a task aborts the run launch with a clear error — the pipeline NEVER silently runs on an empty wordlist. Explosion guards (FFUF-1 caps, §11.4) still apply on top of the union.
 
+### SHARED COMPONENT: IP-CENTRIC PORT SCANNING (user-mandated, frozen operator decision v1.8)
+Rationale: open ports are a property of the SERVER (IP), not of any single hostname — many subdomains commonly share one server. Scanning per hostname duplicates work and multiplies noise. Therefore, across the WHOLE pipeline:
+- RULE 1 — RESOLUTION COVERAGE: host identification (any branch, any source — passive or active) is only complete when the host's IP plane is resolved. Inside the ACTIVE branch, PORT-CHECK consumes the DNSR-3 host→IP map. POST-MERGE RESOLUTION GUARANTEE (executed before PORT-SWEEP): every host in assets.json WITHOUT a resolved IP is resolved in ONE batched dnsx pass (same forged-resolver registry; breaker §11.4 + ceiling §11.5 apply); hosts still unresolvable carry explicit `"resolution_status": "unresolved"` + reason — an IP is never silently missing.
+- RULE 2 — ONE SCAN PER SERVER: PORT-CHECK (order-3), PORT-SWEEP (order-4), and the nmap -sV second stage consume the UNIQUE resolved-IP set: exactly ONE scan command per unique IP per run; results are attributed back to EVERY hostname sharing that IP. PORT-SWEEP's IP DEDUP clause below is reaffirmed; PORT-CHECK gains the same dedup (within its own input set).
+- RULE 3 — EXPLICIT TARGET SET: before ANY scan command runs, the exact server list is materialized and logged (per unique IP: attributed hostnames + their discovery sources) so the operator can audit WHAT will be scanned and WHY — the nmap/naabu target set is never implicit.
+
 ### MODULE: DNS-RESOLVE — branch: ACTIVE | order: 2 | Tool: dnsx (PRIMARY, speed-tuned) + massdns (registered FALLBACK profile per §4.3 / dashboard-switchable)
 Purpose: maximize subdomain CANDIDATE discovery at the DNS plane + resolve every known asset to IPs (A/AAAA/CNAME/MX/NS/TXT + ASN) → host→IP map for PORT-CHECK and the WIDE "max IPs" goal.
 
@@ -133,10 +139,10 @@ Output path: `recon/<target>/20_dns/dnsx/`
 Failure handling: §4.3 — on dnsx failure retry ×1, then AUTO-SWITCH to the registered massdns profile (same forge inputs, JSON output, adapted rate profile), continuing degraded.
 
 ### MODULE: PORT-CHECK — branch: ACTIVE | order: 3 (strictly after DNS-RESOLVE) | light variant (full-range scanning belongs to the NARROW phase — deliberately out of scope here)
-Purpose: per-host check of the 50 most-used ports; feeds the "newly opened port" watchtower alert (§4.6).
-- Input: DNS-RESOLVE data.json (host → IP). Hosts with no resolved IP are skipped + counted.
-- Tool: naabu via tools.yaml (image per §2.2): `naabu -top-ports 50 -rate <rps:300> -json` — hosts processed sequentially (§7.2b); rate/concurrency dashboard-editable; circuit breaker (§11.4) + resource ceiling (§11.5) apply.
-- Output schema (data.json): `{"schema_version":1,"module":"port-check","results":[{"host","ip","ports":[{"port","proto","state":"open"}]}],"unreachable":[...]}`
+Purpose: per-SERVER (unique-IP) check of the 50 most-used ports; feeds the "newly opened port" watchtower alert (§4.6).
+- Input: DNS-RESOLVE data.json (host → IP) → IP DEDUP per §8 IP-CENTRIC PORT SCANNING: build IP→[hostnames]; each UNIQUE resolved IP is checked EXACTLY ONCE (one naabu invocation); results attributed back to EVERY hostname sharing that IP. Hosts with no resolved IP are skipped + counted (never silently).
+- Tool: naabu via tools.yaml (image per §2.2): `naabu -top-ports 50 -rate <rps:300> -json` — unique IPs processed sequentially (§7.2b); rate/concurrency dashboard-editable; circuit breaker (§11.4) + resource ceiling (§11.5) apply.
+- Output schema (data.json): `{"schema_version":1,"module":"port-check","results":[{"ip","hosts":[],"ports":[{"port","proto","state":"open"}]}],"unreachable":[],"unique_ips_checked":0,"duplicates_skipped":0}` (user-mandated refinement v1.8: per-IP rows + attribution, never per-host scans)
 - Output path: `recon/<target>/30_ports/naabu-light/` (the future NARROW full-range scan will use `30_ports/naabu-full/` — no collision).
 - Diff integration: a newly OPEN port vs previous run → §4.6 Telegram alert; newly CLOSED ports recorded in diff, never alerted.
 - Failure handling: §4.3; a fully-timing-out host is marked `unreachable`, not failed.
@@ -144,6 +150,7 @@ Purpose: per-host check of the 50 most-used ports; feeds the "newly opened port"
 ### MODULE: PORT-SWEEP — branch: ACTIVE | order: 4 (runs AFTER MERGE — consumes assets.json) | full-range scan on LIVE subdomains (the light top-50 PORT-CHECK stays as order-3 early signal — both coexist)
 Purpose: complete port surface (all 65,535 ports) for every LIVE subdomain, with hard guarantees: exactly ONE scan command per unique IP per run, rate-ramped so WAF/IDS never blacklists us, professional profile switches (user-mandated).
 - Input filter: hosts with `alive=true` from assets.json (PSV-6 / FFUF-2 probes). When the probe toggle is off, `portsweep_scope: alive_only | all_resolved` (dashboard-editable) decides the input set.
+- POST-MERGE RESOLUTION GUARANTEE (§8 IP-CENTRIC PORT SCANNING, RULE 1 — user-mandated v1.8): hosts lacking a resolved IP are batch-resolved (ONE dnsx pass) BEFORE the IP→[hostnames] map is built; still-unresolvable hosts carry `resolution_status: unresolved` + reason and are EXCLUDED from scanning with an explicit log line — the unique-IP target set is derived only after this guarantee.
 - IP DEDUP (MANDATORY): build IP→[hostnames] from the DNSR-3 map + PSV-8 passive IPs → each UNIQUE IP is scanned EXACTLY ONCE per run; results are attributed back to EVERY hostname sharing that IP. Duplicates are logged and skipped, never re-scanned.
 - Tool: naabu via tools.yaml, SYN scan, host network (§2.4): `naabu -l <unique-ips> -p - -scan-type s -retries 2 -timeout 1000 -c <concurrency> -rate <pps> -json`
 - SCAN PROFILES (the professional switch — dashboard-selectable per run or per schedule): `light` (top-50 = PORT-CHECK behavior) | `full` (all ports, default rate cap 1,000 pps) | `custom` (dashboard port-range + rate). Profile and EVERY flag are named dashboard-editable parameters (§5.6); Cursor implements the profile engine as a thin config layer over the adapter — never a new tool.

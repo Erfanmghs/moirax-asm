@@ -1,5 +1,5 @@
 # RECON PIPELINE AGENT — Master Prompt (for Cursor)
-# Version: 1.6 | Updated: 2026-09-04
+# Version: 1.7 | Updated: 2026-09-04
 # Modules are appended iteratively. Never remove or rewrite completed sections — only append/refine.
 
 ## 1. ROLE
@@ -72,7 +72,7 @@ recon/<target>/
 Purpose: recursive HTTP-based subdomain + virtual-host discovery from a user-provided wildcard include (e.g., *.example.com).
 
 FFUF-0 WORDLIST FORGE (ordered sub-step 0, runs before any enumeration):
-- Aggregate subdomain wordlists from multiple registered sources (GitHub repos, public datasets — sources listed in `wordlists.yaml`); union + dedupe + normalize (lowercase, valid hostname charset) → `wordlists/forge/custom-subdomains.txt` (atomically updated).
+- Aggregate subdomain wordlists from multiple registered sources (GitHub repos, public datasets — sources listed in `wordlists.yaml`); the ACTIVE input set = ONLY the registry keys the operator ticked in the dashboard (§8 WORDLIST REGISTRY & DASHBOARD SELECTION) → union + dedupe + normalize (lowercase, valid hostname charset) → `wordlists/forge/custom-subdomains.txt` (atomically updated).
 - SELF-GROWING: after every completed run, newly VALIDATED host labels from FFUF-1/FFUF-2 AND DNS-RESOLVE (DNSR) hits are appended to the forged list → the custom list becomes target-specific and increasingly complete over time.
 
 FFUF-1 RECURSIVE HOST ENUM (ordered sub-step 1):
@@ -84,13 +84,13 @@ FFUF-1 RECURSIVE HOST ENUM (ordered sub-step 1):
 
 FFUF-2 VHOST ENUM (ordered sub-step 2, runs AFTER the depth loop completes — the module does NOT end at depth):
 - BEFORE fuzzing: a lightweight HTTP probe (e.g., httpx via tools.yaml) tags every discovered host `alive | dead` (status, title, server). TAGGING ONLY — it never filters hosts out.
-- For EVERY discovered host — INCLUDING DNS-dead ones (a dead hostname still answering via Host header = vhost misconfiguration class → flagged `"misconfig_suspect": true`): `ffuf -u http://<host> -H "Host: FUZZ.<host>" -w <forged-list> <baseline_flags> -o vhost_<host>.json -of json`
+- For EVERY discovered host — INCLUDING DNS-dead ones (a dead hostname still answering via Host header = vhost misconfiguration class → flagged `"misconfig_suspect": true`): `ffuf -u http://<host> -H "Host: FUZZ.<host>" -w <effective-vhost-list> <baseline_flags> -o vhost_<host>.json -of json` — the effective vhost list = union of the dashboard-selected Wordlist Registry keys for this task (§8 WORDLIST REGISTRY & DASHBOARD SELECTION)
 - Valid vhost hostnames are recorded as host assets (source: active) and re-enter the FFUF-2 queue for one bounded feedback pass (passes ≤ `ffuf_depth`; caps apply).
 
 Baseline flags (mandatory on EVERY ffuf call):
 `-mc all -ac -t <threads:40> -timeout 10 -rate <rps:150> -maxtime-job <sec:1800>` + `-o <path> -of json` + `-x <proxy>` only when proxy is set (§9.3). ALL load parameters (threads/rate/timeout/maxtime/depth/caps) are dashboard-editable via the Tools panel → tools.yaml overrides (§5.4–5.5); `--aggressive` raises caps but never disables the circuit breaker (§11.4).
 
-Inputs: scope.yaml (wildcard includes) | `ffuf_depth` + load caps from dashboard | forged wordlist (FFUF-0; seclists mounted at `/usr/share/seclists` as one of the forge sources) | proxy setting.
+Inputs: scope.yaml (wildcard includes) | `ffuf_depth` + load caps from dashboard | forged wordlist (FFUF-0 — union of dashboard-selected registry keys, §8; seclists mounted at `/usr/share/seclists` as one of the forge sources) | proxy setting.
 Tools: ffuf via tools.yaml adapter (image per §2.2).
 Output schema (data.json): `{"schema_version":1,"module":"ffuf","hosts":[{"fqdn","level","parent","alive","http_status","length"}],"vhosts":[{"base_host","vhost","alive","http_status","length","misconfig_suspect"}]}`
 Output paths: FFUF-1 → `recon/<target>/10_subdomains/ffuf/` ; FFUF-2 → `recon/<target>/15_vhosts/ffuf/` (filenames embed level+parent so future sub-steps never collide).
@@ -101,10 +101,17 @@ Failure handling: §4.3 defaults; a failed level keeps all previously found host
 - Per-resolver health tracked (success ratio, latency). Auto-prune: a resolver below 80% success over a run is quarantined. Dashboard: manual add/remove of resolvers.
 - SELF-GROWING (same principles as FFUF-0): refreshed/extended from sources every run. The forged file is the ONLY resolver source every DNS-capable tool may use (tools.yaml references it).
 
+### SHARED COMPONENT: WORDLIST REGISTRY & DASHBOARD SELECTION (user-mandated)
+- `wordlists.yaml` is the single registry of curated wordlists (e.g., SecLists trees), keyed per task group (DNSR-1 brute / FFUF-0 forge seeds / FFUF-2 vhost): key → file path (relative to the seclists mount), entry count, role, rationale. Shape-filtered: hostname-shaped entries only for DNS/vhost tasks; content-discovery lists are OUT OF SCOPE (NARROW-phase concern, deferred).
+- DASHBOARD SELECTION (§9.2-a): the operator TICKS which registry keys each task uses — per-task checkboxes + a SELECT-ALL control per task group. Selection persists as named parameters through schema-validated writes (§5.4); the pipeline always consumes the current selection at launch (§5.6).
+- UNION + DEDUPE at use time: per task, the selected files are merged, lowercased, stripped of whitespace/comments, and `sort -u`-deduped into ONE effective wordlist materialized per run (`wordlists/forge/effective-<task>.txt`) with its entry count logged — deterministic + auditable (§10.2 spirit).
+- CACHE: the effective list is cached against a hash of (selection + source file mtimes); an unchanged selection reuses the cache instead of re-merging multi-million-entry lists every run (§11.5 frugality).
+- FAIL-FAST: an empty selection for a task aborts the run launch with a clear error — the pipeline NEVER silently runs on an empty wordlist. Explosion guards (FFUF-1 caps, §11.4) still apply on top of the union.
+
 ### MODULE: DNS-RESOLVE — branch: ACTIVE | order: 2 | Tool: dnsx (PRIMARY, speed-tuned) + massdns (registered FALLBACK profile per §4.3 / dashboard-switchable)
 Purpose: maximize subdomain CANDIDATE discovery at the DNS plane + resolve every known asset to IPs (A/AAAA/CNAME/MX/NS/TXT + ASN) → host→IP map for PORT-CHECK and the WIDE "max IPs" goal.
 
-DNSR-1 BRUTE (candidates from wordlist):
+DNSR-1 BRUTE (candidates = union of the dashboard-SELECTED registry keys for this task, §8 WORDLIST REGISTRY & DASHBOARD SELECTION):
 `dnsx -d <target-domain> -w <forged-wordlist> -r <forged-resolvers> -rl <qps> -a -resp -json` → DNS-true assets found even WITHOUT any HTTP service (the plane ffuf cannot see).
 
 DNSR-2 PERMUTATIONS (candidates from mutations):
@@ -206,7 +213,7 @@ Failure handling: §4.3 per tool; branch independence (§7.2c) — any failed so
 ## 9. WEB DASHBOARD (CONTROL CENTER)
 9.1 One `dashboard` service in the compose stack. Default stack: FastAPI backend + React/Vite SPA (swappable; keep the API contract clean). Binds `127.0.0.1:8080` by default, auth via `DASHBOARD_TOKEN`; docker.sock accessible ONLY to the backend.
 9.2 Phase-1 panels:
-  a) Tools — list from `tools.yaml`: enable/disable, per-tool flag overrides.
+  a) Tools — list from `tools.yaml`: enable/disable, per-tool flag overrides; WORDLIST REGISTRY editor — per-task checkbox selection of `wordlists.yaml` keys + SELECT-ALL per task group (§8 WORDLIST REGISTRY & DASHBOARD SELECTION).
   b) Results — categorized per module, schema-driven (§6.5), read directly from `recon/<target>/` (read-only; the dashboard never stores a second copy of results); "new since last run" diff badges + `diff.json` view (§6.6). GLOBAL RESULT FILTERS (apply to EVERY view, combinable): time range / run selection (§6.6 history), scope-based filtering (per scope.yaml includes/excludes), per-source attribution (which tool found it), tags (dev/stage/api/...), alive/dead, free-text search — filter state shareable via URL. SOURCE COVERAGE ANALYTICS (user-approved): per-source contribution counts (unique assets per tool), source-overlap stats (assets found by N sources), per-source uniqueness % — the operator sees which tools/keys actually pay off per target.
   c) Run Control — start (target + optional module selection), stop, resume; live per-module status from `state.json`; live log streaming; scheduler editor (§4.6).
   d) API Keys — add/edit/delete provider keys (e.g., SHODAN_API_KEY, CENSYS_API_ID, GITHUB_TOKEN, CHAOS_KEY, SERPER_API_KEY, BRAVE_API_KEY, GOOGLE_CSE_KEY, GOOGLE_CSE_CX); written to `.env`, never committed, values masked in UI after save; pipeline picks them up on the next run without restart.

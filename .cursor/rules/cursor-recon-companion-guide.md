@@ -1,5 +1,5 @@
 # RECON PIPELINE — COMPANION GUIDE FOR CURSOR
-# Version: 1.6 | Binds to: cursor-recon-agent-prompt.md (v1.6)
+# Version: 1.8 | Binds to: cursor-recon-agent-prompt.md (v1.7)
 # Read this guide TOGETHER with the master prompt. The master prompt is the CONTRACT; this guide tells you HOW to execute it — in what order, with what acceptance proof.
 
 ## 0. HOW TO USE THIS PACKAGE
@@ -38,6 +38,7 @@ repo/
 ├── dorks.yaml                    # DORK FORGE corpus registry (PSV-0/1/7)
 ├── remediation.yaml              # supervisor playbook (§12.5)
 ├── views.yaml                    # per-module dashboard view descriptors (§6.5)
+├── wordlists.yaml                # curated wordlist registry keyed per task (§8 WORDLIST REGISTRY)
 ├── scheduler.json                # watchtower state (§4.6, runtime)
 ├── dashboard/                    # FastAPI backend + React SPA (§9)
 ├── docker/<tool>/Dockerfile      # per-tool builds when no official image exists (§2.2)
@@ -58,7 +59,7 @@ Phase B1 — ADAPTER & ORCHESTRATOR
   Accept: a fake echo-tool registered in tools.yaml travels the full adapter→container→data.json path; injected error rate trips the breaker; two-run diff yields correct added/removed/changed.
 
 Phase B2 — ACTIVE BRANCH (FFUF → DNS-RESOLVE → PORT-CHECK)
-  Build in sub-step order: FFUF-0 WORDLIST FORGE (self-growing; union of upstream lists + DNSR hits fed back); FFUF-1 recursive enum (level loop 1..ffuf_depth, explosion guards max_hosts_per_level / max_total_requests → PARTIAL); FFUF-2 vhost enum on ALL hosts (alive AND dead → misconfig_suspect) + bounded feedback loop; RESOLVER FORGE (resolvers.yaml; <80% success → auto-quarantine); DNSR-1 dnsx brute → DNSR-2 alterx (max_permutations_per_host 50k) → DNSR-3 resolve-all + records + ASN + wildcard verification; LOAD BALANCE block MANDATORY (RAMP 1000→+1000/30s→dnsx_max_qps; CANARY re-resolve every 30s; ≥100 healthy forged resolvers); PORT-CHECK naabu top-50, rate 300, sequential.
+  Build in sub-step order: FFUF-0 WORDLIST FORGE (self-growing; input = union of the DASHBOARD-SELECTED registry keys per §8 WORDLIST REGISTRY & DASHBOARD SELECTION — checkboxes + select-all in Tools panel, union+dedupe cached per selection hash — plus DNSR hits fed back); FFUF-1 recursive enum (level loop 1..ffuf_depth, explosion guards max_hosts_per_level / max_total_requests → PARTIAL); FFUF-2 vhost enum on ALL hosts (alive AND dead → misconfig_suspect) + bounded feedback loop; RESOLVER FORGE (resolvers.yaml; <80% success → auto-quarantine); DNSR-1 dnsx brute → DNSR-2 alterx (max_permutations_per_host 50k) → DNSR-3 resolve-all + records + ASN + wildcard verification; LOAD BALANCE block MANDATORY (RAMP 1000→+1000/30s→dnsx_max_qps; CANARY re-resolve every 30s; ≥100 healthy forged resolvers); PORT-CHECK naabu top-50, rate 300, sequential.
   Accept: forged wordlist grew after a run; a dead-host vhost hit lands flagged misconfig_suspect=true; host→IP map exists for PORT-CHECK; a <80% resolver gets quarantined.
 
 Phase B3 — PASSIVE BRANCH (PSV-0…PSV-8)
@@ -93,6 +94,7 @@ Phase B8 — SUPERVISOR AGENT (built LAST — it is an opt-in layer)
 - Fresh clone → `cp scope.yaml.example scope.yaml` (authorized test target) → `./recon.sh run <target>` completes end-to-end: pipeline → MERGE → PORT-SWEEP → report.
 
 ## 6. OPERATOR VERIFICATION PROTOCOL (run after each phase)
+6.0 ACCEPTANCE TESTS ARE CURSOR-EXECUTED: after each phase delivery, the operator pastes an atomic TEST PROMPT into the SAME chat. You (Cursor) then execute every acceptance test yourself, capture RAW EVIDENCE for every step (exact command, exit code, relevant file content / log lines), append the PASS/FAIL summary + evidence pointers to PHASE-REPORT.md, and CLEAN UP all test artifacts (fake tools, test runs) before printing the verdict. Nothing is committed — the commit happens only after the operator's explicit acceptance prompt. Never weaken or skip a test to make it pass; if a test cannot run, report BLOCKED with the exact reason.
 B0: remove scope.yaml → zero network activity; inject out-of-scope host → rejected + logged.
 B1: fake-tool rides the full adapter path; injected errors trip the breaker → ANOMALY fired.
 B2: authorized test domain → wordlist grew; host→IP map complete; bad resolver quarantined.

@@ -122,6 +122,35 @@ jobs:
           print("REM10 validation: frozen loader parses the runtime wordlists.yaml; selection=[test_smoke_200] active for DNSR-1/FFUF-0/FFUF-2.")
           PY
 
+      - name: "REM12 vehicle threshold accommodation (transient: min_healthy 100->10)"
+        run: |
+          set -e
+          cp tools.yaml ci/b3_tools_runtime_before.yaml
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("tools.yaml")
+          lines = p.read_text(encoding="utf-8").splitlines()
+          out = []
+          hit = False
+          for line in lines:
+              if line.startswith("  resolver_min_healthy_count:"):
+                  out.append("  resolver_min_healthy_count: 10  # REM12 TRANSIENT vehicle accommodation (never committed): seed-pinned REM5 fleet yields 14 healthy; the fixture-era TEST-2 vehicle ran with the same pin (REM7=10). Production value 100 restored at TEST 4 stays committed.")
+                  hit = True
+              else:
+                  out.append(line)
+          assert hit, "resolver_min_healthy_count line not found"
+          p.write_text("\n".join(out) + "\n", encoding="utf-8")
+          print("REM12: transient resolver_min_healthy_count 100 -> 10 (single-line text edit, project-YAML dialect preserved). Same accommodation as the TEST-2-era REM7 pin; disclosed in PHASE-REPORT.")
+          PY
+          PYTHONPATH=. python3 - <<'PY'
+          from pathlib import Path
+          from pipeline.params import Params
+          params = Params(Path("."))
+          v = int(params.require("resolver_min_healthy_count"))
+          assert v == 10, v
+          print("REM12 validation: frozen loader parses tools.yaml; threshold=10 active for this vehicle run only.")
+          PY
+
       - name: Run B3 vehicle (fixture-target.test)
         id: run
         run: |
@@ -153,6 +182,7 @@ jobs:
             ci/b3_assertions_console.log
             ci/b3_resolvers_runtime_before.yaml
             ci/b3_wordlists_runtime_before.yaml
+            ci/b3_tools_runtime_before.yaml
             wordlists/forge/counts.log
             wordlists/forge/custom-subdomains.txt
             resolvers/forge/custom-resolvers.txt

@@ -1316,3 +1316,87 @@ Disclosed observations (no fixes mandated): §11.4 latency-drift throttle cascad
 variance on runner egress; `passive-recon`/`port-sweep` pending = B3/B4 scopes (not errors).
 
 **VERDICT — TEST 2 (FIXTURE, REM4-R): PASS**
+
+---
+
+# TEST 3 — REAL-TARGET (T3): HOST→IP MAP + ONE-NAABU-PER-IP + LIVE-TREE FRESHNESS
+
+Date: 2026-09-05 (runner era). Vehicle: bounded real-target run on `example.com`
+(scope restored for this test: `example.com` + `*.example.com` includes; TEST 2 fixture
+entries RETAINED; `out.example.com` exclusion kept). Selection stays the B2 test mode
+`[test_smoke_200]` (`candidates.brute=200`); real-run defaults restored at TEST 4.
+Executor: Super Z via GitHub Actions `workflow_dispatch` (workflow `b2-test3.yml`,
+11 steps), one run per commit, evidence artifact per run.
+
+## T3-0 — residual dissection (offline, on the committed stale checkout tree)
+
+| tree | file | rows | uniq hosts | era | smoke-member rows | residual |
+|---|---|---|---|---|---|---|
+| example.com | `20_dns/dnsx/brute_chunk_0.json` | 10319 | **4860** | 2026-09-04T12:16→16:48 | 1000 | **9319** |
+| example.com | `20_dns/dnsx/wildcard-probe.json` | 3 | 3 | 2026-09-04T15:28→16:52 | 0 | 3 |
+| fixture-target.test | `20_dns/dnsx/brute_chunk_0.json` | 600 | 400 | 2026-09-04T17:44→19:56 | n/a | n/a |
+
+**DEFECT PROOF**: current selection yields `candidates.brute=200`, yet the committed chunk
+carries **4860 unique hosts** — the `dns_fast_top5000` era effective wordlist was 4860 entries
+(§wordlists). dnsx `-o` APPENDS, `_rows_from()` re-reads the whole file ⇒ stale-era rows from a
+defunct wordlist leaked across runs into the resolved map and MERGE. Evidence:
+`ci/test3_dissection.json` (regenerated pre-run in every dispatch).
+
+## T3-1 — authorized live-tree freshness fix (code, disclosed)
+
+`pipeline/modules/dns_resolve.py`: `_unlink_stale()` removes output files pre-invoke at all
+5 sites (`_dnsx_run`, `_dnsx_list`, `_massdns_brute`, `_massdns_list`, alterx). Every dnsx/alterx
+output now contains ONLY this run's rows. Regression: `tests/test_dns_freshness.py`
+(appending-adapter simulates `-o` append semantics; stale rows cannot leak).
+Plus the **MERGE composition disclosure line** (`00_assets/summary.md`):
+`composition: passive= active= both= distinct_ips= host_ip_pairs=`.
+`pipeline/verify_b1.py` diff **empty** throughout.
+
+## REM8 — port-check IP scan-eligibility alignment (code, disclosed; run #8 root cause)
+
+Run #8 (321683d): B1/B2/B7/B8 PASS (freshness fix PROVEN), but `unique_ips_checked=0` while
+dnsr held 2 resolved hosts sharing 2 public IPs. `port_check` used `gate.enforce()` on every IP;
+with a host-includes-only scope `_validate_ip` returns `no IP includes` for EVERY IP ⇒ the
+one-naabu-per-IP machinery was unreachable dead code. `merge.py`'s as-frozen ruling already
+accepts exactly `("no IP includes", "IP not in included CIDRs")`. REM8 mirrors that ruling at
+port-check (`_ip_scan_verdict`); **safety rails untouched**: excluded CIDRs, RFC1918, loopback,
+link-local stay REJECTED (6-case bidirectional regression `tests/test_portcheck_ip_policy.py`).
+Local replay against REAL run-8 dnsr data: unique_ips=4, duplicates_skipped=2 ⇒ mechanics confirmed.
+
+## REM9 — `portcheck_top_ports 50 → 100` (§5.6 named-config pin, disclosed; run #9 root cause)
+
+Run #9 (92becd4): B1–B5+B7–B9 PASS; only B6 failed: every naabu invocation died
+`[FTL] could not parse ports: invalid top ports option` — naabu v2.3.5 accepts ONLY
+`100 | 1000 | full`; the as-frozen `50` was never executable on any real IP (hidden in the
+fixture era because port-check always had 0 IPs). REM9 pins `100` (smallest naabu-valid
+superset of the intended top-50); stands with REM7's pin for the TEST 4 cleanup review.
+No pipeline/*.py change. Preflight G-T9 added (naabu-valid value gate).
+
+## Execution ladder (b2-test3)
+
+| run | commit | result | root cause → fix |
+|---|---|---|---|
+| #8 | 321683d | exit 0; B3–B6 FAIL | port-check IP policy gap → **REM8** |
+| #9 | 92becd4 | exit 0; B6 FAIL | naabu `-top-ports 50` invalid → **REM9** (named config) |
+| #10 | 78ab6cf | **exit 0; B1–B9 ALL PASS** | — |
+
+## Final per-assertion table (run #10, 20260905T101612Z, exit 0)
+
+| id | kind | verdict | evidence |
+|---|---|---|---|
+| B1 | MANDATORY | **PASS** | runs.json[37].status=completed ts=20260905T101612Z |
+| B2 | MANDATORY | **PASS** | brute_chunks=1 smoke_subset=no-residual secondary_fresh=True started=10:14:53Z (T3-1 proof: 4860-host residual GONE) |
+| B3 | MANDATORY | **PASS** | target-set lines=4 pairs=8 fmt_bad=0 inconsistent=0 (`ip→hosts` map consistent with dnsr data.json) |
+| B4 | MANDATORY | **PASS** | naabu_invocations=4 == unique_ips_checked=4; dup_invokes=0; ip_sets_match=True (one-naabu-per-IP) |
+| B5 | MANDATORY | **PASS** | duplicates_skipped=4; ips_with_multi_hosts=4 — `104.20.23.154: [example.com, www.example.com]`, `172.66.147.243: [example.com, www.example.com]` (apex+www share IPs) |
+| B6 | MANDATORY | **PASS** | results=4 unreachable=0 schema_bad=0 — rows {ip, hosts[], ports[]}, ports {port, proto, state=open} |
+| B7 | MANDATORY | **PASS** | forge sha `7ee5fd81…9d3d` unchanged (GROWTH-0); verify_b1 diff empty |
+| B8 | MANDATORY | **PASS** | composition line present: `passive=0 active=849 both=0 distinct_ips=4 host_ip_pairs=8` (assets=849) |
+| B9 | DISCLOSURE | PASS | pre-run dissection: 10319 rows / 4860 uniq / defect_confirmed=True |
+
+Disclosed observations: assets=849 = honest unresolved-heavy resolved map
+(`valid=2` of 200 brute labels + 690 perm candidates; MERGE ingests unresolved rows too —
+as-frozen); www resolved both IPv6 addresses in run #10 (DNS variability) → pairs 6→8;
+`skipped_no_ip=847` = unresolved hosts correctly excluded from port-check.
+
+**VERDICT — TEST 3 (REAL-TARGET, T3): PASS**

@@ -17,11 +17,11 @@ RUN mkdir -p /out \
  && cp /go/bin/puredns /out/puredns
 RUN git clone --depth 1 https://github.com/tomnomnom/hacks /src/hacks \
  && cd /src/hacks/assetfinder \
- && go mod init assetfinder \
+ && { test -f go.mod || go mod init assetfinder; } \
  && go build -trimpath -o /out/assetfinder . \
  && git clone --depth 1 https://github.com/tomnomnom/waybackurls /src/waybackurls \
  && cd /src/waybackurls \
- && go mod init waybackurls \
+ && { test -f go.mod || go mod init waybackurls; } \
  && go build -trimpath -o /out/waybackurls .
 
 FROM alpine:3.20

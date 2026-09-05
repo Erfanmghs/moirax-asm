@@ -1400,3 +1400,65 @@ as-frozen); www resolved both IPv6 addresses in run #10 (DNS variability) → pa
 `skipped_no_ip=847` = unresolved hosts correctly excluded from port-check.
 
 **VERDICT — TEST 3 (REAL-TARGET, T3): PASS**
+
+---
+
+# TEST 4 — QUARANTINE + RESTORE (T4): RESOLVER QUARANTINE PROOF + SELECTION RESTORE + CLEANUP
+
+Date: 2026-09-05 (runner era). Vehicle: dedicated verification workflow
+`b2-test4.yml` (offline restore gates + live forge-quarantine harness); no full
+pipeline run needed — the machinery was already proven end-to-end in TEST 2/3,
+and a defaults-active full run on the runner would re-enter the known
+environment cascade (seed fleet < 100 healthy is an environment fact, disclosed).
+
+## T4-B — restore verification (offline gates, committed config)
+
+| gate | check | evidence |
+|---|---|---|
+| C1 | selection defaults active | wordlists.yaml test-mode `selection:` overrides REMOVED for DNSR-1/FFUF-0/FFUF-2; `selected_keys` falls back to tools.yaml config-defaults: `dnsr_1_wordlist_key=dns_fast_top5000`, `ffuf_0_selection_keys=[dns_fast_top5000, dns_exp_combined, vhost_top5000]`, `ffuf_2_wordlist_key=vhost_top5000` |
+| C2 | DNSR-1 materialization reproduces the TEST-1-proven wordlist | `effective-DNSR-1.txt` **4860 lines, sha256 `a94ea1d5d791b6c1...71695`** — byte-identical to the TEST-1 era anchor (§wordlists) |
+| C3 | REM7 fixture-era pin RESTORED | `resolver_min_healthy_count: 10 → 100` (production gate active again) |
+| C5 | REM9 correction STANDS | `portcheck_top_ports: 100` — documented permanent correction (the as-frozen 50 was never naabu-executable: v2.3.5 accepts only 100/1000/full) |
+| C6 | freeze discipline | `pipeline/verify_b1.py` working-tree diff EMPTY |
+
+## T4-A — resolver quarantine machinery proof (deterministic injection)
+
+First deterministic proof of the forge contract "aggregate, validate, quarantine
+<80%, ≥ min_healthy" (`pipeline/resolver_forge.py`). Harness
+(`ci/test4_forge_quarantine.py`, transient working-copy edits only, NEVER
+committed; before-copy kept as evidence):
+- registry transiently rewritten in the project's own minimal-YAML dialect:
+  sources disabled (determinism/speed) + three public non-DNS IPs injected via
+  `manual_add`: 93.184.216.34, 151.101.1.140, 45.33.32.156;
+- `forge_resolvers()` runs for real — dnsx-probe validates every candidate
+  against the 5 validation domains;
+- results: ALL 3 injected IPs quarantined (`resolvers/forge/quarantine.txt`),
+  zero overlap with the healthy fleet; healthy = 14, subset of the 15-anycast
+  seed; the weak anycast 194.242.2.2 re-quarantined — independently matching
+  run #7's measured 14/15 healthy; `run.log` carries the `quarantined:` line.
+
+Disclosed observation: `pipeline/yaml_util.load_yaml` is a frozen minimal-YAML
+subset loader — it rejects 0-indent block-list items (pyyaml `safe_dump`
+dialect). External/harness writers must emit project-style indented lists.
+Recorded as a B3 integration note; no code change.
+
+## Execution ladder (b2-test4)
+
+| run | commit | result | root cause → fix |
+|---|---|---|---|
+| #11 | f5c6662 | T4-B ALL PASS; T4-A crash pre-forge | harness emitted safe_dump dialect the frozen loader rejects → harness writes project-style YAML |
+| #12 | df52121 | T4-A ALL PASS; C-table false FAIL | C-table matched exact keys / read the transient registry → id-token matching + before-copy verification |
+| #13 | 0fe2ae0 | **ALL STEPS SUCCESS; C1–C7 ALL PASS** | — |
+
+## Cleanup ledger (B2 test-mode era closed)
+
+| item | state |
+|---|---|
+| wordlist selection | RESTORED to real-run defaults (TEST-1-proven materialization verified) |
+| resolver_min_healthy_count | RESTORED to 100 |
+| portcheck_top_ports | REM9 correction STANDS (50 was unexecutable) |
+| resolver seed | committed 15-anycast pin (REM5) remains; public sources intact in the committed registry; run-time disable = transient never-committed edit |
+| scope.yaml | example.com + *.example.com and fixture entries retained (T3 vehicle + T2 fixture reproducible) |
+| verify_b1.py | diff EMPTY since handoff |
+
+**VERDICT — TEST 4 (QUARANTINE+RESTORE, T4): PASS**

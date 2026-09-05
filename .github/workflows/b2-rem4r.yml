@@ -9,6 +9,12 @@
 #     20260904T223501Z A3 anomaly = stale public resolver tail x runner egress
 #     -> breaker latency cascade -> canary 2-bad-windows pause. Machinery
 #     conformant; accommodation is environment-only, disclosed in PHASE-REPORT.
+# v4 (REM6): build the pinned LOCAL tool image recon-pipeline/ffuf:v2.1.0 before
+#     the run (fresh runner has no local images; runs #4/#5 ffuf invocations died
+#     exit 125 'pull access denied' -> breaker pause -> anomaly). Assertions now
+#     carry stale-evidence guards: A4/A5/A7 evidence files must be NEWER than
+#     their module's started_at, else mandatory FAIL (skipped module must never
+#     pass on committed stale files).
 
 name: b2-rem4r
 
@@ -46,6 +52,12 @@ jobs:
           for name in ("fixture-target.test", "app.fixture-target.test", "www.fixture-target.test"):
               print(name, "->", socket.gethostbyname(name))
           PY
+
+      - name: "Build pinned local tool images (REM6: ffuf v2.1.0)"
+        run: |
+          set -e
+          docker build -t recon-pipeline/ffuf:v2.1.0 -f docker/ffuf/Dockerfile docker/ffuf
+          docker image inspect recon-pipeline/ffuf:v2.1.0 --format 'ffuf-image-ok {{.Id}}'
 
       - name: Preflight gates (forge anchor, selection, scope, verify_b1)
         run: PYTHONPATH=. python3 ci/rem4r_preflight.py

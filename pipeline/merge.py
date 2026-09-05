@@ -81,6 +81,20 @@ def merge_branches(
     }
     assets_path = target_dir / str(params.require("assets_relpath"))
     write_json(assets_path, payload)
+    # TEST 3 (T3-1, disclosed): composition disclosure line — attribution split
+    # and host->IP map shape of the merged tree, so the acceptance report can
+    # show exactly what this run's MERGE composed from THIS run's inputs.
+    _attr_counts: dict[str, int] = {}
+    for asset in assets:
+        _attr_counts[asset["attribution"]] = _attr_counts.get(asset["attribution"], 0) + 1
+    distinct_ips = len({ip for asset in assets for ip in asset["ips"]})
+    host_ip_pairs = sum(len(asset["ips"]) for asset in assets)
+    composition_line = (
+        f"composition: passive={_attr_counts.get(_ATTR_PASSIVE, 0)}"
+        f" active={_attr_counts.get(_ATTR_ACTIVE, 0)}"
+        f" both={_attr_counts.get(_ATTR_BOTH, 0)}"
+        f" distinct_ips={distinct_ips} host_ip_pairs={host_ip_pairs}"
+    )
     summary = target_dir / str(params.require("assets_summary_relpath"))
     summary.parent.mkdir(parents=True, exist_ok=True)
     summary.write_text(
@@ -90,6 +104,7 @@ def merge_branches(
                 "",
                 f"assets: {len(assets)}",
                 f"quarantine: {len(quarantine)}",
+                composition_line,
                 "",
             ]
         ),

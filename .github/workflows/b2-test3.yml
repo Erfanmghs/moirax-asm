@@ -1,0 +1,125 @@
+# TEST 3 (REAL-TARGET, T3) — B2 acceptance: host->IP map, one-naabu-per-IP
+# dedup, live-tree freshness fix proof, 4860-row residual dissection.
+#
+# Vehicle: bounded real-target run on example.com (scope restored for this
+# test; fixture entries RETAINED). Selection stays the B2 test mode
+# [test_smoke_200] (candidates.brute=200) so the run is bounded; real-run
+# defaults are restored at TEST 4.
+#
+# Authorized code delta (TEST 3 scope, disclosed in PHASE-REPORT):
+#   T3-1 per-run freshness for dnsx/alterx outputs (dnsx -o appends; stale
+#        outputs are unlinked pre-invoke) + MERGE composition disclosure line.
+#   verify_b1.py diff stays empty; no other pipeline change.
+#
+# Steps: checkout -> toolchain -> ffuf image (REM6) -> T3-0 residual
+# dissection (offline, on the committed stale tree) -> preflight gates
+# -> unit proof -> reconcile stale live state -> REM5 resolver fleet pin
+# (transient, never committed) -> run example.com -> assertions B1..B9
+# -> upload evidence.
+
+name: b2-test3
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: b2-test3
+  cancel-in-progress: false
+
+jobs:
+  test3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: "Checkout (branch: private)"
+        uses: actions/checkout@v4
+        with:
+          ref: private
+
+      - name: Toolchain sanity (docker + python3)
+        run: |
+          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          python3 --version
+
+      - name: "Build pinned local tool images (REM6: ffuf v2.1.0)"
+        run: |
+          set -e
+          docker build -t recon-pipeline/ffuf:v2.1.0 -f docker/ffuf/Dockerfile docker/ffuf
+          docker image inspect recon-pipeline/ffuf:v2.1.0 --format 'ffuf-image-ok {{.Id}}'
+
+      - name: "T3-0 residual dissection (offline, on committed stale tree)"
+        run: |
+          set -e
+          python3 ci/test3_dissect.py | tee ci/test3_dissection_console.log
+
+      - name: Preflight gates (forge anchor, selection, scope, T3-1 fix, egress)
+        run: PYTHONPATH=. python3 ci/test3_preflight.py
+
+      - name: Unit proof (incl. tests/test_dns_freshness.py T3-1 regression)
+        run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
+
+      - name: Reconcile stale live state (frozen stop path; expect EXIT 4 or usage)
+        run: |
+          set +e
+          ./recon.sh stop example.com
+          echo "stop exit=$?"
+
+      - name: "REM5 env-accommodation (pin resolver fleet to committed seed)"
+        run: |
+          set -e
+          cp resolvers.yaml ci/test3_resolvers_runtime_before.yaml
+          python3 - <<'PY'
+          import pathlib
+          import yaml
+          p = pathlib.Path("resolvers.yaml")
+          d = yaml.safe_load(p.read_text(encoding="utf-8"))
+          n = len(d.get("sources") or [])
+          d["sources"] = []
+          p.write_text(yaml.safe_dump(d, sort_keys=False), encoding="utf-8")
+          print(f"ENV-ACCOMMODATION REM5: disabled {n} public source URLs at run time; fleet = resolvers/seed.txt (15 pinned anycast). Transient working-copy edit only - never committed.")
+          PY
+
+      - name: Run bounded real-target run (example.com)
+        id: run
+        run: |
+          set +e
+          ./recon.sh run example.com 2>&1 | tee ci/test3_run_console.log
+          echo "run exit=${PIPESTATUS[0]}" | tee ci/test3_run_exit.txt
+
+      - name: Assertions (TEST 3 acceptance table B1..B9)
+        id: assertions
+        run: |
+          PYTHONPATH=. python3 ci/test3_assertions.py 2>&1 | tee ci/test3_assertions_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload evidence artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test3-evidence
+          path: |
+            ci/test3_verdict.txt
+            ci/test3_run_exit.txt
+            ci/test3_run_console.log
+            ci/test3_assertions_console.log
+            ci/test3_dissection.json
+            ci/test3_dissection_console.log
+            ci/test3_resolvers_runtime_before.yaml
+            wordlists/forge/counts.log
+            wordlists/forge/custom-subdomains.txt
+            resolvers/forge/custom-resolvers.txt
+            resolvers/forge/quarantine.txt
+            recon/example.com/runs.json
+            recon/example.com/state.json
+            recon/example.com/logs/run.log
+            recon/example.com/00_assets/summary.md
+            recon/example.com/00_assets/assets.json
+            recon/example.com/10_subdomains/ffuf/summary.md
+            recon/example.com/10_subdomains/ffuf/data.json
+            recon/example.com/20_dns/dnsx/summary.md
+            recon/example.com/20_dns/dnsx/data.json
+            recon/example.com/20_dns/dnsx/brute_chunk_0.json
+            recon/example.com/20_dns/dnsx/wildcard-probe.json
+            recon/example.com/20_dns/dnsx/resolve-all.json
+            recon/example.com/30_ports/**
+          if-no-files-found: warn

@@ -18,6 +18,24 @@ from pipeline.textio import atomic_write_text, read_lines
 from pipeline.wordlist_forge import copy_into_target, materialize_effective
 
 
+def _unlink_stale(path: Path) -> None:
+    """TEST 3 (T3-1, authorized live-tree freshness fix; disclosed in PHASE-REPORT).
+
+    dnsx/alterx `-o` APPEND to an existing output file, so an output left in the
+    live tree by a previous run era (e.g. brute_chunk_0.json carrying 4860
+    unique hosts from the dns_fast_top5000 era while the current selection
+    yields 200 candidates) would be re-read by _rows_from() and pollute this
+    run's resolved map with stale-era rows. Remove the file before the tool
+    writes, so every output contains ONLY this run's rows.
+    """
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+    except IsADirectoryError:
+        pass
+
+
 def run_dns_resolve(
     params: Params,
     gate: ScopeGate,
@@ -106,6 +124,7 @@ def run_dns_resolve(
             in_rel = str(params.require("alterx_input_rel"))
             out_rel = str(params.require("alterx_output_rel"))
             atomic_write_text(target_dir / in_rel, "\n".join(perm_hosts) + "\n")
+            _unlink_stale(target_dir / out_rel)  # TEST 3 T3-1: alterx -o appends
             adapter.invoke(
                 "alterx",
                 module="dns-resolve",
@@ -253,6 +272,7 @@ def _dnsx_run(
 ) -> list[dict[str, Any]]:
     merged = dict(extra)
     merged.update(local)
+    _unlink_stale(out_path)  # TEST 3 T3-1: dnsx -o appends
     result = adapter.invoke(
         tool,
         module="dns-resolve",
@@ -292,6 +312,7 @@ def _dnsx_list(
         "output_raw_dir": f"logs/raw/{tool}/{source}",
         "skip_parse": True,
     }
+    _unlink_stale(target_dir / out_rel)  # TEST 3 T3-1: dnsx -o appends
     result = adapter.invoke(
         tool,
         module="dns-resolve",
@@ -318,6 +339,7 @@ def _massdns_brute(
     apex: str,
     local: dict[str, Any],
 ) -> list[dict[str, Any]]:
+    _unlink_stale(target_dir / brute_rel.replace(".txt", ".json"))  # TEST 3 T3-1
     labels = [line.strip() for line in read_lines(target_dir / brute_rel) if line.strip()]
     q_rel = brute_rel + ".massdns"
     atomic_write_text(target_dir / q_rel, "\n".join(f"{lab}.{apex} A" for lab in labels) + "\n")
@@ -354,6 +376,7 @@ def _massdns_list(
     resolvers_c: str,
     out_rel: str,
 ) -> list[dict[str, Any]]:
+    _unlink_stale(target_dir / out_rel)  # TEST 3 T3-1
     hosts = [line.strip() for line in read_lines(target_dir / hosts_rel) if line.strip()]
     q_rel = hosts_rel + ".massdns"
     atomic_write_text(target_dir / q_rel, "\n".join(f"{h} A" for h in hosts) + "\n")

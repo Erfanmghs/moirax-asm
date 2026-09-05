@@ -2,6 +2,9 @@ engagement:
   name: authorized-test-engagement
   authorization_date: "2026-01-01"
 includes:
+  - example.com
+  - "*.example.com"
+  # TEST 2 fixture entries RETAINED (fixture vehicle stays reproducible after T3):
   - fixture-target.test
   - "*.fixture-target.test"
 excludes:

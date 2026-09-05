@@ -89,20 +89,37 @@ jobs:
           print(f"ENV-ACCOMMODATION REM5: disabled {n} public source URLs at run time; fleet = resolvers/seed.txt (15 pinned anycast). Transient working-copy edit only - never committed.")
           PY
 
-      - name: "Vehicle bounding override (transient: selection [test_smoke_200])"
+      - name: "Vehicle bounding override (REM10, transient: selection [test_smoke_200])"
         run: |
           set -e
           cp wordlists.yaml ci/b3_wordlists_runtime_before.yaml
           python3 - <<'PY'
-          import pathlib
-          import yaml
-          p = pathlib.Path("wordlists.yaml")
-          d = yaml.safe_load(p.read_text(encoding="utf-8"))
-          tasks = d.get("tasks") or {}
+          import re
+          from pathlib import Path
+          p = Path("wordlists.yaml")
+          lines = p.read_text(encoding="utf-8").splitlines()
+          out: list[str] = []
+          inserted: list[str] = []
+          for line in lines:
+              out.append(line)
+              m = re.match(r"^  (DNSR-1|FFUF-0|FFUF-2):\s*(#.*)?$", line)
+              if m:
+                  indent = " " * (len(line) - len(line.lstrip()) + 2)
+                  out.append(f"{indent}selection:")
+                  out.append(f"{indent}  - test_smoke_200")
+                  inserted.append(m.group(1))
+          p.write_text("\n".join(out) + "\n", encoding="utf-8")
+          print(f"VEHICLE OVERRIDE (REM10, project minimal-YAML style): inserted transient selection [test_smoke_200] under tasks {inserted}. Text insertion only - the frozen yaml_util loader must still parse this file (run #14 lesson: pyyaml safe_dump reformatting breaks the frozen loader, same class as T4-A df52121). Committed defaults untouched; before-copy kept as evidence.")
+          PY
+          PYTHONPATH=. python3 - <<'PY'
+          from pathlib import Path
+          from pipeline.params import Params
+          from pipeline.wordlist_forge import selected_keys
+          params = Params(Path("."))
           for task in ("DNSR-1", "FFUF-0", "FFUF-2"):
-              tasks[task]["selection"] = ["test_smoke_200"]
-          p.write_text(yaml.safe_dump(d, sort_keys=False), encoding="utf-8")
-          print("VEHICLE OVERRIDE: transient selection [test_smoke_200] for DNSR-1/FFUF-0/FFUF-2 (bounded fixture run). Committed defaults untouched (before-copy kept as evidence).")
+              keys = selected_keys(params, task)
+              assert keys == ["test_smoke_200"], (task, keys)
+          print("REM10 validation: frozen loader parses the runtime wordlists.yaml; selection=[test_smoke_200] active for DNSR-1/FFUF-0/FFUF-2.")
           PY
 
       - name: Run B3 vehicle (fixture-target.test)

@@ -176,11 +176,14 @@ def main() -> int:
         f"inputs_line={'yes' if m_inputs else 'NO'} at={m_inputs.group(1) if m_inputs else None} "
         f"first_probe_at={m_first_probe.group(1) if m_first_probe else 'none (skip path)'}")
 
-    from pipeline.wordlist_forge import forge_custom_subdomains
+    try:
+        from pipeline.wordlist_forge import forge_custom_subdomains
 
-    forge = forge_custom_subdomains(params)
-    post_sha = hashlib.sha256(forge.read_bytes()).hexdigest()
-    row("D8", "MANDATORY", post_sha == ANCHOR, f"post_sha={post_sha[:16]}... anchor-discipline={'ok' if post_sha == ANCHOR else 'VIOLATED'}")
+        forge = forge_custom_subdomains(params)
+        post_sha = hashlib.sha256(forge.read_bytes()).hexdigest()
+        row("D8", "MANDATORY", post_sha == ANCHOR, f"post_sha={post_sha[:16]}... anchor-discipline={'ok' if post_sha == ANCHOR else 'VIOLATED'}")
+    except Exception as exc:
+        row("D8", "MANDATORY", False, f"forge-error: {exc}")
 
     diff = subprocess.run(
         ["git", "diff", "HEAD", "--stat", "--", "pipeline/verify_b1.py"],

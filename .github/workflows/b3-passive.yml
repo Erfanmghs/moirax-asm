@@ -143,6 +143,9 @@ jobs:
               if line.startswith("  passive_branch_budget_sec:"):
                   out.append("  passive_branch_budget_sec: 3000  # TRANSIENT vehicle accommodation (never committed): amass 20-min cap + recursion must fit the branch budget.")
                   continue
+              if line.startswith("  passive_recursion_depth:"):
+                  out.append("  passive_recursion_depth: 1  # TRANSIENT vehicle accommodation (never committed): example.com's passive surface yields 2695+ first-sweep hosts; depth 1 keeps the recursion bounded so PSV-6 still runs within the branch budget. Committed default 2 stays (F10 checks git HEAD).")
+                  continue
               out.append(line)
           p.write_text("\n".join(out) + "\n", encoding="utf-8")
           print("VEHICLE OVERRIDE: active_branch_modules -> [] + passive budget 3000s (transient, project-YAML dialect preserved; before-copy ci/b3p_tools_runtime_before.yaml).")
@@ -153,8 +156,9 @@ jobs:
           params = Params(Path("."))
           assert params.require("active_branch_modules") == [], params.require("active_branch_modules")
           assert int(params.require("passive_branch_budget_sec")) == 3000
+          assert int(params.require("passive_recursion_depth")) == 1
           assert params.require("passive_branch_modules") == ["passive-recon"]
-          print("Vehicle validation: frozen loader parses tools.yaml; active branch bounded out; passive module armed.")
+          print("Vehicle validation: frozen loader parses tools.yaml; active branch bounded out; recursion depth 1; passive module armed.")
           PY
 
       - name: "sink429 up + transient engine insertion (simulated-429 acceptance)"

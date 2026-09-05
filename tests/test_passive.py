@@ -230,7 +230,7 @@ class SubStepsTest(unittest.TestCase):
             skips: list[str] = []
             meta = _psv8_ip(params, gate, adapter, target_dir, "example.com", {}, 1,
                             _Candidates(gate, target_dir, params), {}, skips,
-                            notes.append, lambda: 100.0)
+                            notes.append, lambda: 100.0, lambda cap=None: 60.0)
             self.assertEqual(meta["state"], "skipped")
             self.assertTrue(any("psv-8" in s for s in skips))
 
@@ -256,7 +256,8 @@ class SubStepsTest(unittest.TestCase):
             os.environ["CENSYS_API_SECRET"] = "secret"
             try:
                 meta = _psv8_ip(params, gate, adapter, target_dir, "example.com", {}, 1,
-                                cands, source_files, skips, notes.append, lambda: 100.0)
+                                cands, source_files, skips, notes.append, lambda: 100.0,
+                                lambda cap=None: 60.0)
             finally:
                 del os.environ["CENSYS_API_ID"], os.environ["CENSYS_API_SECRET"]
             self.assertEqual(meta["state"], "ok")

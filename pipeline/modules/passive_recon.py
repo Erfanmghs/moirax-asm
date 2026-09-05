@@ -74,6 +74,19 @@ def run_passive_recon(
     def remaining() -> float:
         return deadline - clock.time()
 
+    def timeout_for(cap: float | None = None) -> float | None:
+        """Invoke timeout: never exceed the branch deadline, never a floor
+        below it (run #22 evidence: remaining()<0 -> 30s floor -> mass 124
+        timeouts -> breaker error-ratio pause -> ANOMALY). Returns None when
+        the budget is exhausted — the caller SKIPS, never fires a doomed
+        container."""
+        left = remaining()
+        if left <= 0:
+            return None
+        if cap is None:
+            return left
+        return min(left, cap)
+
     def note(detail: str) -> None:
         from datetime import datetime, timezone
 
@@ -123,16 +136,16 @@ def run_passive_recon(
         "psv1": lambda: _psv1_dorks(params, gate, adapter, target_dir, target, extra, planned,
                                     forge, dorks, cands, source_files, skips, note, remaining),
         "psv2": lambda: _psv2_ct(params, gate, adapter, target_dir, target, extra, planned,
-                                 cands, source_files, skips, note, remaining),
+                                 cands, source_files, skips, note, remaining, timeout_for),
         "psv3": lambda: _psv3_agents(params, gate, adapter, target_dir, target, extra, planned,
-                                     cands, source_files, skips, note, remaining, agent_rows),
+                                     cands, source_files, skips, note, remaining, timeout_for, agent_rows),
         "psv4": lambda: _psv4_archives(params, gate, adapter, target_dir, target, extra, planned,
-                                       cands, source_files, skips, note, remaining),
+                                       cands, source_files, skips, note, remaining, timeout_for),
         "psv7": lambda: _psv7_github(params, gate, adapter, target_dir, target, extra, planned,
                                      forge, github_dorks, cands, source_files, skips, findings,
-                                     note, remaining),
+                                     note, remaining, timeout_for),
         "psv8": lambda: _psv8_ip(params, gate, adapter, target_dir, target, extra, planned,
-                                 cands, source_files, skips, note, remaining),
+                                 cands, source_files, skips, note, remaining, timeout_for),
     }
     with ThreadPoolExecutor(max_workers=len(threads)) as pool:
         futs = {pool.submit(_sweep, name, fn): name for name, fn in threads.items()}
@@ -148,8 +161,8 @@ def run_passive_recon(
         note("psv-5 skipped: branch budget exhausted before recursion — disclosed, never silent")
     else:
         _psv5_recursion(params, gate, adapter, target_dir, target, extra, planned, forge,
-                        cands, source_files, skips, partial, note, remaining, recursion,
-                        first_sweep_hosts, sweep)
+                        cands, source_files, skips, partial, note, remaining, timeout_for,
+                        recursion, first_sweep_hosts, sweep)
 
     # ---- PSV-6 HTTPX-PROBE (final sub-step — liveness TAGGING ONLY) --------
     alive_map: dict[str, bool] = {}
@@ -158,7 +171,7 @@ def run_passive_recon(
         note("psv-6 skipped: branch budget exhausted — alive stays null, disclosed, never silent")
     else:
         alive_map = _psv6_probe(params, adapter, target_dir, extra, planned, cands,
-                                skips, note, remaining)
+                                skips, note, remaining, timeout_for)
 
     # ---- payload (exact §8 output schema) ----------------------------------
     rows = cands.rows()
@@ -301,12 +314,15 @@ def _execute_dork(params, adapter, target_dir, extra, planned, forge, dork, time
             return [], "budget"
         forge.pace(engine)
         cmd, _key = forge.fetch_cmd(engine, dork)
+        left = remaining()
+        if left <= 0:
+            return [], "budget"
         result = adapter.invoke(
             "curl-fetch",
             module="curl-fetch",
             extra={**extra, "fetch_cmd": cmd, "fetch_max_time": str(int(max(timeout, 5))), "skip_parse": True},
             planned_concurrency=planned,
-            timeout_sec=max(remaining(), timeout),
+            timeout_sec=min(left, timeout),
             allow_fallback=False,
         )
         status = extract_http_status(result.stdout) or 599
@@ -330,7 +346,7 @@ def _execute_dork(params, adapter, target_dir, extra, planned, forge, dork, time
 # PSV-2 CERT-TRANSPARENCY (parallel sub-step 2)
 # ---------------------------------------------------------------------------
 def _psv2_ct(params, gate, adapter, target_dir, target, extra, planned,
-             cands, source_files, skips, note, remaining) -> dict[str, Any]:
+             cands, source_files, skips, note, remaining, timeout_for) -> dict[str, Any]:
     max_time = int(float(params.require("crtsh_max_time_sec")))
     retries = int(params.require("crtsh_retries"))
     queries = [f"https://crt.sh/?q=%.{target}&output=json", f"https://crt.sh/?q={target}&output=json"]
@@ -342,14 +358,9 @@ def _psv2_ct(params, gate, adapter, target_dir, target, extra, planned,
             if remaining() <= 0:
                 break
             cmd = "curl -sS -D - --max-time " + str(max_time) + " " + _q(query)
-            result = adapter.invoke(
-                "curl-fetch",
-                module="curl-fetch",
-                extra={**extra, "fetch_cmd": cmd, "fetch_max_time": str(max_time), "skip_parse": True},
-                planned_concurrency=planned,
-                timeout_sec=max(remaining(), float(max_time)),
-                allow_fallback=False,
-            )
+            result = _bounded(adapter, "curl-fetch", "curl-fetch",
+                              {**extra, "fetch_cmd": cmd, "fetch_max_time": str(max_time), "skip_parse": True},
+                              planned, float(max_time), timeout_for, allow_fallback=False)
             status = extract_http_status(result.stdout)
             _h, body = split_headers_body(result.stdout)
             if status and 200 <= status < 300:
@@ -368,14 +379,9 @@ def _psv2_ct(params, gate, adapter, target_dir, target, extra, planned,
             f"(tools.yaml profile switch, never a pipeline edit)"
         )
         via = fallback_tool
-        result = adapter.invoke(
-            fallback_tool,
-            module=fallback_tool,
-            extra={**extra, "fetch_max_time": str(max_time)},
-            planned_concurrency=planned,
-            timeout_sec=max(remaining(), float(max_time)),
-            allow_fallback=False,
-        )
+        result = _bounded(adapter, fallback_tool, fallback_tool,
+                          {**extra, "fetch_max_time": str(max_time)},
+                          planned, float(max_time), timeout_for, allow_fallback=False)
         status = extract_http_status(result.stdout)
         if status and 200 <= status < 300:
             _h, body = split_headers_body(result.stdout)
@@ -443,7 +449,7 @@ def _q(url: str) -> str:
 # PSV-3 OSINT-AGENTS (parallel sub-step 3)
 # ---------------------------------------------------------------------------
 def _psv3_agents(params, gate, adapter, target_dir, target, extra, planned,
-                 cands, source_files, skips, note, remaining, agent_rows) -> dict[str, Any]:
+                 cands, source_files, skips, note, remaining, timeout_for, agent_rows) -> dict[str, Any]:
     amass_cap_min = float(params.require("amass_timeout_min"))
     agents = [
         ("subfinder", None),
@@ -457,14 +463,10 @@ def _psv3_agents(params, gate, adapter, target_dir, target, extra, planned,
     results: dict[str, dict[str, Any]] = {}
 
     def run_agent(agent: str, cap_sec: float | None) -> None:
-        timeout = min(cap_sec, max(remaining(), 10.0)) if cap_sec else max(remaining(), 30.0)
-        result = adapter.invoke(
-            agent,
-            module=agent,
-            extra=extra,
-            planned_concurrency=planned,
-            timeout_sec=timeout,
-        )
+        if remaining() <= 0:
+            results[agent] = {"state": "skipped budget exhausted", "hosts": [], "exit": -1}
+            return
+        result = _bounded(adapter, agent, agent, extra, planned, cap_sec, timeout_for)
         hosts = _hosts_from_lines(result.stdout)
         state = "ok" if result.exit_code == 0 else f"degraded exit={result.exit_code}"
         results[agent] = {"state": state, "hosts": hosts, "exit": result.exit_code}
@@ -499,7 +501,8 @@ def _psv3_agents(params, gate, adapter, target_dir, target, extra, planned,
     resolved_ips: dict[str, list[str]] = {}
     if subs_hosts:
         resolved, resolved_ips = _psv3_resolve(
-            params, adapter, target_dir, target, extra, planned, subs_hosts, note, remaining
+            params, adapter, target_dir, target, extra, planned, subs_hosts, note, remaining,
+            timeout_for,
         )
     for agent, meta in results.items():
         rows = len(meta.get("hosts") or [])
@@ -519,7 +522,7 @@ def _psv3_agents(params, gate, adapter, target_dir, target, extra, planned,
 
 
 def _psv3_resolve(params, adapter, target_dir, target, extra, planned, subs_hosts,
-                  note, remaining) -> tuple[list[str], dict[str, list[str]]]:
+                  note, remaining, timeout_for) -> tuple[list[str], dict[str, list[str]]]:
     sources_rel = str(params.require("passive_sources_relpath"))
     input_rel = f"{sources_rel}/puredns-input.txt"
     atomic_write_text(target_dir / input_rel, "\n".join(subs_hosts) + "\n")
@@ -535,20 +538,14 @@ def _psv3_resolve(params, adapter, target_dir, target, extra, planned, subs_host
     resolvers_rel = str(params.require("passive_resolvers_target_rel"))
     if forge_resolvers.is_file():
         atomic_write_text(target_dir / resolvers_rel, forge_resolvers.read_text(encoding="utf-8"))
-    result = adapter.invoke(
-        "assetfinder-resolved",
-        module="assetfinder-resolved",
-        extra={
-            **extra,
-            "puredns_input": container_path(params, target, input_rel),
-            "puredns_resolvers": container_path(params, target, resolvers_rel),
-            "dnsx_hosts": container_path(params, target, input_rel),
-            "dnsx_resolvers": container_path(params, target, resolvers_rel),
-            "skip_parse": True,
-        },
-        planned_concurrency=planned,
-        timeout_sec=max(remaining(), 60.0),
-    )
+    result = _bounded(adapter, "assetfinder-resolved", "assetfinder-resolved",
+                      {**extra,
+                       "puredns_input": container_path(params, target, input_rel),
+                       "puredns_resolvers": container_path(params, target, resolvers_rel),
+                       "dnsx_hosts": container_path(params, target, input_rel),
+                       "dnsx_resolvers": container_path(params, target, resolvers_rel),
+                       "skip_parse": True},
+                      planned, 600.0, timeout_for)
     if result.exit_code == 0 and result.stdout.strip():
         hosts = _hosts_from_lines(result.stdout)
         _write_lines(target_dir / sources_rel / "assetfinder-resolved.txt", hosts)
@@ -580,19 +577,18 @@ def _psv3_resolve(params, adapter, target_dir, target, extra, planned, subs_host
 # PSV-4 ARCHIVES (parallel sub-step 4)
 # ---------------------------------------------------------------------------
 def _psv4_archives(params, gate, adapter, target_dir, target, extra, planned,
-                   cands, source_files, skips, note, remaining) -> dict[str, Any]:
+                   cands, source_files, skips, note, remaining, timeout_for) -> dict[str, Any]:
     sources_rel = str(params.require("passive_sources_relpath"))
     union: set[str] = set()
     per_tool: dict[str, list[str]] = {}
     failures: list[str] = []
     for agent in ("waybackurls", "gau"):
-        result = adapter.invoke(
-            agent,
-            module=agent,
-            extra={**extra, "skip_parse": True},
-            planned_concurrency=planned,
-            timeout_sec=max(remaining(), 30.0),
-        )
+        if remaining() <= 0:
+            failures.append(agent)
+            per_tool[agent] = []
+            note(f"psv-4: {agent} skipped — branch budget exhausted (disclosed)")
+            continue
+        result = _bounded(adapter, agent, agent, {**extra, "skip_parse": True}, planned, 600.0, timeout_for)
         hosts = _hosts_from_lines(result.stdout)
         per_tool[agent] = hosts
         if result.exit_code == 0:
@@ -601,13 +597,8 @@ def _psv4_archives(params, gate, adapter, target_dir, target, extra, planned,
             failures.append(agent)
     if len(failures) == 2:
         note("psv-4: waybackurls AND gau failed -> direct CDX fallback (archive.org throttles: backoff on 429/503)")
-        result = adapter.invoke(
-            "cdx-fallback",
-            module="cdx-fallback",
-            extra={**extra, "skip_parse": True},
-            planned_concurrency=planned,
-            timeout_sec=max(remaining(), 60.0),
-        )
+        result = _bounded(adapter, "cdx-fallback", "cdx-fallback", {**extra, "skip_parse": True},
+                          planned, 300.0, timeout_for)
         status = extract_http_status(result.stdout)
         _h, body = split_headers_body(result.stdout)
         if status is None or 200 <= status < 300:
@@ -631,8 +622,8 @@ def _psv4_archives(params, gate, adapter, target_dir, target, extra, planned,
 # PSV-5 RECURSION LOOP
 # ---------------------------------------------------------------------------
 def _psv5_recursion(params, gate, adapter, target_dir, target, extra, planned, forge,
-                    cands, source_files, skips, partial, note, remaining, recursion,
-                    first_sweep_hosts, sweep) -> None:
+                    cands, source_files, skips, partial, note, remaining, timeout_for,
+                    recursion, first_sweep_hosts, sweep) -> None:
     depth_cap = int(params.require("passive_recursion_depth"))
     seeds_cap = int(params.require("max_seeds_per_iteration"))
     sources_rel = str(params.require("passive_sources_relpath"))
@@ -659,6 +650,8 @@ def _psv5_recursion(params, gate, adapter, target_dir, target, extra, planned, f
 
         def work_seed(seed: str) -> set[str]:
             found: set[str] = set()
+            if remaining() <= 0:
+                return found
             if forge.healthy():
                 hosts, via = _execute_dork(params, adapter, target_dir, extra, planned, forge,
                                            f"site:*.{seed}", per_dork_timeout, note, remaining)
@@ -668,39 +661,33 @@ def _psv5_recursion(params, gate, adapter, target_dir, target, extra, planned, f
                         _append_lines(target_dir / sources_rel / f"dorks-{via}.txt", hosts)
                     found.update(hosts)
             cmd = "curl -sS -D - --max-time 120 " + _q(f"https://crt.sh/?q=%.{seed}&output=json")
-            result = adapter.invoke(
-                "curl-fetch",
-                module="curl-fetch",
-                extra={**extra, "fetch_cmd": cmd, "fetch_max_time": "120", "skip_parse": True},
-                planned_concurrency=planned,
-                timeout_sec=max(remaining(), 120.0),
-                allow_fallback=False,
-            )
+            result = _bounded(adapter, "curl-fetch", "curl-fetch",
+                              {**extra, "fetch_cmd": cmd, "fetch_max_time": "120", "skip_parse": True},
+                              planned, 120.0, timeout_for, allow_fallback=False)
             status = extract_http_status(result.stdout)
             if status and 200 <= status < 300:
                 _h, body = split_headers_body(result.stdout)
                 found.update(_crtsh_names(body))
-            sf = adapter.invoke(
-                "subfinder",
-                module="subfinder",
-                extra={**extra, "target_domain": seed},
-                planned_concurrency=planned,
-                timeout_sec=max(remaining(), 30.0),
-            )
-            if sf.exit_code == 0:
-                found.update(_hosts_from_lines(sf.stdout))
-            af = adapter.invoke(
-                "assetfinder",
-                module="assetfinder",
-                extra={**extra, "target_domain": seed},
-                planned_concurrency=planned,
-                timeout_sec=max(remaining(), 30.0),
-            )
-            if af.exit_code == 0:
-                found.update(_hosts_from_lines(af.stdout))
+            # skip_parse + manual parse: parallel seed workers must not race on
+            # the adapter's shared data.json tmp path (run #22 evidence), and
+            # 60s caps keep slow third-party sources out of breaker windows.
+            sf = _bounded(adapter, "subfinder", "subfinder",
+                          {**extra, "target_domain": seed, "skip_parse": True},
+                          planned, 60.0, timeout_for)
+            if sf.exit_code == 0 and sf.stdout.strip():
+                hosts = _hosts_from_lines(sf.stdout)
+                _append_lines(target_dir / sources_rel / "subfinder.txt", hosts)
+                found.update(hosts)
+            af = _bounded(adapter, "assetfinder", "assetfinder",
+                          {**extra, "target_domain": seed, "skip_parse": True},
+                          planned, 60.0, timeout_for)
+            if af.exit_code == 0 and af.stdout.strip():
+                hosts = _hosts_from_lines(af.stdout)
+                _append_lines(target_dir / sources_rel / "assetfinder.txt", hosts)
+                found.update(hosts)
             return found
 
-        with ThreadPoolExecutor(max_workers=min(len(seeds), 8) or 1) as pool:
+        with ThreadPoolExecutor(max_workers=min(len(seeds), 4) or 1) as pool:
             futs = {pool.submit(work_seed, seed): seed for seed in seeds}
             for fut in as_completed(futs):
                 if remaining() <= 0:
@@ -730,7 +717,7 @@ def _psv5_recursion(params, gate, adapter, target_dir, target, extra, planned, f
 # PSV-6 HTTPX-PROBE (final sub-step — liveness TAGGING ONLY)
 # ---------------------------------------------------------------------------
 def _psv6_probe(params, adapter, target_dir, extra, planned, cands, skips, note,
-                remaining) -> dict[str, bool]:
+                remaining, timeout_for) -> dict[str, bool]:
     if not bool(params.require("passive_httpx_probe")):
         note("psv-6: passive_httpx_probe is OFF — alive stays null (tagging toggle, dashboard-editable)")
         skips.append("psv-6: probe toggle off — alive stays null")
@@ -743,18 +730,12 @@ def _psv6_probe(params, adapter, target_dir, extra, planned, cands, skips, note,
     list_rel = f"{sources_rel}/probe-candidates.txt"
     out_rel = f"{sources_rel}/httpx.json"
     atomic_write_text(target_dir / list_rel, "\n".join(hosts) + "\n")
-    result = adapter.invoke(
-        "httpx-passive",
-        module="httpx-passive",
-        extra={
-            **extra,
-            "httpx_list": container_path(params, target_dir.name, list_rel),
-            "httpx_output": container_path(params, target_dir.name, out_rel),
-            "skip_parse": True,
-        },
-        planned_concurrency=planned,
-        timeout_sec=max(remaining(), 60.0),
-    )
+    result = _bounded(adapter, "httpx-passive", "httpx-passive",
+                      {**extra,
+                       "httpx_list": container_path(params, target_dir.name, list_rel),
+                       "httpx_output": container_path(params, target_dir.name, out_rel),
+                       "skip_parse": True},
+                      planned, 600.0, timeout_for)
     alive: dict[str, bool] = {}
     out_path = target_dir / out_rel
     raw_lines = ""
@@ -785,7 +766,8 @@ def _psv6_probe(params, adapter, target_dir, extra, planned, cands, skips, note,
 # PSV-7 GITHUB-OSINT (user-approved; executes inside the parallel sweep)
 # ---------------------------------------------------------------------------
 def _psv7_github(params, gate, adapter, target_dir, target, extra, planned, forge,
-                 github_dorks, cands, source_files, skips, findings, note, remaining) -> dict[str, Any]:
+                 github_dorks, cands, source_files, skips, findings, note, remaining,
+                 timeout_for) -> dict[str, Any]:
     tokens = _env_keys(params, "GITHUB_TOKEN")
     if not tokens:
         note("psv-7 skipped: no GITHUB_TOKEN in .env — sub-step SKIPPED, never silent")
@@ -815,14 +797,9 @@ def _psv7_github(params, gate, adapter, target_dir, target, extra, planned, forg
                 "-H " + _q("Accept: application/vnd.github+json") + " "
                 "-H " + _q("User-Agent: recon-pipeline") + " " + _q(url)
             )
-            result = adapter.invoke(
-                "curl-fetch",
-                module="curl-fetch",
-                extra={**extra, "fetch_cmd": cmd, "fetch_max_time": "60", "skip_parse": True},
-                planned_concurrency=planned,
-                timeout_sec=max(remaining(), 60.0),
-                allow_fallback=False,
-            )
+            result = _bounded(adapter, "curl-fetch", "curl-fetch",
+                              {**extra, "fetch_cmd": cmd, "fetch_max_time": "60", "skip_parse": True},
+                              planned, 60.0, timeout_for, allow_fallback=False)
             status = extract_http_status(result.stdout)
             _h, body = split_headers_body(result.stdout)
             if status in (403, 429, 451):
@@ -857,7 +834,7 @@ def _psv7_github(params, gate, adapter, target_dir, target, extra, planned, forg
 # PSV-8 IP-DISCOVERY (user-approved; appended after PSV-7, inside the sweep)
 # ---------------------------------------------------------------------------
 def _psv8_ip(params, gate, adapter, target_dir, target, extra, planned,
-             cands, source_files, skips, note, remaining) -> dict[str, Any]:
+             cands, source_files, skips, note, remaining, timeout_for) -> dict[str, Any]:
     includes = [str(i) for i in (gate.document.get("includes") or [])]
     targets = [i for i in includes if "/" in i or _RANGE_RE.match(i) or _ASN_RE.match(i)]
     if not targets:
@@ -882,14 +859,9 @@ def _psv8_ip(params, gate, adapter, target_dir, target, extra, planned,
                 + " -H " + _q("Content-Type: application/json")
                 + " " + _q(f"https://search.censys.io/api/v2/hosts/search?q=ip%3A%22{quoted}%22")
             )
-            result = adapter.invoke(
-                "curl-fetch",
-                module="curl-fetch",
-                extra={**extra, "fetch_cmd": cmd, "fetch_max_time": "60", "skip_parse": True},
-                planned_concurrency=planned,
-                timeout_sec=max(remaining(), 60.0),
-                allow_fallback=False,
-            )
+            result = _bounded(adapter, "curl-fetch", "curl-fetch",
+                              {**extra, "fetch_cmd": cmd, "fetch_max_time": "60", "skip_parse": True},
+                              planned, 60.0, timeout_for, allow_fallback=False)
             status = extract_http_status(result.stdout)
             _h, body = split_headers_body(result.stdout)
             if status and 200 <= status < 300:
@@ -907,14 +879,9 @@ def _psv8_ip(params, gate, adapter, target_dir, target, extra, planned,
                 "curl -sS -D - --max-time 60 "
                 + _q(f"https://api.shodan.io/shodan/host/search?query=net%3A{quoted}&key={shodan_key[0]}")
             )
-            result = adapter.invoke(
-                "curl-fetch",
-                module="curl-fetch",
-                extra={**extra, "fetch_cmd": cmd, "fetch_max_time": "60", "skip_parse": True},
-                planned_concurrency=planned,
-                timeout_sec=max(remaining(), 60.0),
-                allow_fallback=False,
-            )
+            result = _bounded(adapter, "curl-fetch", "curl-fetch",
+                              {**extra, "fetch_cmd": cmd, "fetch_max_time": "60", "skip_parse": True},
+                              planned, 60.0, timeout_for, allow_fallback=False)
             status = extract_http_status(result.stdout)
             _h, body = split_headers_body(result.stdout)
             if status and 200 <= status < 300:
@@ -951,6 +918,25 @@ def _psv8_ip(params, gate, adapter, target_dir, target, extra, planned,
 # ---------------------------------------------------------------------------
 # candidate store
 # ---------------------------------------------------------------------------
+def _bounded(adapter, tool, module, extra, planned, cap, timeout_for, **kwargs):
+    """Invoke with a branch-deadline-bounded timeout; when the budget is
+    exhausted, return a synthetic skip WITHOUT spawning a doomed container and
+    WITHOUT recording a breaker error (run #22 evidence)."""
+    t = timeout_for(cap)
+    if t is None:
+        from pipeline.adapter import InvokeResult
+
+        return InvokeResult(
+            tool=tool, argv=[], docker_cmd=[], exit_code=124, stdout="",
+            stderr="branch budget exhausted", duration_sec=0.0,
+            used_fallback=False, data_json=None, paused=False, attempts=0,
+        )
+    return adapter.invoke(
+        tool, module=module, extra=extra, planned_concurrency=planned,
+        timeout_sec=t, **kwargs,
+    )
+
+
 class _Candidates:
     """Scope-gated candidate store with source attribution (§7.3 inputs)."""
 

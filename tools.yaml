@@ -104,7 +104,15 @@ settings:
   dnsx_ramp_start_qps: 1000
   dnsx_ramp_step_qps: 1000
   dnsx_ramp_interval_sec: 30
-  portcheck_top_ports: 50
+  # REM9 (TEST 3 named-config pin, disclosed; PHASE-REPORT): 50 -> 100.
+  # naabu v2.3.5 rejects any -top-ports value except 100 | 1000 | full
+  # ("could not parse ports: invalid top ports option", run9 run.log 10:11Z)
+  # so the as-frozen 50 was unexecutable on every real IP. 100 is the
+  # smallest naabu-valid superset of the intended top-50. B3-B6 acceptance
+  # dimensions (host->IP map, one-naabu-per-IP, schema) are port-count
+  # independent. Stands with REM7's pin (resolver_min_healthy_count) for
+  # the TEST 4 cleanup review.
+  portcheck_top_ports: 100
   portcheck_rate: 300
   portsweep_scope: alive_only
   portsweep_duration_hours: 24

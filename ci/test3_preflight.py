@@ -103,6 +103,11 @@ def main() -> int:
     check("G-T8 rem8-alignment-present", rem8_ok,
           f"port_check _ip_scan_verdict present, merge-ruling mirrored, strict-enforce-on-IP removed={rem8_ok}")
 
+    top_ports = params.require("portcheck_top_ports")
+    gt9_ok = str(top_ports) in {"100", "1000", "full"}
+    check("G-T9 naabu-top-ports-valid", gt9_ok,
+          f"portcheck_top_ports={top_ports} (naabu v2.3.5 accepts only 100|1000|full; REM9)")
+
     try:
         ip = socket.gethostbyname("example.com")
         ok = bool(re.match(r"^\d+\.\d+\.\d+\.\d+$", ip))

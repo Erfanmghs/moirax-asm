@@ -32,8 +32,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import yaml  # noqa: E402
-
 from pipeline.adapter import Adapter  # noqa: E402
 from pipeline.breaker import CircuitBreaker, Clock  # noqa: E402
 from pipeline.ceiling import ResourceCeiling  # noqa: E402
@@ -63,12 +61,17 @@ def main() -> int:
     reg_path = ROOT / "resolvers.yaml"
     before.write_text(reg_path.read_text(encoding="utf-8"), encoding="utf-8")
 
-    doc = yaml.safe_load(reg_path.read_text(encoding="utf-8"))
-    n_sources = len(doc.get("sources") or [])
-    doc["sources"] = []
-    doc["manual_add"] = sorted(set([str(x) for x in (doc.get("manual_add") or [])] + DEAD))
-    reg_path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
-    print(f"T4-A transient edit: disabled {n_sources} public sources; injected {DEAD} via manual_add. Never committed.")
+    # Transient registry, written in the project's own minimal-YAML style
+    # (pipeline/yaml_util.load_yaml parses ONLY indented block lists; a
+    # pyyaml safe_dump of a non-empty list emits 0-indent items that the
+    # frozen loader rejects: "list item where mapping expected").
+    reg_text = "\n".join(
+        ["schema_version: 1", "sources: []", "manual_add:"]
+        + [f"  - {ip}" for ip in DEAD]
+        + ["manual_remove: []", ""]
+    )
+    reg_path.write_text(reg_text, encoding="utf-8")
+    print(f"T4-A transient edit: sources disabled; injected {DEAD} via manual_add (project-style YAML). Never committed.")
 
     seed = {ln.strip() for ln in read_lines(ROOT / "resolvers" / "seed.txt") if ln.strip()}
     target_dir = ROOT / "recon" / SCRATCH_TARGET

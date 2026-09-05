@@ -115,9 +115,8 @@ lists:
 tasks:
   DNSR-1:
     default_key: dns_fast_top5000
-    # B2 TEST MODE: smoke selection. Real-run default is default_key dns_fast_top5000.
-    selection:
-      - test_smoke_200
+    # TEST 4: B2 test-mode selection override REMOVED (restore). Default_key
+    # dns_fast_top5000 is active again (TEST-1-proven materialization).
     fast:
       - dns_fast_top5000
       - dns_fast_fierce
@@ -140,14 +139,11 @@ tasks:
   FFUF-0:
     default_key: dns_exp_combined
     # §8 operator ticks (B6 dashboard later). No UI in B2.
-    # Committed / real-run default_selection (unchanged):
+    # Committed / real-run default_selection — RESTORED at TEST 4:
     default_selection:
       - dns_fast_top5000
       - dns_exp_combined
       - vhost_top5000
-    # B2 TEST MODE (until TEST 4 housekeeping restores default_selection):
-    selection:
-      - test_smoke_200
     sources:
       - test_smoke_200
       - dns_exp_combined
@@ -169,9 +165,8 @@ tasks:
       - dns_exp_trickest
   FFUF-2:
     default_key: vhost_top5000
-    # B2 TEST MODE: smoke. Real-run default_key vhost_top5000.
-    selection:
-      - test_smoke_200
+    # TEST 4: B2 test-mode selection override REMOVED (restore). Default_key
+    # vhost_top5000 is active again.
     sources:
       - test_smoke_200
       - vhost_top5000

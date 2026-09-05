@@ -1,0 +1,82 @@
+# TEST 4 (QUARANTINE+RESTORE, T4) — B2 acceptance: resolver quarantine proof,
+# wordlist selection restore to the real-run defaults, and REM-era cleanup.
+#
+# Part T4-B (offline): ci/test4_restore_verify.py proves the committed config
+#   is back at production state — no test-mode selection overrides,
+#   tools.yaml config-defaults = the three real keys, DNSR-1 materialization
+#   reproduces the TEST-1-proven 4860-line wordlist (sha a94ea1d5...),
+#   REM7 threshold restored to 100, REM9 correction stands, verify_b1 clean.
+# Part T4-A (docker): ci/test4_forge_quarantine.py proves the forge quarantine
+#   contract deterministically — three public non-DNS IPs are injected via a
+#   transient manual_add edit (never committed), dnsx-probe validates, and
+#   every injected IP must land in resolvers/forge/quarantine.txt while the
+#   anycast fleet stays healthy.
+# Then ci/test4_assertions.py emits the C-table + verdict line.
+#
+# NOTE: the runner clones SecLists to /usr/share/seclists because DNSR-1's
+# default key (dns_fast_top5000) materializes from the SecLists registry.
+
+name: b2-test4
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: b2-test4
+  cancel-in-progress: false
+
+jobs:
+  test4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: "Checkout (branch: private)"
+        uses: actions/checkout@v4
+        with:
+          ref: private
+
+      - name: Toolchain sanity (docker + python3)
+        run: |
+          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          python3 --version
+
+      - name: "Clone SecLists (DNSR-1 default key materialization source; host-side ~/seclists)"
+        run: |
+          set -e
+          git clone --depth 1 https://github.com/danielmiessler/SecLists "$HOME/seclists"
+          test -f "$HOME/seclists/Discovery/DNS/subdomains-top1million-5000.txt" && echo "seclists-ok"
+
+      - name: "T4-B restore verification (offline gates C1/C2/C3/C5/C6)"
+        run: |
+          set -e
+          PYTHONPATH=. python3 ci/test4_restore_verify.py | tee ci/test4_restore_console.log
+
+      - name: "T4-A forge quarantine proof (transient registry edit + dnsx-probe)"
+        run: |
+          set +e
+          PYTHONPATH=. python3 ci/test4_forge_quarantine.py 2>&1 | tee ci/test4_forge_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Assertions (TEST 4 acceptance table C1..C7)
+        run: |
+          PYTHONPATH=. python3 ci/test4_assertions.py 2>&1 | tee ci/test4_assertions_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload evidence artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test4-evidence
+          path: |
+            ci/test4_verdict.txt
+            ci/test4_restore_result.json
+            ci/test4_restore_console.log
+            ci/test4_forge_result.json
+            ci/test4_forge_console.log
+            ci/test4_resolvers_before.yaml
+            ci/test4_assertions_console.log
+            wordlists/forge/counts.log
+            wordlists/forge/effective-DNSR-1.txt
+            resolvers/forge/custom-resolvers.txt
+            resolvers/forge/quarantine.txt
+          if-no-files-found: warn

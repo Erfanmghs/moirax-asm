@@ -358,7 +358,7 @@ def _psv2_ct(params, gate, adapter, target_dir, target, extra, planned,
             if remaining() <= 0:
                 break
             cmd = "curl -sS -D - --max-time " + str(max_time) + " " + _q(query)
-            result = _bounded(adapter, "curl-fetch", "curl-fetch",
+            result = _bounded(adapter, "curl-fetch", "crtsh",
                               {**extra, "fetch_cmd": cmd, "fetch_max_time": str(max_time), "skip_parse": True},
                               planned, float(max_time), timeout_for, allow_fallback=False)
             status = extract_http_status(result.stdout)
@@ -661,7 +661,7 @@ def _psv5_recursion(params, gate, adapter, target_dir, target, extra, planned, f
                         _append_lines(target_dir / sources_rel / f"dorks-{via}.txt", hosts)
                     found.update(hosts)
             cmd = "curl -sS -D - --max-time 120 " + _q(f"https://crt.sh/?q=%.{seed}&output=json")
-            result = _bounded(adapter, "curl-fetch", "curl-fetch",
+            result = _bounded(adapter, "curl-fetch", "crtsh",
                               {**extra, "fetch_cmd": cmd, "fetch_max_time": "120", "skip_parse": True},
                               planned, 120.0, timeout_for, allow_fallback=False)
             status = extract_http_status(result.stdout)
@@ -671,16 +671,19 @@ def _psv5_recursion(params, gate, adapter, target_dir, target, extra, planned, f
             # skip_parse + manual parse: parallel seed workers must not race on
             # the adapter's shared data.json tmp path (run #22 evidence), and
             # 60s caps keep slow third-party sources out of breaker windows.
-            sf = _bounded(adapter, "subfinder", "subfinder",
+            # §8 PSV-5 names `subfinder -d <host>` (NOT -all) for deeper
+            # queries: fewer sources, faster, keeps breaker windows clean
+            # (run #23: -all per seed -> 124 timeouts -> error-ratio pause).
+            sf = _bounded(adapter, "subfinder-seed", "subfinder-seed",
                           {**extra, "target_domain": seed, "skip_parse": True},
-                          planned, 60.0, timeout_for)
+                          planned, 120.0, timeout_for)
             if sf.exit_code == 0 and sf.stdout.strip():
                 hosts = _hosts_from_lines(sf.stdout)
                 _append_lines(target_dir / sources_rel / "subfinder.txt", hosts)
                 found.update(hosts)
             af = _bounded(adapter, "assetfinder", "assetfinder",
                           {**extra, "target_domain": seed, "skip_parse": True},
-                          planned, 60.0, timeout_for)
+                          planned, 120.0, timeout_for)
             if af.exit_code == 0 and af.stdout.strip():
                 hosts = _hosts_from_lines(af.stdout)
                 _append_lines(target_dir / sources_rel / "assetfinder.txt", hosts)

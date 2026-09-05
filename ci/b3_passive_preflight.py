@@ -103,6 +103,7 @@ def main() -> int:
         "certspotter": {"fetch_max_time": "120"},
         "cdx-fallback": {"fetch_max_time": "60"},
         "subfinder": {},
+        "subfinder-seed": {},
         "amass": {},
         "assetfinder": {},
         "assetfinder-related": {},

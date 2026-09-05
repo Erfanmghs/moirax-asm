@@ -803,6 +803,26 @@ tools:
     output_data_json: logs/raw/subfinder/data.json
     output_summary: logs/raw/subfinder/summary.md
     output_raw_dir: logs/raw/subfinder
+  # PSV-5 recursion variant: spec §8 names `subfinder -d <host>` (no -all)
+  # for deeper per-seed queries — faster and breaker-window friendly.
+  subfinder-seed:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: subfinder
+    binary: subfinder
+    network_host: false
+    argv_template:
+      - subfinder
+      - -d
+      - "{target_domain}"
+      - -silent
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/subfinder-seed/data.json
+    output_summary: logs/raw/subfinder-seed/summary.md
+    output_raw_dir: logs/raw/subfinder-seed
   amass:
     enabled: true
     branch: passive

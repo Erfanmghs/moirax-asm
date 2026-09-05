@@ -90,7 +90,11 @@ def main() -> int:
 
     # ---- F2 core sources populated ----------------------------------------
     sources_dir = TARGET_DIR / "10_subdomains" / "passive" / "sources"
-    core = ["crtsh.txt", "subfinder.txt", "amass.txt", "assetfinder.txt",
+    # CT contract: crt.sh primary OR its registered fallback (certspotter)
+    # serve the SAME output contract (§8 PSV-2) — either file proves the
+    # cert-transparency sub-step populated sources.
+    ct_name = "crtsh.txt" if (sources_dir / "crtsh.txt").is_file() else "certspotter.txt"
+    core = [ct_name, "subfinder.txt", "amass.txt", "assetfinder.txt",
             "assetfinder-related.txt", "archives.txt"]
     counts: dict[str, int] = {}
     for name in core:
@@ -192,8 +196,9 @@ def main() -> int:
           f"out_of_scope_candidates={bad_hosts[:5]} out_of_scope_log={oos_log.is_file()}")
 
     # ---- F9 tags never drop ------------------------------------------------
-    crtsh_rows = [ln.strip() for ln in (sources_dir / "crtsh.txt").read_text(
-        encoding="utf-8", errors="replace").splitlines() if ln.strip()] if (sources_dir / "crtsh.txt").is_file() else []
+    ct_file = sources_dir / ct_name
+    crtsh_rows = [ln.strip() for ln in ct_file.read_text(
+        encoding="utf-8", errors="replace").splitlines() if ln.strip()] if ct_file.is_file() else []
     candidate_hosts = {str(row.get("host")) for row in (data.get("candidates") or [])}
     missing_from_candidates = [h for h in crtsh_rows if h not in candidate_hosts]
     keyword_tags = [str(t) for t in params.require("keyword_tags")]

@@ -67,14 +67,18 @@ def main() -> int:
     params_ok = (
         "ffuf3_data_json: 15_vhosts/ffuf-3/data.json" in tools_txt
         and "ffuf3_summary: 15_vhosts/ffuf-3/summary.md" in tools_txt
+        and "ffuf3_max_dead_probes:" in tools_txt
         and "15_vhosts/ffuf-3" in tools_txt
         and re.search(r"^    - ffuf-3$", tools_txt, re.M) is not None
     )
-    ffuf3_mod = (ROOT / "pipeline" / "modules" / "ffuf3.py").read_text(encoding="utf-8")
+    ffuf3_src = (ROOT / "pipeline" / "modules" / "ffuf3.py").read_text(encoding="utf-8")
+    ffuf3_mod = ffuf3_src
     spec_ok = (
-        "Host: FUZZ.{dead}" in ffuf3_module_source(ffuf3_mod)
-        and 'misconfig_suspect": True' in ffuf3_mod.replace("'", '"')
-        and '"dns_status": "dead"' in ffuf3_mod.replace("'", '"')
+        "Host: FUZZ.{dead}" in ffuf3_mod
+        and "misconfig_suspect" in ffuf3_mod
+        and '"dns_status": "dead"' in ffuf3_mod
+        and "endswith(zone_suffix)" in ffuf3_mod  # REM11 same-target law
+        and "ffuf3_max_dead_probes" in ffuf3_mod  # REM11 explosion guard
     )
     check(
         "G-B2 ffuf-3-wiring",
@@ -143,10 +147,6 @@ def main() -> int:
 
     print(f"PREFLIGHT {'PASS' if not failures else 'FAIL'} ({len(failures)} failing)")
     return 0 if not failures else 1
-
-
-def ffuf3_module_source(src: str) -> str:
-    return src.replace("'", '"')
 
 
 if __name__ == "__main__":

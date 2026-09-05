@@ -8,15 +8,18 @@ tests/test_ffuf_label.py and tests/test_dns_freshness.py:
                       a filtered/autocalib artifact (label NOT in the job
                       wordlist — REM4-R1 calibration-drop discipline) is
                       counted as suppressed and NEVER flagged.
-  2. probe binding  : -u is bound to the alive in-scope base with
+  2. probe binding  : -u is bound to the alive SAME-ZONE base with
                       "Host: FUZZ.<dead-name>"; the dead name is never
-                      resolved directly (no dnsx invoke happens).
-  3. base-host set  : FFUF-1 records UNION DNSR-3 unresolved, with both input
-                      counts logged BEFORE any probe; resolved names are not
-                      probed.
-  4. skip path      : no alive base -> explicit log line, zero probes,
-                      never silent.
-  5. output         : data.json at 15_vhosts/ffuf-3/ with module "ffuf-3" and
+                      resolved directly (no dnsx invoke happens); foreign-
+                      zone hosts are never binding bases (REM11, run #15).
+  3. dead set       : FFUF-1 records with DNSR-3 unresolved status ONLY —
+                      perm-NXDOMAIN store rows are NOT DNSR-3 hosts (REM11,
+                      run #15: 1237-name explosion); both counts disclosed.
+  4. skip path      : no same-zone alive base -> explicit log line, zero
+                      probes, never silent.
+  5. explosion cap  : ffuf3_max_dead_probes truncates with an explicit
+                      ffuf3_dead_probe_cap partial marker (REM11).
+  6. output         : data.json at 15_vhosts/ffuf-3/ with module "ffuf-3" and
                       exactly the spec root keys; bases[] carry host/ip/alive.
 """
 
@@ -37,7 +40,7 @@ class _Gate:
 
 
 class _Params:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, **overrides) -> None:
         self.root = root
         self.settings = {
             "ffuf_data_json": "10_subdomains/ffuf/data.json",
@@ -45,11 +48,13 @@ class _Params:
             "ffuf3_data_json": "15_vhosts/ffuf-3/data.json",
             "ffuf3_summary": "15_vhosts/ffuf-3/summary.md",
             "ffuf_vhost_wordlist_rel": "wordlists/effective-FFUF-2-test.txt",
+            "ffuf3_max_dead_probes": 1000,
             "max_total_requests": 5000000,
             "recon_container_mount": "/recon",
             "run_log": "logs/run.log",
             "schema_version": 1,
         }
+        self.settings.update(overrides)
 
     def require(self, key: str):
         if key in self.settings:
@@ -165,8 +170,8 @@ class TestFfuf3(unittest.TestCase):
         ffuf3_module.materialize_effective, ffuf3_module.copy_into_target = self._saved
         self._tmp.cleanup()
 
-    def _run(self, adapter, target="example.test"):
-        params = _Params(self.root)
+    def _run(self, adapter, target="example.test", **param_overrides):
+        params = _Params(self.root, **param_overrides)
         partial: list[str] = []
         payload = run_ffuf3(
             params,
@@ -224,13 +229,13 @@ class TestFfuf3(unittest.TestCase):
         data = json.loads((self.root / "15_vhosts/ffuf-3/data.json").read_text(encoding="utf-8"))
         self.assertEqual(data["module"], "ffuf-3")
 
-    def test_base_set_union_counts_and_dead_only_probing(self):
+    def test_dead_set_is_ffuf1_records_only(self):
+        """REM11: perm-NXDOMAIN store rows are NOT DNSR-3 hosts (run #15)."""
         _write_ffuf_doc(
             self.root,
             [
                 {"fqdn": ALIVE_BASE_HOST, "alive": True},
                 {"fqdn": DEAD_NAME, "alive": False},
-                {"fqdn": "perm-only.example.test", "alive": None},
             ],
         )
         _write_dnsr_doc(
@@ -238,24 +243,50 @@ class TestFfuf3(unittest.TestCase):
             [
                 ALIVE_BASE_ROW,
                 DEAD_ROW,
-                {"host": "dnsr-unresolved.example.test", "ips": [], "resolution_status": "unresolved", "resolution_reason": "no A/AAAA"},
+                # perm-mutation NXDOMAIN rows: unresolved in the store, but NOT
+                # FFUF-1 records -> never probed (run #15: 1237-name explosion)
+                {"host": "perm-mutation.example.test", "ips": [], "resolution_status": "unresolved"},
+                {"host": "perm-mutation2.example.test", "ips": [], "resolution_status": "unresolved"},
             ],
         )
-        adapter = _ProbeSpyAdapter([[], []])
+        adapter = _ProbeSpyAdapter([[]])
         payload, _ = self._run(adapter)
 
-        # union = {app, dead, perm-only, dnsr-unresolved}; dead = {dead, dnsr-unresolved}
         probed = [c["extra"]["ffuf_host_header"] for c in adapter.calls]
-        self.assertEqual(
-            probed,
-            [f"Host: FUZZ.dead.example.test", "Host: FUZZ.dnsr-unresolved.example.test"],
-        )
-        self.assertEqual(payload["suppressed"], 0)
+        self.assertEqual(probed, [f"Host: FUZZ.{DEAD_NAME}"])
         summary = (self.root / "15_vhosts/ffuf-3/summary.md").read_text(encoding="utf-8")
-        self.assertIn("ffuf1_records=3", summary)
-        self.assertIn("dnsr_unresolved=2", summary)
-        self.assertIn("union=4", summary)
-        self.assertIn("dead_probed=2", summary)
+        self.assertIn("ffuf1_records=2", summary)
+        self.assertIn("dnsr_unresolved_store=3", summary)   # disclosed, not probed
+        self.assertIn("dnsr_unresolved_ffuf_records=1", summary)
+        self.assertIn("dead_probed=1", summary)
+
+    def test_dead_probe_cap_truncates_with_marker(self):
+        _write_ffuf_doc(
+            self.root,
+            [
+                {"fqdn": ALIVE_BASE_HOST, "alive": True},
+                {"fqdn": "d1.example.test", "alive": False},
+                {"fqdn": "d2.example.test", "alive": False},
+                {"fqdn": "d3.example.test", "alive": False},
+            ],
+        )
+        _write_dnsr_doc(
+            self.root,
+            [ALIVE_BASE_ROW]
+            + [
+                {"host": f"d{i}.example.test", "ips": [], "resolution_status": "unresolved"}
+                for i in (1, 2, 3)
+            ],
+        )
+        adapter = _ProbeSpyAdapter([[], [], []])
+        payload, partial = self._run(adapter, ffuf3_max_dead_probes=2)
+
+        self.assertEqual(len(adapter.calls), 2)
+        self.assertIn("ffuf3_dead_probe_cap", partial)
+        run_log = (self.root / "logs/run.log").read_text(encoding="utf-8")
+        self.assertIn("ffuf-3 dead-probe cap", run_log)
+        summary = (self.root / "15_vhosts/ffuf-3/summary.md").read_text(encoding="utf-8")
+        self.assertIn("dead_capped: True", summary)
 
     def test_no_alive_base_skips_never_silent(self):
         _write_ffuf_doc(self.root, [{"fqdn": DEAD_NAME, "alive": False}])
@@ -269,17 +300,44 @@ class TestFfuf3(unittest.TestCase):
         run_log = (self.root / "logs/run.log").read_text(encoding="utf-8")
         self.assertIn("ffuf-3 skipped: no alive in-scope base", run_log)
 
-    def test_alive_bases_prefers_apex(self):
+    def test_foreign_zone_base_never_used(self):
+        """REM11: a foreign-zone alive host is NOT a binding base (run #15:
+        fixture dead names were bound to www.example.com)."""
+        _write_ffuf_doc(
+            self.root,
+            [
+                {"fqdn": "www.foreign.zone", "alive": True},   # alive + resolved, WRONG zone
+                {"fqdn": DEAD_NAME, "alive": False},
+            ],
+        )
+        _write_dnsr_doc(
+            self.root,
+            [
+                {"host": "www.foreign.zone", "ips": ["9.9.9.9"], "resolution_status": "resolved"},
+                DEAD_ROW,
+            ],
+        )
+        adapter = _ProbeSpyAdapter()
+        payload, _ = self._run(adapter, target="example.test")
+
+        self.assertEqual(adapter.calls, [])  # skip, never bind across zones
+        self.assertEqual(payload["bases"], [])
+        run_log = (self.root / "logs/run.log").read_text(encoding="utf-8")
+        self.assertIn("ffuf-3 skipped: no alive in-scope base", run_log)
+
+    def test_alive_bases_prefers_apex_and_filters_zone(self):
         ffuf_doc = {
             "hosts": [
                 {"fqdn": "www.example.test", "alive": True},
                 {"fqdn": "example.test", "alive": True},
+                {"fqdn": "www.other.zone", "alive": True},  # foreign zone
             ]
         }
         dnsr_doc = {
             "resolved": [
                 {"host": "example.test", "ips": ["1.1.1.1"], "resolution_status": "resolved"},
                 {"host": "www.example.test", "ips": ["2.2.2.2"], "resolution_status": "resolved"},
+                {"host": "www.other.zone", "ips": ["3.3.3.3"], "resolution_status": "resolved"},
             ]
         }
         bases = _alive_bases(ffuf_doc, dnsr_doc, _Gate(), Path("."), "example.test")
@@ -289,7 +347,7 @@ class TestFfuf3(unittest.TestCase):
     def test_alive_base_requires_resolved_ip_and_alive(self):
         ffuf_doc = {
             "hosts": [
-                {"fqdn": "a.example.test", "alive": True},    # no resolved IP
+                {"fqdn": "a.example.test", "alive": True},    # unresolved in DNSR
                 {"fqdn": "b.example.test", "alive": False},   # resolved but not alive
                 {"fqdn": "c.example.test", "alive": True},    # qualifies
             ]

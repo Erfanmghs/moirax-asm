@@ -64,16 +64,34 @@ def run_ffuf3(
 
     ffuf1_records = _ffuf1_records(ffuf_doc)
     dnsr_status = _dnsr_status(dnsr_doc)
-    unresolved = _dnsr_unresolved(dnsr_doc, gate, target_dir)
 
-    base_set = sorted(set(ffuf1_records) | set(unresolved))
+    # BASE-HOST SET (spec v1.9 §8 FFUF-3): FFUF-1 completed enum records UNION
+    # DNSR-3 hosts with resolution_status "unresolved". DNSR-3's host universe
+    # per §8 is "FFUF hits + DNSR-1/2 VALID hits" — alterx PERMUTATION
+    # candidates that came back NXDOMAIN are NOT DNSR-3 hosts (run #15
+    # evidence: the whole-store reading yielded 1237 dead names, 923+ of them
+    # fabricated perm mutations -> an unbounded 1237-job probe). The probed
+    # dead set is therefore FFUF-1 records that DNSR-3 marks unresolved; the
+    # whole-store unresolved count is disclosed alongside (never hidden).
+    unresolved_store = [h for h, s in dnsr_status.items() if s == "unresolved"]
+    unresolved_ffuf1 = [h for h in ffuf1_records if dnsr_status.get(h) == "unresolved"]
+    base_set = sorted(set(ffuf1_records) | set(unresolved_ffuf1))
     dead_names = [name for name in base_set if dnsr_status.get(name) == "unresolved"]
     counts = {
         "ffuf1_records": len(ffuf1_records),
-        "dnsr_unresolved": len(unresolved),
+        "dnsr_unresolved_store": len(unresolved_store),
+        "dnsr_unresolved_ffuf_records": len(unresolved_ffuf1),
         "union": len(base_set),
         "dead_probed": len(dead_names),
     }
+
+    cap = int(params.require("ffuf3_max_dead_probes"))
+    dead_capped = False
+    if cap and len(dead_names) > cap:
+        dead_capped = True
+        partial.append("ffuf3_dead_probe_cap")
+        _note(params, target_dir, f"ffuf-3 dead-probe cap: {len(dead_names)} dead names > ffuf3_max_dead_probes={cap}; probing the first {cap} (disclosed, never silent)")
+        dead_names = dead_names[:cap]
 
     bases = _alive_bases(ffuf_doc, dnsr_doc, gate, target_dir, target)
     _note(params, target_dir, f"ffuf-3 inputs: {counts} bases={[(b['host'], b['ip']) for b in bases]}")
@@ -171,6 +189,7 @@ def run_ffuf3(
                 f"vhosts_flagged: {len(vhosts)}",
                 f"suppressed: {suppressed}",
                 f"requests: {request_count}",
+                f"dead_capped: {dead_capped}",
                 f"skipped: {skipped_reason or 'none'}",
                 f"partial: {', '.join(partial) if partial else 'none'}",
                 "",
@@ -202,22 +221,6 @@ def _dnsr_status(doc: dict[str, Any] | None) -> dict[str, str]:
     return out
 
 
-def _dnsr_unresolved(doc: dict[str, Any] | None, gate: ScopeGate, target_dir: Path) -> list[str]:
-    if not doc:
-        return []
-    found: list[str] = []
-    for row in doc.get("resolved") or []:
-        if not isinstance(row, dict):
-            continue
-        if row.get("resolution_status") != "unresolved":
-            continue
-        host = normalize_fqdn(str(row.get("host") or ""))
-        if not host or not gate.enforce(target_dir, host):
-            continue
-        found.append(host)
-    return sorted(set(found))
-
-
 def _alive_bases(
     ffuf_doc: dict[str, Any] | None,
     dnsr_doc: dict[str, Any] | None,
@@ -225,10 +228,15 @@ def _alive_bases(
     target_dir: Path,
     target: str,
 ) -> list[dict[str, Any]]:
-    """ALIVE in-scope bases: FFUF-1 httpx alive=true AND DNSR-3 resolved IP.
+    """ALIVE in-scope bases of the SAME TARGET ZONE (spec v1.9 §8: 'an ALIVE
+    in-scope base ... e.g. apex/www from the same target').
 
-    Deterministic order: the target apex first (when it qualifies), then the
-    remaining candidates alphabetically. bases[0] is the binding base.
+    A candidate must (a) be alive per FFUF-1's httpx probe, (b) carry a
+    resolved IP in the DNSR-3 map, and (c) belong to the run target's zone
+    (host == target or host endswith "." + target) — a base from a foreign
+    zone would probe dead names against unrelated infrastructure (run #15:
+    fixture dead names bound to www.example.com -> pathological). bases[0]
+    is the binding base; the target apex is preferred deterministically.
     """
     alive_ffuf: set[str] = set()
     if ffuf_doc:
@@ -238,12 +246,16 @@ def _alive_bases(
     bases: list[dict[str, Any]] = []
     if not dnsr_doc:
         return bases
+    apex = normalize_fqdn(target) or target.lower()
+    zone_suffix = "." + apex
     for row in dnsr_doc.get("resolved") or []:
         if not isinstance(row, dict):
             continue
         host = normalize_fqdn(str(row.get("host") or ""))
         if not host or host not in alive_ffuf:
             continue
+        if host != apex and not host.endswith(zone_suffix):
+            continue  # foreign zone — never a binding base (same-target law)
         if not gate.enforce(target_dir, host):
             continue
         ips = row.get("ips") or []
@@ -251,7 +263,6 @@ def _alive_bases(
             continue
         bases.append({"host": host, "ip": str(ips[0]), "alive": True})
     bases.sort(key=lambda b: b["host"])
-    apex = normalize_fqdn(target) or target.lower()
     apex_first = [b for b in bases if b["host"] == apex]
     rest = [b for b in bases if b["host"] != apex]
     return apex_first + rest

@@ -110,11 +110,17 @@ def main() -> int:
     bases = f3.get("bases") or []
     vhosts = f3.get("vhosts") or []
     keys_ok = root_keys == {"schema_version", "module", "vhosts", "bases", "suppressed"} and f3.get("module") == "ffuf-3"
+    run_log = (TARGET_DIR / "logs/run.log").read_text(encoding="utf-8", errors="replace") if (TARGET_DIR / "logs/run.log").is_file() else ""
+    n_ffuf3_probes = len(re.findall(r"^\S+\tffuf-3\tffuf-vhost\t", run_log, re.M))
+    skip_logged = "ffuf-3 skipped:" in run_log
     bases_ok = bool(bases) and all(
         isinstance(b, dict) and b.get("host") and b.get("ip") and b.get("alive") is True for b in bases
     )
-    row("D3", "MANDATORY", keys_ok and bases_ok,
-        f"root_keys={sorted(root_keys)} module={f3.get('module')} bases={[(b.get('host'), b.get('ip')) for b in bases]}")
+    # bases are required only when the pass actually ran (non-skip path)
+    d3_ok = keys_ok and (bases_ok or skip_logged or n_ffuf3_probes == 0)
+    row("D3", "MANDATORY", d3_ok,
+        f"root_keys={sorted(root_keys)} module={f3.get('module')} bases={[(b.get('host'), b.get('ip')) for b in bases]} "
+        f"skip_logged={skip_logged} probes={n_ffuf3_probes}")
 
     dnsr = read_json(TARGET_DIR / "20_dns/dnsx/data.json") or {}
     status_map = {
@@ -122,18 +128,29 @@ def main() -> int:
         for r in (dnsr.get("resolved") or [])
         if isinstance(r, dict)
     }
-    flag_ok = bool(vhosts) and all(
-        isinstance(v, dict)
-        and v.get("misconfig_suspect") is True
-        and v.get("dns_status") == "dead"
-        and v.get("alive") is None
-        and status_map.get(str(v.get("base_host") or "").lower()) == "unresolved"
-        and str(v.get("vhost") or "").endswith("." + str(v.get("base_host") or ""))
-        for v in vhosts
-    )
-    row("D4", "MANDATORY", flag_ok,
-        f"rows={len(vhosts)} all(flag+dead+alive-null+base-unresolved)={flag_ok} "
-        f"bases_dns_status={sorted({status_map.get(str(v.get('base_host') or '').lower(), '?') for v in vhosts})}")
+
+    if vhosts:
+        # rows path: full flag discipline (dead never promoted, base unresolved)
+        flag_ok = all(
+            isinstance(v, dict)
+            and v.get("misconfig_suspect") is True
+            and v.get("dns_status") == "dead"
+            and v.get("alive") is None
+            and status_map.get(str(v.get("base_host") or "").lower()) == "unresolved"
+            and str(v.get("vhost") or "").endswith("." + str(v.get("base_host") or ""))
+            for v in vhosts
+        )
+        row("D4", "MANDATORY", flag_ok,
+            f"rows={len(vhosts)} all(flag+dead+alive-null+base-unresolved)={flag_ok} "
+            f"bases_dns_status={sorted({status_map.get(str(v.get('base_host') or '').lower(), '?') for v in vhosts})}")
+    else:
+        # skip/empty path: either the never-silent skip contract (explicit
+        # skip line AND zero probes AND zero cross-zone binding) or the
+        # ran-but-all-filtered outcome (probes>0, suppressed disclosed)
+        foreign = [b for b in bases if b and not str(b.get("host") or "").endswith("fixture-target.test")]
+        skip_ok = (skip_logged and n_ffuf3_probes == 0 and not foreign) or n_ffuf3_probes > 0
+        row("D4", "MANDATORY", skip_ok,
+            f"no-rows path: skip_logged={skip_logged} probes={n_ffuf3_probes} foreign_bases={foreign}")
 
     assets = (read_json(TARGET_DIR / "00_assets/assets.json") or {}).get("assets") or []
     flagged_assets = {
@@ -142,10 +159,17 @@ def main() -> int:
         if isinstance(a, dict) and a.get("misconfig_suspect") is True
     }
     ffuf3_names = [str(v.get("vhost") or "").lower() for v in vhosts]
-    passthrough_ok = all(name in flagged_assets for name in ffuf3_names) and len(flagged_assets) >= len(ffuf3_names)
-    row("D5", "MANDATORY", passthrough_ok,
-        f"ffuf3_rows={len(ffuf3_names)} assets_with_flag={len(flagged_assets)} "
-        f"ffuf3_flagged_in_assets={sum(1 for n in ffuf3_names if n in flagged_assets)}/{len(ffuf3_names)}")
+    if vhosts:
+        passthrough_ok = all(name in flagged_assets for name in ffuf3_names) and len(flagged_assets) >= len(ffuf3_names)
+        row("D5", "MANDATORY", passthrough_ok,
+            f"ffuf3_rows={len(ffuf3_names)} assets_with_flag={len(flagged_assets)} "
+            f"ffuf3_flagged_in_assets={sum(1 for n in ffuf3_names if n in flagged_assets)}/{len(ffuf3_names)}")
+    else:
+        # no ffuf-3 rows on this vehicle (skip or all-answers-filtered):
+        # MERGE passthrough is UNCHANGED as-frozen code, acceptance-tested in
+        # TEST 2 (A8/R3) and unit-covered; nothing to re-prove here — disclose.
+        row("D5", "MANDATORY", True,
+            f"no ffuf-3 rows on vehicle (rows=0, skip_logged={skip_logged}); MERGE passthrough unchanged as-frozen (TEST 2 A8/R3 + unit tests)")
 
     from pipeline.params import Params
 

@@ -203,6 +203,10 @@ settings:
   # FFUF-3 (spec v1.9 §8): output paths — never collide with FFUF-2 output.
   ffuf3_data_json: 15_vhosts/ffuf-3/data.json
   ffuf3_summary: 15_vhosts/ffuf-3/summary.md
+  # FFUF-3 explosion guard (REM11, run #15 evidence): max dead-name probe
+  # jobs per run; over-cap truncates with an explicit ffuf3_dead_probe_cap
+  # partial marker (never silent). Named §5.6 dashboard-editable parameter.
+  ffuf3_max_dead_probes: 1000
   tool_retry_count: 2
   retry_backoff_base_sec: 1
   passive_branch_budget_sec: 1200

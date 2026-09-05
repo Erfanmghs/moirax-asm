@@ -3,6 +3,12 @@
 # fixture up -> preflight gates -> unit proof -> run -> assertions -> teardown.
 # Dispatched manually (workflow_dispatch) by the supervisor; no schedule.
 # v2: re-parse bump (workflow_dispatch trigger index).
+# v3 (REM5 env-accommodation): resolver fleet pinned to the committed 15-anycast
+#     seed (sources disabled at run time, transient working-copy edit only);
+#     run.log + resolver forge outputs added to evidence. Reason: run
+#     20260904T223501Z A3 anomaly = stale public resolver tail x runner egress
+#     -> breaker latency cascade -> canary 2-bad-windows pause. Machinery
+#     conformant; accommodation is environment-only, disclosed in PHASE-REPORT.
 
 name: b2-rem4r
 
@@ -53,6 +59,21 @@ jobs:
           ./recon.sh stop fixture-target.test
           echo "stop exit=$?"
 
+      - name: "REM5 env-accommodation (pin resolver fleet to committed seed)"
+        run: |
+          set -e
+          cp resolvers.yaml ci/rem4r_resolvers_runtime_before.yaml
+          python3 - <<'PY'
+          import pathlib
+          import yaml
+          p = pathlib.Path("resolvers.yaml")
+          d = yaml.safe_load(p.read_text(encoding="utf-8"))
+          n = len(d.get("sources") or [])
+          d["sources"] = []
+          p.write_text(yaml.safe_dump(d, sort_keys=False), encoding="utf-8")
+          print(f"ENV-ACCOMMODATION REM5: disabled {n} public source URLs at run time; fleet = resolvers/seed.txt (15 pinned anycast). Transient working-copy edit only - never committed.")
+          PY
+
       - name: Run isolated B2 fixture run (fixture-target.test)
         id: run
         run: |
@@ -82,8 +103,12 @@ jobs:
             ci/rem4r_run_exit.txt
             ci/rem4r_run_console.log
             ci/rem4r_assertions_console.log
+            ci/rem4r_resolvers_runtime_before.yaml
             wordlists/forge/counts.log
             wordlists/forge/custom-subdomains.txt
+            resolvers/forge/custom-resolvers.txt
+            resolvers/forge/quarantine.txt
+            recon/fixture-target.test/logs/run.log
             recon/fixture-target.test/state.json
             recon/fixture-target.test/runs.json
             recon/fixture-target.test/diff.json

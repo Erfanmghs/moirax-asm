@@ -217,6 +217,7 @@ jobs:
           print("sink429 engine inserted at priority 1 (transient; before-copy ci/b3p_search_engines_runtime_before.yaml).")
           PY
           PYTHONPATH=. python3 - <<'PY'
+          from pathlib import Path
           from pipeline.params import Params
           from pipeline.search_forge import load_registry
           registry = load_registry(Params(Path(".")))

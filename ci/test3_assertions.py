@@ -30,6 +30,7 @@ Table (ID / kind / expectation):
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import re
 import subprocess
@@ -179,7 +180,18 @@ def main() -> int:
     map_detail = "target-set missing"
     if map_ok:
         lines = [ln for ln in ts_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
-        fmt_bad = [ln for ln in lines if not re.match(r"^\d+(\.\d+){3}\t[\w.\-]+(,[\w.\-]+)*$", ln)]
+
+        def _valid_ip(token: str) -> bool:
+            try:
+                ipaddress.ip_address(token.strip())
+                return True
+            except ValueError:
+                return False
+
+        fmt_bad = [ln for ln in lines
+                   if "\t" not in ln
+                   or not _valid_ip(ln.split("\t", 1)[0])
+                   or not re.match(r"^[\w.\-]+(,[\w.\-]+)*$", ln.split("\t", 1)[1])]
         for ln in lines:
             ip, _, hosts_s = ln.partition("\t")
             for h in hosts_s.split(","):
@@ -196,9 +208,9 @@ def main() -> int:
     invoked: list[str] = []
     if log_path.is_file():
         for ln in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
-            m = re.search(r"\tnaabu-invoke\tip=(\d+(\.\d+){3})\t", ln)
+            m = re.search(r"\tnaabu-invoke\tip=([^\t]+)\t", ln)
             if m:
-                invoked.append(m.group(1))
+                invoked.append(m.group(1).strip())
     invoked_set, target_set = set(invoked), {ip for ip, _ in pairs}
     dupes = len(invoked) - len(invoked_set)
     port_summary = PORT_DIR / "summary.md"

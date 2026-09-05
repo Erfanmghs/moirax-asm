@@ -11,6 +11,26 @@ from pipeline.ndjson import parse_json_payload
 from pipeline.params import Params
 from pipeline.scope import ScopeGate
 
+# REM8 (TEST 3, disclosed in PHASE-REPORT): merge.py's as-frozen IP ruling
+# accepts host-attributed public IPs for exactly these two gate reasons.
+# Without the same ruling at port-check, a host-includes-only scope (the
+# frozen B2 shape) rejects EVERY IP and the one-naabu-per-IP machinery that
+# TEST 3 must prove is unreachable dead code.
+_IP_ALLOWED_REASONS = ("no IP includes", "IP not in included CIDRs")
+
+
+def _ip_scan_verdict(gate: ScopeGate, ip: str) -> tuple[bool, str | None]:
+    """REM8 alignment: mirror merge.py's as-frozen IP ruling.
+
+    Returns (scan_eligible, rejection_reason). Excluded CIDRs/IPs and private
+    ranges (RFC1918/loopback/link-local not listed in includes) stay REJECTED
+    - the safety rails are untouched.
+    """
+    ok, reason = gate.validate_candidate(ip)
+    if ok or reason in _IP_ALLOWED_REASONS:
+        return True, None
+    return False, reason
+
 
 def run_port_check(
     params: Params,
@@ -32,6 +52,7 @@ def run_port_check(
     ip_hosts: dict[str, list[str]] = {}
     skipped_no_ip: list[str] = []
     duplicates_skipped = 0
+    oos_rel = str(params.require("out_of_scope_log"))
     for row in resolved_rows:
         host = str(row.get("host") or "").strip().lower()
         if not host:
@@ -44,7 +65,9 @@ def run_port_check(
             _log(params, target_dir, f"skip-no-ip\t{host}")
             continue
         for ip in ips:
-            if not gate.enforce(target_dir, ip):
+            eligible, reject_reason = _ip_scan_verdict(gate, ip)
+            if not eligible:
+                gate.log_rejection(target_dir / oos_rel, ip, reject_reason or "out of scope")  # REM8: same rejection ledger as merge
                 continue
             bucket = ip_hosts.setdefault(ip, [])
             if host in bucket:

@@ -93,6 +93,16 @@ def main() -> int:
     check("G-T5 t31-fix-present", n_def == 1 and n_calls >= 5 and comp_ok,
           f"_unlink_stale def={n_def} call_sites={n_calls} merge_composition={comp_ok}")
 
+    pc_mod = (ROOT / "pipeline" / "modules" / "port_check.py").read_text(encoding="utf-8")
+    rem8_ok = (
+        "def _ip_scan_verdict(" in pc_mod
+        and "no IP includes" in pc_mod
+        and "IP not in included CIDRs" in pc_mod
+        and "gate.enforce(target_dir, ip)" not in pc_mod
+    )
+    check("G-T8 rem8-alignment-present", rem8_ok,
+          f"port_check _ip_scan_verdict present, merge-ruling mirrored, strict-enforce-on-IP removed={rem8_ok}")
+
     try:
         ip = socket.gethostbyname("example.com")
         ok = bool(re.match(r"^\d+\.\d+\.\d+\.\d+$", ip))

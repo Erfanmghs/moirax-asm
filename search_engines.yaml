@@ -1,14 +1,93 @@
 schema_version: 1
+# SEARCH-FORGE engine pool (master spec §8 PSV-0).
+# The pipeline NEVER raw-scrapes Google/Bing HTML from pipeline IPs; all search
+# traffic flows through this registered engine pool of API-routed providers.
+# Keys come from §9.2-d/.env (comma-separated value = multiple keys per engine
+# -> per-request key rotation with per-key quota tracking). Keyless engines are
+# throttled (rate_per_min). Engine response kinds: html | json | xml.
+#
+# BLOCK HANDLING (PSV-0): HTTP 429/403 or captcha signal -> engine marked
+# COOLDOWN (exponential backoff + jitter), traffic instantly re-routed to the
+# next healthy engine; engine error-rate > 20% over 60s -> ISOLATED (per-engine
+# mirror of the §11.4 breaker); cooldown engines re-probed after the backoff
+# window. Per-dork TTL cache -> scheduled re-runs never re-burn quota.
+settings:
+  cooldown_backoff_base_sec: 2
+  cooldown_backoff_max_sec: 300
+  isolate_window_sec: 60
+  isolate_error_ratio: 0.2
+  dork_cache_ttl_sec: 3600
+  http_user_agent: "Mozilla/5.0 (compatible; recon-pipeline/1.0)"
 engines:
-  - name: google_cse
+  duckduckgo:
+    kind: html
+    endpoint: "https://html.duckduckgo.com/html/"
+    method: POST
+    keyless: true
     enabled: true
-  - name: serper
+    rate_per_min: 10
+    priority: 50
+    query_body: "q={dork_encoded}"
+    headers:
+      - "Content-Type: application/x-www-form-urlencoded"
+  google-cse:
+    kind: json
+    endpoint: "https://www.googleapis.com/customsearch/v1"
+    method: GET
+    keyless: false
+    key_env: GOOGLE_CSE_KEY
+    cx_env: GOOGLE_CSE_CX
     enabled: true
-  - name: serpapi
+    rate_per_min: 100
+    priority: 10
+    query: "key={key}&cx={cx}&q={dork_encoded}"
+    headers: []
+  serper:
+    kind: json
+    endpoint: "https://google.serper.dev/search"
+    method: POST
+    keyless: false
+    key_env: SERPER_API_KEY
     enabled: true
-  - name: brave
+    rate_per_min: 100
+    priority: 20
+    query_body: '{"q":"{dork_json}"}'
+    headers:
+      - "X-API-KEY: {key}"
+      - "Content-Type: application/json"
+  brave:
+    kind: json
+    endpoint: "https://api.search.brave.com/res/v1/web/search"
+    method: GET
+    keyless: false
+    key_env: BRAVE_API_KEY
     enabled: true
-  - name: yandex_xml
+    rate_per_min: 15
+    priority: 30
+    query: "q={dork_encoded}"
+    headers:
+      - "X-API-Token: {key}"
+      - "Accept: application/json"
+  serpapi:
+    kind: json
+    endpoint: "https://serpapi.com/search"
+    method: GET
+    keyless: false
+    key_env: SERPAPI_KEY
     enabled: true
-  - name: duckduckgo
+    rate_per_min: 100
+    priority: 40
+    query: "engine=google&q={dork_encoded}&api_key={key}"
+    headers: []
+  yandex-xml:
+    kind: xml
+    endpoint: "https://yandex.com/search/xml"
+    method: GET
+    keyless: false
+    key_env: YANDEX_XML_KEY
+    user_env: YANDEX_XML_USER
     enabled: true
+    rate_per_min: 60
+    priority: 60
+    query: "user={user}&key={key}&query={dork_encoded}"
+    headers: []

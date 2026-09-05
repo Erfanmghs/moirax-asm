@@ -323,6 +323,21 @@ settings:
     # completes and BEFORE MERGE; existing module orders untouched.
     - ffuf-3
     - port-check
+  # ---- B3 PASSIVE BRANCH (spec §8 PSV-0..PSV-8) — module wiring + artifacts.
+  # Order law (PSV-0 first ... PSV-6 last) lives inside the passive-recon
+  # orchestrator; the branch runs PASSIVE ∥ ACTIVE (§7.2a) untouched.
+  passive_branch_modules:
+    - passive-recon
+  passive_data_json: 10_subdomains/passive/data.json
+  passive_summary: 10_subdomains/passive/summary.md
+  passive_resolvers_target_rel: 10_subdomains/passive/resolvers.txt
+  passive_github_raw_dir: logs/raw/passive/github
+  search_engines_registry: search_engines.yaml
+  dorks_registry: dorks.yaml
+  dorks_forge_output: dorks/forge/search-dorks.txt
+  # CT fallback (§8 PSV-2): the swap is a tools.yaml profile switch, never a
+  # pipeline edit — crtsh.fallback chains to this registered tool.
+  ct_fallback_tool: certspotter
 
 tools:
   # TEST FIXTURE (verify_b1)
@@ -711,3 +726,296 @@ tools:
     output_data_json: 30_ports/naabu-light/data.json
     output_summary: 30_ports/naabu-light/summary.md
     output_raw_dir: logs/raw/naabu-light
+  # ==== B3 PASSIVE BRANCH (spec §8 PSV-0..PSV-8) ====
+  # PSV-1/2/7/8 HTTP fetches + engine-pool requests run through this generic
+  # curl spec; the fetch command is assembled from NAMED registry parameters
+  # (search_engines.yaml) and quoted by the module. PSV-1..PSV-5 + PSV-7
+  # containers need no --network host (pure third-party queries).
+  curl-fetch:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: curl
+    binary: sh
+    network_host: false
+    argv_template:
+      - "-c"
+      - "{fetch_cmd}"
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/curl-fetch/data.json
+    output_summary: logs/raw/curl-fetch/summary.md
+    output_raw_dir: logs/raw/curl-fetch
+  # PSV-2 crt.sh primary (retry x3 exponential, bare-domain variant) with the
+  # registered CT fallback chained via the adapter (§4.3) — profile switch via
+  # ct_fallback_tool, never a pipeline edit.
+  crtsh:
+    enabled: true
+    branch: passive
+    fallback: certspotter
+    image_ref: curl
+    binary: sh
+    network_host: false
+    argv_template:
+      - "-c"
+      - "curl -sS -D - --max-time {fetch_max_time} {crtsh_url}"
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/crtsh/data.json
+    output_summary: logs/raw/crtsh/summary.md
+    output_raw_dir: logs/raw/crtsh
+  certspotter:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: curl
+    binary: sh
+    network_host: false
+    argv_template:
+      - "-c"
+      - "curl -sS -D - --max-time {fetch_max_time} 'https://api.certspotter.com/v1/issuances?domain={target_domain}&include_subdomains=true&expand=dns_names'"
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/certspotter/data.json
+    output_summary: logs/raw/certspotter/summary.md
+    output_raw_dir: logs/raw/certspotter
+  # PSV-3 OSINT agents — each in its own container, each writing its OWN
+  # source file for attribution (never one shared subs.txt).
+  subfinder:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: subfinder
+    binary: subfinder
+    network_host: false
+    argv_template:
+      - subfinder
+      - -d
+      - "{target_domain}"
+      - -all
+      - -silent
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/subfinder/data.json
+    output_summary: logs/raw/subfinder/summary.md
+    output_raw_dir: logs/raw/subfinder
+  amass:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: amass
+    binary: amass
+    network_host: false
+    argv_template:
+      - amass
+      - enum
+      - -passive
+      - -d
+      - "{target_domain}"
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/amass/data.json
+    output_summary: logs/raw/amass/summary.md
+    output_raw_dir: logs/raw/amass
+  assetfinder:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: assetfinder
+    binary: assetfinder
+    network_host: false
+    argv_template:
+      - assetfinder
+      - --subs-only
+      - "{target_domain}"
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/assetfinder/data.json
+    output_summary: logs/raw/assetfinder/summary.md
+    output_raw_dir: logs/raw/assetfinder
+  assetfinder-related:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: assetfinder
+    binary: assetfinder
+    network_host: false
+    argv_template:
+      - assetfinder
+      - "{target_domain}"
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/assetfinder-related/data.json
+    output_summary: logs/raw/assetfinder-related/summary.md
+    output_raw_dir: logs/raw/assetfinder-related
+  # DNS-valid subset (RESOLVER FORGE output; built-in wildcard detection).
+  # Fallback: same contract served by the pinned dnsx image (§4.3 chain).
+  assetfinder-resolved:
+    enabled: true
+    branch: passive
+    fallback: puredns-fallback-dnsx
+    image_ref: puredns
+    binary: puredns
+    network_host: false
+    argv_template:
+      - puredns
+      - resolve
+      - "{puredns_input}"
+      - -r
+      - "{puredns_resolvers}"
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/assetfinder-resolved/data.json
+    output_summary: logs/raw/assetfinder-resolved/summary.md
+    output_raw_dir: logs/raw/assetfinder-resolved
+  puredns-fallback-dnsx:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: dnsx
+    binary: dnsx
+    network_host: false
+    argv_template:
+      - dnsx
+      - -l
+      - "{dnsx_hosts}"
+      - -r
+      - "{dnsx_resolvers}"
+      - -rl
+      - "{dnsx_max_qps}"
+      - -a
+      - -resp
+      - -json
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/puredns-fallback-dnsx/data.json
+    output_summary: logs/raw/puredns-fallback-dnsx/summary.md
+    output_raw_dir: logs/raw/puredns-fallback-dnsx
+  chaos:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: chaos
+    binary: chaos
+    network_host: false
+    argv_template:
+      - chaos
+      - -d
+      - "{target_domain}"
+      - -silent
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/chaos/data.json
+    output_summary: logs/raw/chaos/summary.md
+    output_raw_dir: logs/raw/chaos
+  findomain:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: findomain
+    binary: findomain
+    network_host: false
+    argv_template:
+      - findomain
+      - -t
+      - "{target_domain}"
+      - -q
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/findomain/data.json
+    output_summary: logs/raw/findomain/summary.md
+    output_raw_dir: logs/raw/findomain
+  # PSV-4 ARCHIVES — URL streams parsed by the module (per-tool raw file +
+  # gated union in archives.txt); direct CDX fallback when both fail.
+  waybackurls:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: waybackurls
+    binary: waybackurls
+    network_host: false
+    argv_template:
+      - waybackurls
+      - "{target_domain}"
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/waybackurls/data.json
+    output_summary: logs/raw/waybackurls/summary.md
+    output_raw_dir: logs/raw/waybackurls
+  gau:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: passive-tools
+    binary: gau
+    network_host: false
+    argv_template:
+      - gau
+      - --subs
+      - "{target_domain}"
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/gau/data.json
+    output_summary: logs/raw/gau/summary.md
+    output_raw_dir: logs/raw/gau
+  cdx-fallback:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: curl
+    binary: sh
+    network_host: false
+    argv_template:
+      - "-c"
+      - "curl -sS -D - --max-time {fetch_max_time} 'http://web.archive.org/cdx/search/cdx?url=*.{target_domain}&output=text&fl=original&collapse=urlkey'"
+    output_mode: text
+    parser: host_lines
+    data_kind: passive
+    output_data_json: logs/raw/cdx-fallback/data.json
+    output_summary: logs/raw/cdx-fallback/summary.md
+    output_raw_dir: logs/raw/cdx-fallback
+  # PSV-6 HTTPX-PROBE — the ONLY passive sub-step that sends packets toward
+  # the target (light HTTP probe); host network for accurate probing; §11.4
+  # breaker + §11.5 ceiling apply via the shared adapter.
+  httpx-passive:
+    enabled: true
+    branch: passive
+    fallback: null
+    image_ref: httpx
+    binary: httpx
+    network_host: true
+    argv_template:
+      - httpx
+      - -l
+      - "{httpx_list}"
+      - -silent
+      - -threads
+      - "{httpx_threads}"
+      - -json
+      - -o
+      - "{httpx_output}"
+    optional_argv:
+      - when: httpx_disable_update_check
+        argv:
+          - "{httpx_disable_update_check}"
+    docker_env:
+      - "HF_HUB_OFFLINE={httpx_hf_hub_offline}"
+    output_mode: json
+    parser: json
+    data_kind: passive
+    output_data_json: 10_subdomains/passive/httpx-doc.json
+    output_summary: 10_subdomains/passive/httpx-doc-summary.md
+    output_raw_dir: logs/raw/httpx-passive

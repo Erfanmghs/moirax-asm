@@ -48,3 +48,40 @@ images:
     image: projectdiscovery/alterx
     tag: "v0.0.6"
     digest: ""
+  # ---- B3 passive branch (PSV-0..PSV-8) ----
+  curl:
+    image: curlimages/curl
+    tag: "8.10.1"
+    digest: ""
+  subfinder:
+    image: projectdiscovery/subfinder
+    tag: "v2.6.7"
+    digest: ""
+  amass:
+    image: caffix/amass
+    tag: "latest"
+    digest: ""
+  assetfinder:
+    image: tomnomnom/hacks
+    tag: "assetfinder"
+    digest: ""
+  waybackurls:
+    image: tomnomnom/hacks
+    tag: "waybackurls"
+    digest: ""
+  puredns:
+    image: puredns/puredns
+    tag: "latest"
+    digest: ""
+  chaos:
+    image: projectdiscovery/chaos
+    tag: "latest"
+    digest: ""
+  findomain:
+    image: edoardottt/findomain
+    tag: "latest"
+    digest: ""
+  passive-tools:
+    image: recon-pipeline/passive-tools
+    tag: "v1"
+    digest: ""

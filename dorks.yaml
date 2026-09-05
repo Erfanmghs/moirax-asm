@@ -1,7 +1,20 @@
 schema_version: 1
-templates:
-  - 'site:*.TARGET'
-  - 'site:*.*.TARGET'
-  - 'site:TARGET -inurl:www'
-  - 'site:*.TARGET -site:www.TARGET'
+# DORK FORGE corpus registry (master spec §8 PSV-0) — same self-growing pattern
+# as FFUF-0's wordlist registry. Built-in host-discovery dork templates are
+# templated per target ({target} placeholder), merged with community dork lists
+# (community_lists entries: dashboard-editable, same {target} placeholder),
+# deduped, and forged into dorks/forge/search-dorks.txt per run.
+# Self-growth: newly discovered hosts spawn deeper dorks (fed by PSV-5
+# recursion: site:*.seed variants are generated at recursion time, never
+# stored here).
+builtin_host_dorks:
+  - "site:*.{target}"
+  - "site:*.*.{target}"
+  - "site:{target} -inurl:www"
+  - "site:*.{target} -site:www.{target}"
+github_dorks:
+  - '"{target}"'
+  - '"*.{target}" filename:.env'
+  - '"{target}" password'
+  - "@{target}"
 community_lists: []

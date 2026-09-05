@@ -1,0 +1,262 @@
+# B3 PASSIVE CHAIN (spec §8 PSV-0..PSV-8) — acceptance vehicle.
+#
+# Vehicle: example.com (committed scope; real public passive data: CT logs,
+# archives, OSINT agents). The ACTIVE branch is disabled by a TRANSIENT
+# bounding override (before-copy kept as evidence) so this vehicle isolates
+# the passive chain: PSV-0 infrastructure first, parallel sweep (PSV-1,2,3,4,
+# 7,8), PSV-5 recursion, PSV-6 probe last.
+#
+# Simulated-429 acceptance (§8 PSV-0): a local sink container answers 429; a
+# transient engine `sink429` (priority 1) is inserted into search_engines.yaml
+# (before-copy evidence) so the first dork request hits it -> COOLDOWN +
+# instant reroute visible in run.log (assertion F3).
+#
+# Transient runtime accommodations (NEVER committed; before-copies kept):
+#   - REM5 resolver-fleet refresh from the committed seed (public source URLs
+#     disabled at runtime) — puredns must resolve against a healthy fleet
+#   - active_branch_modules: [] (passive-only bounding)
+#   - passive_branch_budget_sec 1200 -> 3000 (amass 20-min cap + recursion fit)
+#   - sink429 engine insertion
+# Committed defaults stay intact (assertion F10 checks git HEAD).
+#
+# Steps: checkout -> toolchain -> preflight G-S1..G-S8 -> unit suite ->
+# passive image pulls (soft, with report) -> build passive-tools (gau) ->
+# reconcile stale state -> REM5 fleet refresh -> vehicle bounding overrides ->
+# sink429 up -> run example.com -> assertions F1..F10/G1..G2 -> teardown ->
+# evidence upload.
+
+name: b3-passive
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: b3-passive
+  cancel-in-progress: false
+
+jobs:
+  b3-passive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - name: "Checkout (branch: private)"
+        uses: actions/checkout@v4
+        with:
+          ref: private
+
+      - name: Toolchain sanity (docker + python3)
+        run: |
+          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          python3 --version
+
+      - name: Preflight gates (G-S1..G-S8)
+        run: PYTHONPATH=. python3 ci/b3_passive_preflight.py
+
+      - name: Unit proof (PSV chain regression suite)
+        run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
+
+      - name: "Pull passive tool images (soft — per-agent degraded-continue covers gaps)"
+        run: |
+          set +e
+          : > ci/b3p_pull_report.txt
+          for img in \
+            curlimages/curl:8.10.1 \
+            projectdiscovery/subfinder:v2.6.7 \
+            caffix/amass:latest \
+            tomnomnom/hacks:assetfinder \
+            tomnomnom/hacks:waybackurls \
+            puredns/puredns:latest \
+            edoardottt/findomain:latest \
+            projectdiscovery/chaos:latest \
+            projectdiscovery/httpx:v1.10.0; do
+            if docker pull "$img"; then
+              echo "pull-ok $img" >> ci/b3p_pull_report.txt
+            else
+              echo "pull-FAILED $img" >> ci/b3p_pull_report.txt
+            fi
+          done
+          cat ci/b3p_pull_report.txt
+
+      - name: "Build pinned local passive-tools image (gau; REM6 pattern)"
+        run: |
+          set -e
+          docker build -t recon-pipeline/passive-tools:v1 -f docker/passive-tools/Dockerfile docker/passive-tools
+          docker image inspect recon-pipeline/passive-tools:v1 --format 'passive-tools-ok {{.Id}}'
+
+      - name: Reconcile stale live state (frozen stop path; expect EXIT 4 or usage)
+        run: |
+          set +e
+          ./recon.sh stop example.com
+          echo "stop exit=$?"
+
+      - name: "REM5 fleet refresh (transient: public source URLs disabled; forge from committed seed)"
+        run: |
+          set -e
+          cp resolvers.yaml ci/b3p_resolvers_runtime_before.yaml
+          python3 - <<'PY'
+          import pathlib
+          import yaml
+          p = pathlib.Path("resolvers.yaml")
+          d = yaml.safe_load(p.read_text(encoding="utf-8"))
+          n = len(d.get("sources") or [])
+          d["sources"] = []
+          p.write_text(yaml.safe_dump(d, sort_keys=False), encoding="utf-8")
+          print(f"ENV-ACCOMMODATION REM5: disabled {n} public source URLs at run time; fleet = resolvers/seed.txt (15 pinned anycast). Transient working-copy edit only - never committed.")
+          PY
+          PYTHONPATH=. python3 - <<'PY'
+          import tempfile
+          from pathlib import Path
+          from pipeline.params import Params
+          from pipeline.adapter import Adapter
+          from pipeline.breaker import CircuitBreaker
+          from pipeline.ceiling import ResourceCeiling
+          from pipeline.resolver_forge import forge_resolvers
+          params = Params(Path("."))
+          tdir = Path(tempfile.mkdtemp()) / "forge-warmup"
+          tdir.mkdir(parents=True)
+          clock = None
+          breaker = CircuitBreaker(params, target_dir=tdir, target="example.com")
+          ceiling = ResourceCeiling(params)
+          adapter = Adapter(params, tdir, breaker, ceiling)
+          forge_resolvers(params, adapter, tdir, "example.com")
+          fleet = [ln for ln in (Path("resolvers/forge/custom-resolvers.txt")).read_text().splitlines() if ln.strip()]
+          assert len(fleet) >= 10, f"fleet too small: {len(fleet)}"
+          print(f"REM5 fleet refresh: healthy={len(fleet)} resolvers from committed seed")
+          PY
+
+      - name: "Vehicle bounding overrides (transient: passive-only + budget 3000s)"
+        run: |
+          set -e
+          cp tools.yaml ci/b3p_tools_runtime_before.yaml
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("tools.yaml")
+          lines = p.read_text(encoding="utf-8").splitlines()
+          out: list[str] = []
+          skipping = False
+          for line in lines:
+              key = line.split(":")[0].strip() if line.startswith("  ") and line.strip().endswith(":") else None
+              if key is not None:
+                  skipping = key == "active_branch_modules"
+                  if skipping:
+                      out.append("  active_branch_modules: []  # TRANSIENT vehicle bounding (never committed): passive-chain vehicle only; committed order restored on checkout.")
+                      continue
+              if skipping:
+                  continue  # drop entries/comments of the bounded block
+              if line.startswith("  passive_branch_budget_sec:"):
+                  out.append("  passive_branch_budget_sec: 3000  # TRANSIENT vehicle accommodation (never committed): amass 20-min cap + recursion must fit the branch budget.")
+                  continue
+              out.append(line)
+          p.write_text("\n".join(out) + "\n", encoding="utf-8")
+          print("VEHICLE OVERRIDE: active_branch_modules -> [] + passive budget 3000s (transient, project-YAML dialect preserved; before-copy ci/b3p_tools_runtime_before.yaml).")
+          PY
+          PYTHONPATH=. python3 - <<'PY'
+          from pathlib import Path
+          from pipeline.params import Params
+          params = Params(Path("."))
+          assert params.require("active_branch_modules") == [], params.require("active_branch_modules")
+          assert int(params.require("passive_branch_budget_sec")) == 3000
+          assert params.require("passive_branch_modules") == ["passive-recon"]
+          print("Vehicle validation: frozen loader parses tools.yaml; active branch bounded out; passive module armed.")
+          PY
+
+      - name: "sink429 up + transient engine insertion (simulated-429 acceptance)"
+        run: |
+          set -e
+          docker run -d --name sink429 python:3.12-alpine python -u -c "
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+          class H(BaseHTTPRequestHandler):
+              def _t(self):
+                  self.send_response(429)
+                  self.send_header('Content-Length', '9')
+                  self.end_headers()
+                  self.wfile.write(b'throttled')
+              do_GET = _t
+              do_POST = _t
+              def log_message(self, *a):
+                  pass
+          HTTPServer(('0.0.0.0', 8099), H).serve_forever()"
+          SINK_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' sink429)
+          echo "sink429 ip=$SINK_IP"
+          docker run --rm curlimages/curl:8.10.1 -sS -o /dev/null -w "sink selftest http_code=%{http_code}\n" "http://$SINK_IP:8099/search?q=x"
+          cp search_engines.yaml ci/b3p_search_engines_runtime_before.yaml
+          SINK_IP="$SINK_IP" python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path("search_engines.yaml")
+          lines = p.read_text(encoding="utf-8").splitlines()
+          out = []
+          inserted = False
+          for line in lines:
+              if line.startswith("engines:") and not inserted:
+                  out.append(line)
+                  out.append("  sink429:")
+                  out.append("    kind: html")
+                  out.append(f"    endpoint: \"http://{os.environ['SINK_IP']}:8099/search\"")
+                  out.append("    method: GET")
+                  out.append("    keyless: true")
+                  out.append("    enabled: true")
+                  out.append("    rate_per_min: 600")
+                  out.append("    priority: 1")
+                  out.append("    query: \"q={dork_encoded}\"")
+                  out.append("    headers: []")
+                  inserted = True
+              else:
+                  out.append(line)
+          assert inserted, "engines: key not found"
+          p.write_text("\n".join(out) + "\n", encoding="utf-8")
+          print("sink429 engine inserted at priority 1 (transient; before-copy ci/b3p_search_engines_runtime_before.yaml).")
+          PY
+          PYTHONPATH=. python3 - <<'PY'
+          from pipeline.params import Params
+          from pipeline.search_forge import load_registry
+          registry = load_registry(Params(Path(".")))
+          engines = registry["engines"]
+          assert "sink429" in engines, list(engines)
+          assert int(engines["sink429"]["priority"]) == 1
+          print("sink429 validated with the FROZEN loader; it will be the first engine picked.")
+          PY
+
+      - name: Run passive vehicle (example.com)
+        run: |
+          set +e
+          ./recon.sh run example.com 2>&1 | tee ci/b3p_run_console.log
+          echo "run exit=${PIPESTATUS[0]}" | tee ci/b3p_run_exit.txt
+
+      - name: Assertions (B3-2 passive table F1..F10 + G1..G2)
+        run: |
+          PYTHONPATH=. python3 ci/b3_passive_assertions.py 2>&1 | tee ci/b3p_assertions_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Teardown (always)
+        if: always()
+        run: |
+          docker rm -f sink429 || true
+          docker ps -q --filter "label=recon.pipeline" | xargs -r docker rm -f || true
+
+      - name: Upload evidence artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b3-passive-evidence
+          path: |
+            ci/b3p_verdict.txt
+            ci/b3p_run_exit.txt
+            ci/b3p_run_console.log
+            ci/b3p_assertions_console.log
+            ci/b3p_pull_report.txt
+            ci/b3p_resolvers_runtime_before.yaml
+            ci/b3p_tools_runtime_before.yaml
+            ci/b3p_search_engines_runtime_before.yaml
+            resolvers/forge/custom-resolvers.txt
+            resolvers/forge/quarantine.txt
+            dorks/forge/search-dorks.txt
+            recon/example.com/logs/run.log
+            recon/example.com/state.json
+            recon/example.com/runs.json
+            recon/example.com/diff.json
+            recon/example.com/00_assets/summary.md
+            recon/example.com/00_assets/assets.json
+            recon/example.com/10_subdomains/passive/**
+            recon/example.com/logs/out_of_scope.log
+          if-no-files-found: warn

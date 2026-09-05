@@ -78,24 +78,39 @@ def run_pipeline(
     active_docs: list[dict[str, Any]] = []
 
     def passive_branch() -> list[dict[str, Any]]:
-        if not passive_names:
-            msg = "passive branch: no tools registered (B3 pending) — skipped, not an error"
-            _append_note(params, target_dir, "passive", msg)
-            print(msg)
-            return []
-        return _run_parallel(
+        docs: list[dict[str, Any]] = _run_passive_modules(
             params,
+            gate,
             adapter,
             target_dir,
-            passive_names,
+            target,
             extra,
             float(params.require("passive_branch_budget_sec")),
             clock,
-            max(1, min(len(passive_names), passive_workers) or 1),
             planned,
             partial,
-            "passive",
         )
+        if not passive_names:
+            msg = "passive branch: no generic passive tools registered (B3 PSV chain handles the branch) — skipped, not an error"
+            _append_note(params, target_dir, "passive", msg)
+            print(msg)
+            return docs
+        docs.extend(
+            _run_parallel(
+                params,
+                adapter,
+                target_dir,
+                passive_names,
+                extra,
+                float(params.require("passive_branch_budget_sec")),
+                clock,
+                max(1, min(len(passive_names), passive_workers) or 1),
+                planned,
+                partial,
+                "passive",
+            )
+        )
+        return docs
 
     def active_branch() -> list[dict[str, Any]]:
         docs: list[dict[str, Any]] = []
@@ -329,6 +344,76 @@ def _branch_tools(params: Params, key: str) -> list[str]:
         if isinstance(spec, dict) and spec.get("enabled", True):
             out.append(str(name))
     return out
+
+
+def _run_passive_modules(
+    params: Params,
+    gate: ScopeGate,
+    adapter: Adapter,
+    target_dir: Path,
+    target: str,
+    extra: dict[str, Any],
+    budget: float,
+    clock: Clock,
+    planned: int,
+    partial: list[str],
+) -> list[dict[str, Any]]:
+    """PASSIVE branch module runner (B3): mirrors _run_active_modules for the
+    passive side. Order law lives INSIDE the passive-recon orchestrator
+    (PSV-0 first ... PSV-6 last)."""
+    names = params.require("passive_branch_modules")
+    if not isinstance(names, list):
+        return []
+    deadline = clock.time() + budget
+    docs: list[dict[str, Any]] = []
+    st = state_engine.load_state(params, target_dir, target)
+    data_keys = {
+        "passive-recon": "passive_data_json",
+    }
+    for name in names:
+        name = str(name)
+        if name not in RUNNERS:
+            continue
+        if state_engine.skip_done(st, name):
+            key = data_keys.get(name)
+            if key:
+                doc = load_tool_doc(target_dir / str(params.require(key)))
+                if doc:
+                    docs.append(doc)
+            continue
+        if not adapter.breaker.allow(name):
+            reason = adapter.breaker.pause_reason(name) or "circuit breaker paused this module"
+            _append_log(params, target_dir, name, name, 0, f"skip: {reason}")
+            print(f"skip: module={name} reason={reason}")
+            continue
+        left = deadline - clock.time()
+        if left <= 0:
+            partial.append("passive_budget")
+            break
+        state_engine.set_status(params, target_dir, name, "running")
+        try:
+            doc = RUNNERS[name](
+                params,
+                gate,
+                adapter,
+                target_dir,
+                target,
+                extra,
+                planned,
+                left,
+                partial,
+            )
+            if doc:
+                docs.append(doc)
+            state_engine.set_status(params, target_dir, name, "done")
+            st = state_engine.load_state(params, target_dir, target)
+        except Exception as exc:
+            state_engine.set_status(params, target_dir, name, "failed")
+            _append_log(params, target_dir, name, name, 1, str(exc))
+            partial.append(f"passive:{name}:{exc}")
+            traceback.print_exc()
+            continue
+    return docs
 
 
 def _run_active_modules(

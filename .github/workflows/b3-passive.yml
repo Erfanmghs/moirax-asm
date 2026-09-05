@@ -175,7 +175,19 @@ jobs:
           HTTPServer(('0.0.0.0', 8099), H).serve_forever()"
           SINK_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' sink429)
           echo "sink429 ip=$SINK_IP"
-          docker run --rm curlimages/curl:8.10.1 -sS -o /dev/null -w "sink selftest http_code=%{http_code}\n" "http://$SINK_IP:8099/search?q=x"
+          ok=""
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            code=$(docker run --rm curlimages/curl:8.10.1 -sS -o /dev/null -w "%{http_code}" "http://$SINK_IP:8099/search?q=x" || echo 000)
+            echo "sink selftest attempt $i -> $code"
+            if [ "$code" = "429" ]; then ok="yes"; break; fi
+            sleep 1
+          done
+          if [ -z "$ok" ]; then
+            echo "--- sink429 container logs ---"
+            docker logs sink429 || true
+            exit 1
+          fi
+          echo "sink selftest OK (429 observed)"
           cp search_engines.yaml ci/b3p_search_engines_runtime_before.yaml
           SINK_IP="$SINK_IP" python3 - <<'PY'
           import os

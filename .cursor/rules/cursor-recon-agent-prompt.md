@@ -1,5 +1,5 @@
 # RECON PIPELINE AGENT — Master Prompt (for Cursor)
-# Version: 1.8 | Updated: 2026-09-04
+# Version: 1.9 | Updated: 2026-09-05
 # Modules are appended iteratively. Never remove or rewrite completed sections — only append/refine.
 
 ## 1. ROLE
@@ -122,6 +122,7 @@ DNSR-1 BRUTE (candidates = union of the dashboard-SELECTED registry keys for thi
 
 DNSR-2 PERMUTATIONS (candidates from mutations):
 `alterx` on ALL known hosts (FFUF-1/2 hits) → candidate set capped by `max_permutations_per_host` (dashboard-editable, default 50,000) → resolved via dnsx with the same flags as DNSR-1.
+- AGGREGATE CAP + SUSPECT-NAME EXCLUSION (v1.9, approved Option-1 item 3 — B2 evidence: 51,872 perms from 199 vhost-feedback FQDNs; per-host cap alone leaves the aggregate unbounded): an AGGREGATE cap `max_permutations_aggregate` (dashboard-editable, named §5.6 parameter) bounds the TOTAL perm candidate set per target per run, enforced after the per-host caps; wildcard-suspect and `misconfig_suspect`-flagged names are EXCLUDED from alterx seed input — suspect-name mutations must never amplify a wildcard/misconfig artifact.
 
 DNSR-3 RESOLVE-ALL + RECORDS:
 All known assets (FFUF hits + DNSR-1/2 valid hits) → full record resolution (A/AAAA/CNAME/MX/NS/TXT) + ASN + wildcard verification → host→IP map (input of PORT-CHECK).
@@ -146,6 +147,16 @@ Purpose: per-SERVER (unique-IP) check of the 50 most-used ports; feeds the "newl
 - Output path: `recon/<target>/30_ports/naabu-light/` (the future NARROW full-range scan will use `30_ports/naabu-full/` — no collision).
 - Diff integration: a newly OPEN port vs previous run → §4.6 Telegram alert; newly CLOSED ports recorded in diff, never alerted.
 - Failure handling: §4.3; a fully-timing-out host is marked `unreachable`, not failed.
+
+### MODULE: FFUF-3 — POST-DNSR VHOST PASS (v1.9, approved Option-1 item 1 — appended ACTIVE sub-step; runs after DNS-RESOLVE completes and BEFORE MERGE; existing module orders untouched, append-only law preserved)
+Purpose: production path for the vhost-misconfiguration class on DNS-DEAD names. The frozen FFUF-2 flag-time DNS cross-check is impossible by the APPEND-ONLY order law (FFUF order 1 finishes before DNS-RESOLVE order 2) — B2 proved the machinery via the vhost fixture (TEST 2); this module is the production implementation, implemented at B3 start (§8.2 next-phase rule).
+- BASE-HOST SET (exact): FFUF-1 completed enum records ∪ DNSR-3 hosts with `resolution_status: unresolved`. Both inputs are logged with counts before any probe.
+- PROBE BINDING: `-u` is bound to an ALIVE in-scope base (a host with a resolved IP that answers HTTP — e.g. apex/www from the same target), with `Host: FUZZ.<dead-name>`; the dead name is never resolved directly. If no alive base exists for the target, the pass is SKIPPED with an explicit log line (never silent).
+- FLAG RULE: `misconfig_suspect: true` ⟺ DNS-dead(name) AND a NON-FILTERED answer — i.e. the response survives the REM4-R1 calibration-drop discipline (genuine body/status, not a wildcard/autocalib artifact). Filtered answers are logged as suppressed, never flagged.
+- ASSET-PROMOTION RULING (v1.9, approved Option-1 item 2): `misconfig_suspect` is an ORTHOGONAL FLAG, never an alive signal — it does NOT promote a DNS-dead host to `alive=true`, and as-frozen alive=true vhost records are not stripped because of the flag; the flag is carried through MERGE to the dashboard layer verbatim (flag-passthrough is acceptance-tested: if MERGE loses it, that is a defect).
+- Output schema (data.json): `{"schema_version":1,"module":"ffuf-3","vhosts":[{"base_host","vhost","alive":null,"http_status","length","misconfig_suspect":true,"dns_status":"dead"}],"bases":[{"host","ip","alive"}],"suppressed":0}`
+- Output path: `recon/<target>/15_vhosts/ffuf-3/` (never collides with FFUF-2 output).
+- Caps: load flags mirror the FFUF-2 baseline (§8 FFUF baseline flags); circuit breaker (§11.4) + resource ceiling (§11.5) apply.
 
 ### MODULE: PORT-SWEEP — branch: ACTIVE | order: 4 (runs AFTER MERGE — consumes assets.json) | full-range scan on LIVE subdomains (the light top-50 PORT-CHECK stays as order-3 early signal — both coexist)
 Purpose: complete port surface (all 65,535 ports) for every LIVE subdomain, with hard guarantees: exactly ONE scan command per unique IP per run, rate-ramped so WAF/IDS never blacklists us, professional profile switches (user-mandated).

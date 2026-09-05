@@ -352,6 +352,7 @@ def _run_active_modules(
     data_keys = {
         "ffuf": "ffuf_data_json",
         "dns-resolve": "dnsr_data_json",
+        "ffuf-3": "ffuf3_data_json",
         "port-check": "portcheck_data_json",
     }
     for name in names:

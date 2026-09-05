@@ -116,7 +116,23 @@ def run_dns_resolve(
             brute_valid += 1
             _merge_resolved(resolved, rec, host, "brute")
 
-    perm_hosts = sorted(set(known))
+    # DNSR-2 AGGREGATE CAP + SUSPECT-NAME EXCLUSION (spec v1.9, approved
+    # Option-1 item 3): the wildcard probe is hoisted BEFORE the perm pass so
+    # wildcard-suspect and misconfig_suspect-flagged names can be EXCLUDED
+    # from the alterx seed input — suspect-name mutations must never amplify
+    # a wildcard/misconfig artifact. The same wildcard_ip classifies the
+    # DNSR-3 phase below (one probe per run, as before).
+    wildcard_ip = None
+    if balancer.tick(resolvers_c, "logs/raw/dnsx-canary", extra_lb):
+        wildcard_ip = _wildcard_ip(
+            params, adapter, target_dir, target, extra, planned, timeout_sec, balancer, resolvers_c, apex
+        )
+    else:
+        partial.append("load_balance_canary_pause")
+    flagged = _misconfig_flagged(params, target_dir)
+    wildcard_seed_suspects = _wildcard_ip_members(sorted(set(known)), resolved, wildcard_ip)
+    perm_hosts, seed_counts = _filter_seeds(sorted(set(known)), flagged, wildcard_seed_suspects)
+    dropped_aggregate = 0
     if perm_hosts:
         if not balancer.tick(resolvers_c, "logs/raw/dnsx-canary", extra_lb):
             partial.append("load_balance_canary_pause")
@@ -140,7 +156,10 @@ def run_dns_resolve(
                 allow_fallback=False,
             )
             cap = int(params.require("max_permutations_per_host"))
-            perms = _cap_perms(target_dir / out_rel, perm_hosts, cap, gate, target_dir)
+            aggregate = int(params.require("max_permutations_aggregate"))
+            perms, dropped_aggregate = _cap_perms(
+                target_dir / out_rel, perm_hosts, cap, gate, target_dir, aggregate
+            )
             perm_candidates = len(perms)
             for i in range(0, len(perms), chunk):
                 if not balancer.tick(resolvers_c, "logs/raw/dnsx-canary", extra_lb):
@@ -206,9 +225,6 @@ def run_dns_resolve(
             host = normalize_fqdn(str(rec.get("host") or rec.get("input") or ""))
             if host:
                 by_host[host] = rec
-        wildcard_ip = _wildcard_ip(
-            params, adapter, target_dir, target, extra, planned, timeout_sec, balancer, resolvers_c, apex
-        )
         suspects: list[str] = []
         for host in all_hosts:
             rec = by_host.get(host)
@@ -246,6 +262,8 @@ def run_dns_resolve(
                 f"candidates: {payload['candidates']}",
                 f"resolved_rows: {len(payload['resolved'])}",
                 f"wildcard_suspects: {len(wildcard_suspects)}",
+                f"alterx_seeds: {seed_counts}",
+                f"aggregate_cap_dropped: {dropped_aggregate}",
                 f"load_balance_qps: {balancer.current_qps()}",
                 "",
             ]
@@ -438,7 +456,20 @@ def _wildcard_ip(
     return None
 
 
-def _cap_perms(path: Path, parents: list[str], cap: int, gate: ScopeGate, target_dir: Path) -> list[str]:
+def _cap_perms(
+    path: Path,
+    parents: list[str],
+    cap: int,
+    gate: ScopeGate,
+    target_dir: Path,
+    aggregate: int = 0,
+) -> tuple[list[str], int]:
+    """Per-host cap first; then the v1.9 DNSR-2 AGGREGATE cap.
+
+    Returns (capped_lines, dropped_aggregate). The aggregate cap bounds the
+    TOTAL perm candidate set per target per run, enforced AFTER the per-host
+    caps (spec v1.9, approved Option-1 item 3).
+    """
     lines = [normalize_fqdn(x) for x in read_lines(path)]
     lines = [h for h in lines if h]
     per_host: dict[str, int] = {p: 0 for p in parents}
@@ -457,9 +488,69 @@ def _cap_perms(path: Path, parents: list[str], cap: int, gate: ScopeGate, target
         per_host[key] += 1
         seen.add(host)
         out.append(host)
+    dropped_aggregate = 0
+    if aggregate and len(out) > aggregate:
+        dropped_aggregate = len(out) - aggregate
+        out = out[:aggregate]
     if path.is_file():
         atomic_write_text(path, "\n".join(out) + "\n")
+    return out, dropped_aggregate
+
+
+def _misconfig_flagged(params: Params, target_dir: Path) -> set[str]:
+    """DNSR-2 (v1.9 item 3): misconfig_suspect-flagged names are excluded from
+    the alterx seed input — suspect-name mutations must never amplify a
+    wildcard/misconfig artifact."""
+    doc = _read_doc(target_dir / str(params.require("ffuf_data_json")))
+    if not doc:
+        return set()
+    out: set[str] = set()
+    for row in doc.get("vhosts") or []:
+        if not isinstance(row, dict):
+            continue
+        if row.get("misconfig_suspect") is True and row.get("vhost"):
+            out.add(str(row["vhost"]).strip().lower().rstrip("."))
     return out
+
+
+def _wildcard_ip_members(
+    hosts: list[str],
+    resolved: dict[str, dict[str, Any]],
+    wildcard_ip: str | None,
+) -> list[str]:
+    """Wildcard-suspect seeds visible at DNSR-2 time: known hosts whose
+    resolved-so-far row carries the wildcard IP."""
+    if not wildcard_ip:
+        return []
+    return [
+        host
+        for host in hosts
+        if wildcard_ip in ((resolved.get(host) or {}).get("ips") or [])
+    ]
+
+
+def _filter_seeds(
+    known: list[str],
+    flagged: set[str],
+    wildcard_suspects: list[str],
+) -> tuple[list[str], dict[str, int]]:
+    seeds = sorted(set(known) - set(flagged) - set(wildcard_suspects))
+    counts = {
+        "seeds_before": len(known),
+        "seeds_after": len(seeds),
+        "excluded_misconfig_flagged": len(set(known) & set(flagged)),
+        "excluded_wildcard_suspect": len(set(known) & set(wildcard_suspects)),
+    }
+    return seeds, counts
+
+
+def _read_doc(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        return read_json(path)
+    except Exception:
+        return None
 
 
 def _ffuf_hosts(params: Params, target_dir: Path) -> list[str]:

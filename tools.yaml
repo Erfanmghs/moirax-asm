@@ -57,6 +57,7 @@ settings:
     - admin
   pipeline_modules:
     - ffuf
+    - ffuf-3
     - dns-resolve
     - port-check
     - passive-recon
@@ -76,6 +77,7 @@ settings:
     - 10_subdomains/passive/sources
     - 15_vhosts
     - 15_vhosts/ffuf
+    - 15_vhosts/ffuf-3
     - 20_dns
     - 20_dns/dnsx
     - 30_ports
@@ -102,6 +104,14 @@ settings:
   ffuf_match_codes: all
   ffuf_auto_calibrate: true
   max_permutations_per_host: 50000
+  # DNSR-2 AGGREGATE CAP (spec v1.9, approved Option-1 item 3 — named §5.6
+  # dashboard-editable parameter). Bounds the TOTAL alterx perm candidate set
+  # per target per run, enforced AFTER the per-host caps. B2 evidence: 51,872
+  # perms from 199 vhost-feedback FQDNs — per-host cap alone leaves the
+  # aggregate unbounded. Default = max_permutations_per_host (50,000): one
+  # host may consume the entire aggregate, never more than that, and the
+  # observed B2 explosion class now binds.
+  max_permutations_aggregate: 50000
   dnsx_max_qps: 5000
   dnsx_ramp_start_qps: 1000
   dnsx_ramp_step_qps: 1000
@@ -190,6 +200,9 @@ settings:
     - vhost_fierce
     - vhost_services
     - vhost_env
+  # FFUF-3 (spec v1.9 §8): output paths — never collide with FFUF-2 output.
+  ffuf3_data_json: 15_vhosts/ffuf-3/data.json
+  ffuf3_summary: 15_vhosts/ffuf-3/summary.md
   tool_retry_count: 2
   retry_backoff_base_sec: 1
   passive_branch_budget_sec: 1200
@@ -302,6 +315,9 @@ settings:
   active_branch_modules:
     - ffuf
     - dns-resolve
+    # FFUF-3 (spec v1.9 §8): appended ACTIVE sub-step — runs after DNS-RESOLVE
+    # completes and BEFORE MERGE; existing module orders untouched.
+    - ffuf-3
     - port-check
 
 tools:

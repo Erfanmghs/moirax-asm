@@ -1,0 +1,156 @@
+# B3 FIRST SUB-STEP (spec v1.9 Option-1 mandate) — FFUF-3 production
+# implementation + DNSR-2 aggregate-cap/suspect-exclusion refinement.
+#
+# Vehicle: fixture-target.test (deterministic, committed scope) with a
+# TRANSIENT selection override [test_smoke_200] (wordlists.yaml working-copy
+# edit, never committed; before-copy kept as evidence) + transient REM5
+# resolver fleet pin. Production defaults remain committed (G-B6).
+#
+# Authorized code delta (B3 scope, spec v1.9 §8.2 next-phase rule):
+#   FFUF-3 module (pipeline/modules/ffuf3.py + wiring) and DNSR-2 refinement
+#   (pipeline/modules/dns_resolve.py). verify_b1.py diff stays empty.
+#
+# Steps: checkout -> toolchain -> fixture up -> ffuf image (REM6) -> preflight
+# -> unit proof -> reconcile stale state -> REM5 fleet pin (transient) ->
+# vehicle selection override (transient) -> run fixture-target.test ->
+# assertions D1..D9 -> teardown -> evidence upload.
+
+name: b3-ffuf3
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: b3-ffuf3
+  cancel-in-progress: false
+
+jobs:
+  b3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: "Checkout (branch: private)"
+        uses: actions/checkout@v4
+        with:
+          ref: private
+
+      - name: Toolchain sanity (docker + python3 + sudo)
+        run: |
+          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          python3 --version
+          sudo -n true && echo "sudo-ok"
+
+      - name: "Clone SecLists (DNSR-1 default key materialization source; host-side ~/seclists)"
+        run: |
+          git clone --depth 1 https://github.com/danielmiessler/SecLists "$HOME/seclists"
+          test -f "$HOME/seclists/Discovery/DNS/subdomains-top1million-5000.txt" && echo "seclists-ok"
+
+      - name: Activate fixture (compose profile + /etc/hosts)
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.vhost-fixture.yml --profile vhost-fixture up -d --build
+          sudo -n python3 docker/vhost-fixture/hosts.py install
+          grep -n "recon-pipeline vhost-fixture" /etc/hosts
+          python3 - <<'PY'
+          import socket
+          for name in ("fixture-target.test", "app.fixture-target.test", "www.fixture-target.test"):
+              print(name, "->", socket.gethostbyname(name))
+          PY
+
+      - name: "Build pinned local tool images (REM6: ffuf v2.1.0)"
+        run: |
+          set -e
+          docker build -t recon-pipeline/ffuf:v2.1.0 -f docker/ffuf/Dockerfile docker/ffuf
+          docker image inspect recon-pipeline/ffuf:v2.1.0 --format 'ffuf-image-ok {{.Id}}'
+
+      - name: Preflight gates (anchor, FFUF-3 wiring, DNSR-2, verify_b1)
+        run: PYTHONPATH=. python3 ci/b3_preflight.py
+
+      - name: Unit proof (FFUF-3 + DNSR-2 regression suite)
+        run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
+
+      - name: Reconcile stale live state (frozen stop path; expect EXIT 4 or usage)
+        run: |
+          set +e
+          ./recon.sh stop fixture-target.test
+          echo "stop exit=$?"
+
+      - name: "REM5 env-accommodation (pin resolver fleet to committed seed)"
+        run: |
+          set -e
+          cp resolvers.yaml ci/b3_resolvers_runtime_before.yaml
+          python3 - <<'PY'
+          import pathlib
+          import yaml
+          p = pathlib.Path("resolvers.yaml")
+          d = yaml.safe_load(p.read_text(encoding="utf-8"))
+          n = len(d.get("sources") or [])
+          d["sources"] = []
+          p.write_text(yaml.safe_dump(d, sort_keys=False), encoding="utf-8")
+          print(f"ENV-ACCOMMODATION REM5: disabled {n} public source URLs at run time; fleet = resolvers/seed.txt (15 pinned anycast). Transient working-copy edit only - never committed.")
+          PY
+
+      - name: "Vehicle bounding override (transient: selection [test_smoke_200])"
+        run: |
+          set -e
+          cp wordlists.yaml ci/b3_wordlists_runtime_before.yaml
+          python3 - <<'PY'
+          import pathlib
+          import yaml
+          p = pathlib.Path("wordlists.yaml")
+          d = yaml.safe_load(p.read_text(encoding="utf-8"))
+          tasks = d.get("tasks") or {}
+          for task in ("DNSR-1", "FFUF-0", "FFUF-2"):
+              tasks[task]["selection"] = ["test_smoke_200"]
+          p.write_text(yaml.safe_dump(d, sort_keys=False), encoding="utf-8")
+          print("VEHICLE OVERRIDE: transient selection [test_smoke_200] for DNSR-1/FFUF-0/FFUF-2 (bounded fixture run). Committed defaults untouched (before-copy kept as evidence).")
+          PY
+
+      - name: Run B3 vehicle (fixture-target.test)
+        id: run
+        run: |
+          set +e
+          ./recon.sh run fixture-target.test 2>&1 | tee ci/b3_run_console.log
+          echo "run exit=${PIPESTATUS[0]}" | tee ci/b3_run_exit.txt
+
+      - name: Assertions (B3 first sub-step table D1..D9)
+        id: assertions
+        run: |
+          PYTHONPATH=. python3 ci/b3_assertions.py 2>&1 | tee ci/b3_assertions_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Teardown (always)
+        if: always()
+        run: |
+          sudo -n python3 docker/vhost-fixture/hosts.py remove || true
+          docker compose -f docker-compose.yml -f docker-compose.vhost-fixture.yml --profile vhost-fixture down -v || true
+
+      - name: Upload evidence artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b3-evidence
+          path: |
+            ci/b3_verdict.txt
+            ci/b3_run_exit.txt
+            ci/b3_run_console.log
+            ci/b3_assertions_console.log
+            ci/b3_resolvers_runtime_before.yaml
+            ci/b3_wordlists_runtime_before.yaml
+            wordlists/forge/counts.log
+            wordlists/forge/custom-subdomains.txt
+            resolvers/forge/custom-resolvers.txt
+            resolvers/forge/quarantine.txt
+            recon/fixture-target.test/logs/run.log
+            recon/fixture-target.test/state.json
+            recon/fixture-target.test/runs.json
+            recon/fixture-target.test/diff.json
+            recon/fixture-target.test/00_assets/summary.md
+            recon/fixture-target.test/00_assets/assets.json
+            recon/fixture-target.test/10_subdomains/ffuf/summary.md
+            recon/fixture-target.test/10_subdomains/ffuf/data.json
+            recon/fixture-target.test/15_vhosts/ffuf-3/**
+            recon/fixture-target.test/15_vhosts/ffuf/summary.md
+            recon/fixture-target.test/20_dns/dnsx/summary.md
+            recon/fixture-target.test/20_dns/dnsx/data.json
+            recon/fixture-target.test/30_ports/**
+          if-no-files-found: warn

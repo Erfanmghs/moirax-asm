@@ -1462,3 +1462,38 @@ Recorded as a B3 integration note; no code change.
 | verify_b1.py | diff EMPTY since handoff |
 
 **VERDICT — TEST 4 (QUARANTINE+RESTORE, T4): PASS**
+
+---
+
+# B2 ACCEPTANCE — OFFICIAL RECORD
+
+Date: 2026-09-05 (runner era). Executor: Super Z (sole executor, GitHub Actions
+`workflow_dispatch`; Cursor retired). Four of four acceptance tests closed PASS.
+
+## Final acceptance table
+
+| test | vehicle | verdict | closing evidence |
+|---|---|---|---|
+| TEST 1 — WORDLIST FORGE | local host era | **PASS** | forge anchor `7ee5fd81…9d3d`; effective-DNSR-1 4860 sha `a94ea1d5…71695` |
+| TEST 2 — MISCONFIG_SUSPECT (FIXTURE, REM4-R) | fixture vhost container, runs #1–#7 | **PASS** | REM5/6/7 ladder; final A3–A10 table (run #7, exit 0) |
+| TEST 3 — REAL-TARGET (T3) | example.com, runs #8–#10 | **PASS** | T3-0 dissection (4860-host residual quantified), T3-1 freshness fix proven (no residual, all fresh), host→IP map + one-naabu-per-IP + dedup + schema proven; final B1–B9 table (run #10, exit 0) |
+| TEST 4 — QUARANTINE + RESTORE (T4) | verification workflow, runs #11–#13 | **PASS** | C2 reproduces the TEST-1 anchor byte-exact after restore; deterministic quarantine injection proof; cleanup ledger closed |
+
+## Integrity statement at acceptance
+
+- `pipeline/verify_b1.py`: working-tree diff **EMPTY** since handoff (gate re-checked on every run).
+- Pipeline code delta vs handoff (`9944048..HEAD`): exactly three files, all TEST-3-authorized
+  and disclosed — `dns_resolve.py` (+23, T3-1 freshness), `merge.py` (+15, composition
+  disclosure), `port_check.py` (+25, REM8 alignment). Unit suite 16/16.
+- Config deltas: REM7 pin applied then RESTORED; REM9 correction applied and STANDS (as-frozen
+  value unexecutable); wordlist selection restored (byte-exact TEST-1 reproduction); REM5 fleet
+  protocol remains runtime-transient, never committed.
+- Honesty record: run #4/#5 stale-pass retraction (REM6), REM-era environment accommodations
+  disclosed inline; every remediation carries its root cause + evidence in this report.
+- Note: the fixture-era preflight gate G-P3 (scope-fixture-only) is superseded by the T3/T4
+  gate sets after the TEST-3 scope restore — recorded to prevent a false legacy-gate alarm.
+
+## B2 ACCEPTANCE VERDICT
+
+**B2: ACCEPTED — 4/4 tests PASS.** The B2 acceptance commit on branch `private`
+formalizes this record. Next phases: spec v1.9 install (approved Option-1 append), then B3.

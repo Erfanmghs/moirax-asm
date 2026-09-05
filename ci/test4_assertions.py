@@ -49,13 +49,22 @@ def load_result(path: Path) -> dict:
         return {}
 
 
+def result_entry(result: dict, cid: str):
+    """Result keys carry the full gate name ("C1 selection-defaults-active");
+    match by the leading id token."""
+    for key, val in result.items():
+        if isinstance(val, dict) and key.split(" ", 1)[0] == cid:
+            return val
+    return None
+
+
 def main() -> int:
     restore = load_result(ROOT / "ci" / "test4_restore_result.json")
     forge = load_result(ROOT / "ci" / "test4_forge_result.json")
 
     for cid in ("C1", "C2", "C3"):
-        entry = restore.get(cid) or {}
-        row(cid, "MANDATORY", bool(entry.get("ok")), str(entry.get("detail") or "restore-verify evidence MISSING"))
+        entry = result_entry(restore, cid)
+        row(cid, "MANDATORY", bool(entry and entry.get("ok")), str((entry or {}).get("detail") or "restore-verify evidence MISSING"))
 
     c4_entries = {k: v for k, v in forge.items() if isinstance(v, dict) and "ok" in v}
     c4_ok = bool(c4_entries) and all(v.get("ok") for v in c4_entries.values())
@@ -64,19 +73,22 @@ def main() -> int:
         f"healthy={len(forge.get('healthy') or [])} quarantined_file={forge.get('quarantined_file')} "
         f"or forge evidence MISSING")
 
-    entry = restore.get("C5") or {}
-    row("C5", "MANDATORY", bool(entry.get("ok")), str(entry.get("detail") or "restore-verify evidence MISSING"))
-    entry = restore.get("C6") or {}
-    row("C6", "MANDATORY", bool(entry.get("ok")), str(entry.get("detail") or "restore-verify evidence MISSING"))
+    entry = result_entry(restore, "C5")
+    row("C5", "MANDATORY", bool(entry and entry.get("ok")), str((entry or {}).get("detail") or "restore-verify evidence MISSING"))
+    entry = result_entry(restore, "C6")
+    row("C6", "MANDATORY", bool(entry and entry.get("ok")), str((entry or {}).get("detail") or "restore-verify evidence MISSING"))
 
+    # C7 reads the COMMITTED-state snapshot (before-copy saved by the harness),
+    # NOT the transient working-copy registry the forge step rewrote.
     seed_path = ROOT / "resolvers" / "seed.txt"
     seed_n = len([ln for ln in seed_path.read_text(encoding="utf-8").splitlines()
                   if ln.strip() and not ln.strip().startswith("#")])
-    reg = ROOT / "resolvers.yaml"
-    reg_txt = reg.read_text(encoding="utf-8") if reg.is_file() else ""
-    sources_intact = "trickest" in reg_txt and "proabiral" in reg_txt
+    before_copy = ROOT / "ci" / "test4_resolvers_before.yaml"
+    before_txt = before_copy.read_text(encoding="utf-8") if before_copy.is_file() else ""
+    sources_intact = "trickest" in before_txt and "proabiral" in before_txt
     row("C7", "DISCLOSURE", True,
-        f"committed seed={seed_n} anycast (REM5); committed public sources intact={sources_intact}; "
+        f"committed seed={seed_n} anycast (REM5); committed public sources intact={sources_intact} "
+        f"(verified against harness before-copy of the committed registry); "
         f"run-time source-disable is a transient working-copy edit (never committed)")
 
     verdict = "PASS" if not failures else "FAIL"

@@ -1,13 +1,33 @@
-# passive-tools: locally built image for the gau archive harvester (PSV-4).
-# REM6 pattern (same as docker/ffuf): the runner has no preinstalled recon
-# images; locally built images are pinned in tools.lock as
-# recon-pipeline/passive-tools:v1 with an empty digest (local build).
-# gau v2 has a go.mod (installable via `go install ...@latest`); the tomnomnom
-# hacks tools (assetfinder, waybackurls) come from their documented Docker Hub
-# per-tool images (tomnomnom/hacks:<tool>).
+# passive-tools: locally built image for the Go passive tools (REM6 pattern;
+# REM13 naming fix after run #18: tomnomnom/hacks and puredns/puredns do NOT
+# exist on Docker Hub - "pull access denied ... repository does not exist").
+#
+# Pinned in tools.lock as recon-pipeline/passive-tools:v1 (empty digest):
+#   gau         github.com/lc/gau/v2/cmd/gau   (package lives under cmd/gau)
+#   puredns     github.com/d3mondev/puredns/v2 (main package at module root)
+#   assetfinder github.com/tomnomnom/hacks/assetfinder (no go.mod in repo ->
+#               clone + minimal go.mod + build; stdlib-only package)
+#   waybackurls github.com/tomnomnom/waybackurls (same no-go.mod treatment)
 FROM golang:1.23-alpine AS build
-RUN go install github.com/lc/gau/v2@latest
+RUN apk add --no-cache git
+RUN go install github.com/lc/gau/v2/cmd/gau@latest \
+ && go install github.com/d3mondev/puredns/v2@latest
+RUN mkdir -p /out \
+ && cp /go/bin/gau /out/gau \
+ && cp /go/bin/puredns /out/puredns
+RUN git clone --depth 1 https://github.com/tomnomnom/hacks /src/hacks \
+ && cd /src/hacks/assetfinder \
+ && go mod init assetfinder \
+ && go build -trimpath -o /out/assetfinder . \
+ && git clone --depth 1 https://github.com/tomnomnom/waybackurls /src/waybackurls \
+ && cd /src/waybackurls \
+ && go mod init waybackurls \
+ && go build -trimpath -o /out/waybackurls .
 
 FROM alpine:3.20
-COPY --from=build /go/bin/gau /usr/local/bin/gau
+RUN apk add --no-cache ca-certificates
+COPY --from=build /out/gau /usr/local/bin/gau
+COPY --from=build /out/puredns /usr/local/bin/puredns
+COPY --from=build /out/assetfinder /usr/local/bin/assetfinder
+COPY --from=build /out/waybackurls /usr/local/bin/waybackurls
 ENTRYPOINT ["gau"]

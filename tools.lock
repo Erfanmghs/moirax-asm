@@ -61,24 +61,28 @@ images:
     image: caffix/amass
     tag: "latest"
     digest: ""
+  # REM13 (run #18 evidence): tomnomnom/hacks and puredns/puredns do not exist
+  # on Docker Hub; the four Go tools are built from source into the local
+  # passive-tools image (docker/passive-tools). chaos lives at
+  # projectdiscovery/chaos-client; findomain at the author's repo image.
   assetfinder:
-    image: tomnomnom/hacks
-    tag: "assetfinder"
+    image: recon-pipeline/passive-tools
+    tag: "v1"
     digest: ""
   waybackurls:
-    image: tomnomnom/hacks
-    tag: "waybackurls"
+    image: recon-pipeline/passive-tools
+    tag: "v1"
     digest: ""
   puredns:
-    image: puredns/puredns
-    tag: "latest"
+    image: recon-pipeline/passive-tools
+    tag: "v1"
     digest: ""
   chaos:
-    image: projectdiscovery/chaos
+    image: projectdiscovery/chaos-client
     tag: "latest"
     digest: ""
   findomain:
-    image: edoardottt/findomain
+    image: edu4rdshl/findomain
     tag: "latest"
     digest: ""
   passive-tools:

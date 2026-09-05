@@ -63,11 +63,8 @@ jobs:
             curlimages/curl:8.10.1 \
             projectdiscovery/subfinder:v2.6.7 \
             caffix/amass:latest \
-            tomnomnom/hacks:assetfinder \
-            tomnomnom/hacks:waybackurls \
-            puredns/puredns:latest \
-            edoardottt/findomain:latest \
-            projectdiscovery/chaos:latest \
+            edu4rdshl/findomain:latest \
+            projectdiscovery/chaos-client:latest \
             projectdiscovery/httpx:v1.10.0; do
             if docker pull "$img"; then
               echo "pull-ok $img" >> ci/b3p_pull_report.txt

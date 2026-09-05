@@ -1497,3 +1497,69 @@ Date: 2026-09-05 (runner era). Executor: Super Z (sole executor, GitHub Actions
 
 **B2: ACCEPTED — 4/4 tests PASS.** The B2 acceptance commit on branch `private`
 formalizes this record. Next phases: spec v1.9 install (approved Option-1 append), then B3.
+
+---
+
+# B3 FIRST SUB-STEP (FFUF-3 + DNSR-2) — CLOSURE RECORD
+
+Date: 2026-09-05 (runner era). Mandate: spec v1.9 (approved Option-1 append,
+commit `c5addb6`) — companion Phase B3 FIRST SUB-STEP: implement MASTER §8
+MODULE FFUF-3 POST-DNSR VHOST PASS, then the DNSR-2 aggregate cap +
+suspect-name exclusion refinement. Runs #14–#17 on the fixture vehicle
+(`b3-ffuf3` workflow).
+
+## Implementation (commits `6b90eee`, then REM10/11/12 hardening)
+
+- **FFUF-3** (`pipeline/modules/ffuf3.py` + wiring): appended ACTIVE sub-step,
+  module order `ffuf → dns-resolve → ffuf-3 → port-check` (after DNS-RESOLVE,
+  before MERGE; append-only law preserved). Base-host set = FFUF-1 completed
+  enum records ∪ DNSR-3 unresolved (§8 DNSR-3 host universe); probe binding
+  `-u` → alive SAME-TARGET-ZONE base with `Host: FUZZ.<dead-name>`; flag rule
+  = DNS-dead(name) AND non-filtered answer (REM4-R1 calibration-drop
+  discipline, suppressed counter); asset-promotion ruling honored (rows carry
+  `alive: null`, flag orthogonal); exact 5-key schema at
+  `15_vhosts/ffuf-3/data.json`; no-alive-base skip is explicit, never silent.
+- **DNSR-2 refinement** (`dns_resolve.py`): named §5.6 parameter
+  `max_permutations_aggregate=50000` (B2 evidence: 51,872-perm explosion now
+  binds), enforced in `_cap_perms` AFTER the per-host caps;
+  wildcard-suspect + `misconfig_suspect`-flagged names EXCLUDED from alterx
+  seed input (wildcard probe hoisted before the perm pass; same wildcard_ip
+  reused for DNSR-3 classification — one probe per run, as before).
+- Unit suite 29/29 (`tests/test_ffuf3.py` 7 cases, `tests/test_dnsr2_aggregate.py`
+  6 cases, prior 16 intact). `verify_b1.py` diff EMPTY throughout.
+
+## Remediation ladder (each with root cause + evidence)
+
+| id | run | root cause | fix |
+|---|---|---|---|
+| REM10 | #14 (`33963556234`) | transient selection override used pyyaml `safe_dump` → whole `wordlists.yaml` reformatted into a dialect the frozen `yaml_util` loader rejects → ffuf + dns-resolve crashed at startup (partial, exit 3); assertions D8 crashed on the same file | override rewritten as a TEXT insertion in the project minimal-YAML style + validated through the frozen loader before the run (same class as T4-A `df52121`); D8 crash-proofed |
+| REM11 | #15 (`33963852240`, 150-min job kill) | dead set = 1237 names — 923+ were alterx perm NXDOMAIN rows (NOT DNSR-3 hosts per §8); binding base = foreign-zone `www.example.com` (real Cloudflare) → cross-zone probing; breaker drifted to ~zero (1 req/s, 3m17s × 1237 jobs) | dead set = FFUF-1 records with DNSR-3 unresolved status (spec §8 universe; store count still disclosed as `dnsr_unresolved_store`); same-target zone law in `_alive_bases`; new §5.6 param `ffuf3_max_dead_probes=1000` with explicit `ffuf3_dead_probe_cap` partial marker |
+| REM12 | #16 (`33971844406`) | D1..D9 all PASS except D1: status partial, reason `resolver_min_healthy_count:14` ONLY — the documented seed-fleet environment fact (TEST-2-era vehicle ran with the identical REM7=10 pin) | transient runtime pin 100→10 via single-line text edit (frozen-loader validated, before-copy kept); production 100 stays committed |
+
+## Final D-table (run #17, `33972405723`, exit 0, status completed)
+
+| id | kind | result |
+|---|---|---|
+| D1 run completes (exit 0, completed) | MANDATORY | PASS |
+| D2 ordering: dns-resolve ≤ ffuf-3 ≤ merge, ffuf-3 done | MANDATORY | PASS |
+| D3 data.json exact spec root keys, module=ffuf-3 | MANDATORY | PASS |
+| D4 flag discipline / never-silent skip contract (0 probes, 0 foreign bases) | MANDATORY | PASS |
+| D5 MERGE flag-passthrough (rows=0 on vehicle: as-frozen, TEST 2 A8/R3 + units) | MANDATORY | PASS |
+| D6 DNSR-2: seeds_before=8 → seeds_after=3 (5 misconfig-flagged excluded), perms 1957 ≤ aggregate 50000 | MANDATORY | PASS |
+| D7 input counts logged BEFORE any probe | MANDATORY | PASS |
+| D8 forge POST sha == anchor `7ee5fd81…` | MANDATORY | PASS |
+| D9 verify_b1 working-tree diff EMPTY | MANDATORY | PASS |
+| E1 dead-set disclosure: probed=7 (FFUF-1-record universe) vs store=1199 (perm NXDOMAINs disclosed, not probed) | DISCLOSURE | disclosed |
+| E2 aggregate_cap_dropped=0, seeds dict | DISCLOSURE | disclosed |
+
+Vehicle note (honest): on this fixture the dnsx resolver fleet cannot resolve
+`.test` names (fleet = public anycast; fixture names live only in
+/etc/hosts), so no same-zone alive base carries a DNSR-3 IP → FFUF-3 takes
+its SPEC-DEFINED skip path (explicit log, zero probes, zero cross-zone
+binding). The rows-path machinery (flag rule, suppression, schema,
+asset-promotion) is unit-proven bidirectionally and the flag mechanics are
+the TEST-2-acceptance-tested as-frozen MERGE/FFUF-2 machinery. First
+real-target era with a same-zone alive base will exercise the rows path
+end-to-end.
+
+**VERDICT — B3 FIRST SUB-STEP (FFUF-3 + DNSR-2, FIXTURE): PASS**

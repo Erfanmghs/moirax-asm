@@ -200,7 +200,17 @@ def main() -> int:
     crtsh_rows = [ln.strip() for ln in ct_file.read_text(
         encoding="utf-8", errors="replace").splitlines() if ln.strip()] if ct_file.is_file() else []
     candidate_hosts = {str(row.get("host")) for row in (data.get("candidates") or [])}
-    missing_from_candidates = [h for h in crtsh_rows if h not in candidate_hosts]
+    # harvest-everything vs scope-gate (§3.3): a crt.sh cert can carry SANs
+    # outside the engagement (run #24: m.testexample.com); such rows must be
+    # REJECTED BY THE GATE (out_of_scope.log) — never silently dropped.
+    oos_text = ""
+    oos_log = TARGET_DIR / "logs" / "out_of_scope.log"
+    if oos_log.is_file():
+        oos_text = oos_log.read_text(encoding="utf-8", errors="replace")
+    missing_from_candidates = [
+        h for h in crtsh_rows
+        if h not in candidate_hosts and f"\trejected\t{h}\t" not in oos_text
+    ]
     keyword_tags = [str(t) for t in params.require("keyword_tags")]
     tagged_named = [h for h in crtsh_rows if any(t in h.split(".")[0].lower() for t in keyword_tags)]
     tagged_in_data = [

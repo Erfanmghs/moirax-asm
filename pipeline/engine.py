@@ -168,6 +168,32 @@ def run_pipeline(
             _append_log(params, target_dir, merge_name, merge_name, 1, str(exc))
             state_engine.set_status(params, target_dir, merge_name, "failed")
 
+    # B4 PORT-SWEEP (spec §8, order-4): post-MERGE stage consuming assets.json.
+    # Not a branch member — it runs strictly after MERGE and before the run
+    # status is classified, so its partial markers (window breach / canary
+    # pause) shape the final status like every other stage.
+    sweep_name = str(params.require("portsweep_module"))
+    if sweep_name in RUNNERS:
+        st = state_engine.load_state(params, target_dir, target)
+        if state_engine.skip_done(st, sweep_name):
+            print(f"skip: module={sweep_name} reason=already done (resume)")
+        elif not adapter.breaker.allow(sweep_name):
+            reason = adapter.breaker.pause_reason(sweep_name) or "circuit breaker paused this module"
+            _append_log(params, target_dir, sweep_name, sweep_name, 0, f"skip: {reason}")
+            print(f"skip: module={sweep_name} reason={reason}")
+        else:
+            state_engine.set_status(params, target_dir, sweep_name, "running")
+            try:
+                RUNNERS[sweep_name](
+                    params, gate, adapter, target_dir, target, extra, planned, None, partial
+                )
+                state_engine.set_status(params, target_dir, sweep_name, "done")
+            except Exception as exc:
+                state_engine.set_status(params, target_dir, sweep_name, "failed")
+                partial.append(f"portsweep:{exc}")
+                _append_log(params, target_dir, sweep_name, sweep_name, 1, str(exc))
+                traceback.print_exc()
+
     stamp = utc_stamp()
     counts = _counts(params, target_dir, passive_docs, active_docs)
     status, reason, failing_module = _classify_status(params, breaker, alerts, partial, failed, passive_docs, active_docs)

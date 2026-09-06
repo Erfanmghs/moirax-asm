@@ -138,7 +138,28 @@ settings:
   portsweep_filtered_reprobe_divisor: 4
   portsweep_anomalous_open_threshold: 1000
   portsweep_nmap_sv: false
-  portsweep_nmap_max_rate: null
+  # SECOND STAGE nmap -sV (designated VA hook): default OFF — the toggle is
+  # the only VA surface (DO-NOT-BUILD list); max-rate is a named param.
+  portsweep_nmap_max_rate: 300
+  # ---- B4 PORT-SWEEP (spec §8 order-4 post-MERGE) — wiring + artifacts.
+  portsweep_module: port-sweep
+  portsweep_data_json: 30_ports/naabu-full/data.json
+  portsweep_summary: 30_ports/naabu-full/summary.md
+  portsweep_target_set_rel: 30_ports/naabu-full/target-set.txt
+  portsweep_guarantee_hosts_rel: 30_ports/naabu-full/resolution-guarantee-hosts.txt
+  portsweep_guarantee_output_rel: 30_ports/naabu-full/resolution-guarantee.json
+  portsweep_raw_dir: logs/raw/naabu-sweep
+  # custom profile (dashboard port-range + rate) — empty default keeps the
+  # profile non-executable until the operator chooses a range (never silent).
+  portsweep_custom_ports: ""
+  portsweep_custom_rate_cap: 1000
+  portsweep_concurrency: 50
+  # naabu -rate is overridden per-IP by the pacer (ramp x pace budget); this
+  # committed value is the template default so the argv always resolves.
+  portsweep_rate: 100
+  portsweep_ramp_interval_sec: 30
+  portsweep_canary_connect_timeout_sec: 3
+  portsweep_sentinel_limit: 3
   dork_timeout_sec: 60
   crtsh_max_time_sec: 120
   crtsh_retries: 3
@@ -729,6 +750,90 @@ tools:
     output_data_json: 30_ports/naabu-light/data.json
     output_summary: 30_ports/naabu-light/summary.md
     output_raw_dir: logs/raw/naabu-light
+  # ==== B4 PORT-SWEEP (spec §8 order-4 post-MERGE) ====
+  # naabu-full: SYN full range (profile=full). The -p "-" form asks naabu for
+  # all 65,535 TCP ports; pacing + ramp + canary live in the module/pacer.
+  naabu-full:
+    enabled: true
+    branch: active
+    fallback: null
+    image_ref: naabu
+    binary: naabu
+    network_host: true
+    argv_template:
+      - naabu
+      - -host
+      - "{naabu_host}"
+      - -p
+      - "-"
+      - -scan-type
+      - s
+      - -retries
+      - "{portsweep_retries}"
+      - -timeout
+      - "{portsweep_timeout_ms}"
+      - -c
+      - "{portsweep_concurrency}"
+      - -rate
+      - "{portsweep_rate}"
+      - -json
+    output_mode: json
+    parser: json
+    data_kind: active
+    output_raw_dir: logs/raw/naabu-sweep
+  # naabu-sweep: custom profile — the port range comes from the named param
+  # portsweep_custom_ports (dashboard-editable), never hardcoded.
+  naabu-sweep:
+    enabled: true
+    branch: active
+    fallback: null
+    image_ref: naabu
+    binary: naabu
+    network_host: true
+    argv_template:
+      - naabu
+      - -host
+      - "{naabu_host}"
+      - -p
+      - "{portsweep_ports_arg}"
+      - -scan-type
+      - s
+      - -retries
+      - "{portsweep_retries}"
+      - -timeout
+      - "{portsweep_timeout_ms}"
+      - -c
+      - "{portsweep_concurrency}"
+      - -rate
+      - "{portsweep_rate}"
+      - -json
+    output_mode: json
+    parser: json
+    data_kind: active
+    output_raw_dir: logs/raw/naabu-sweep
+  # nmap-sv: SECOND STAGE — designated VA hook; invoked ONLY when the
+  # portsweep_nmap_sv toggle is on (default OFF -> zero containers ever).
+  nmap-sv:
+    enabled: true
+    branch: active
+    fallback: null
+    image_ref: nmap
+    binary: nmap
+    network_host: true
+    argv_template:
+      - nmap
+      - -sV
+      - -p
+      - "{nmap_ports_arg}"
+      - --max-rate
+      - "{portsweep_nmap_max_rate}"
+      - -oX
+      - "-"
+      - "{naabu_host}"
+    output_mode: text
+    parser: host_lines
+    data_kind: active
+    output_raw_dir: logs/raw/nmap-sv
   # ==== B3 PASSIVE BRANCH (spec §8 PSV-0..PSV-8) ====
   # PSV-1/2/7/8 HTTP fetches + engine-pool requests run through this generic
   # curl spec; the fetch command is assembled from NAMED registry parameters

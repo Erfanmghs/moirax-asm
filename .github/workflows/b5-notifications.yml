@@ -1,0 +1,218 @@
+# B5 NOTIFICATIONS & SCHEDULER (spec §4.5/§4.6/§4.7) — acceptance vehicle.
+#
+# Vehicle: example.com (committed scope), the same proven shape as the B4
+# vehicle: full pipeline (passive chain PSV-0..PSV-8 -> MERGE -> PORT-SWEEP
+# under the proven bounding) with the NEW run-end notification fan-out
+# (§4.5 summary + §4.7 self-monitoring + §4.6/§4.7 diff-driven watchtower
+# evaluation over the real diff.json) executed against a REAL run.
+#
+# CI has NO Telegram credentials (by design): the honest skip-silently path
+# (§4.5 "if unset → skip silently") is what the vehicle exercises; the three
+# companion acceptance scenarios (forced failure -> FAILED alert; flood ->
+# exactly ONE digest; closed-port-only diff -> silence) are re-proven
+# in-CI against the FROZEN code with fake senders (assertions I2..I4).
+#
+# Transient runtime accommodations (NEVER committed; before-copies kept) —
+# the exact proven B4 set:
+#   - REM5 resolver-fleet refresh from the committed seed
+#   - active_branch_modules: [] (passive-producer bounding)
+#   - passive_branch_budget_sec 1200 -> 3000; passive_recursion_depth 2 -> 1
+#   - portsweep_profile full -> custom "80,443,8080"; duration 24 -> 1
+# Committed defaults stay intact (assertion I6 checks git HEAD via frozen
+# loader — B3 F10 discipline).
+#
+# Steps: checkout -> toolchain -> preflight G-Y1..G-Y8 -> unit suite ->
+# image pulls (soft) -> passive-tools build -> reconcile stale state ->
+# REM5 fleet refresh -> vehicle bounding overrides -> run example.com ->
+# assertions I1..I8 -> teardown -> evidence upload.
+
+name: b5-notifications
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: b5-notifications
+  cancel-in-progress: false
+
+jobs:
+  b5-notifications:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - name: "Checkout (branch: private)"
+        uses: actions/checkout@v4
+        with:
+          ref: private
+
+      - name: Toolchain sanity (docker + python3)
+        run: |
+          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          python3 --version
+
+      - name: Preflight gates (G-Y1..G-Y8)
+        run: PYTHONPATH=. python3 ci/b5_preflight.py
+
+      - name: Unit proof (full regression suite incl. B5 notifications+scheduler)
+        run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
+
+      - name: "Pull tool images (soft — passive fleet + sweep)"
+        run: |
+          set +e
+          : > ci/b5_pull_report.txt
+          for img in \
+            projectdiscovery/naabu:v2.3.5 \
+            projectdiscovery/dnsx:v1.2.2 \
+            projectdiscovery/httpx:v1.10.0 \
+            projectdiscovery/subfinder:v2.6.7 \
+            caffix/amass:latest \
+            edu4rdshl/findomain:latest \
+            projectdiscovery/chaos-client:latest \
+            curlimages/curl:8.10.1; do
+            if docker pull "$img"; then
+              echo "pull-ok $img" >> ci/b5_pull_report.txt
+            else
+              echo "pull-FAILED $img" >> ci/b5_pull_report.txt
+            fi
+          done
+          cat ci/b5_pull_report.txt
+
+      - name: "Build pinned local passive-tools image (gau; REM6 pattern)"
+        run: |
+          set -e
+          docker build -t recon-pipeline/passive-tools:v1 -f docker/passive-tools/Dockerfile docker/passive-tools
+          docker image inspect recon-pipeline/passive-tools:v1 --format 'passive-tools-ok {{.Id}}'
+
+      - name: Reconcile stale live state (frozen stop path; expect EXIT 4 or usage)
+        run: |
+          set +e
+          ./recon.sh stop example.com
+          echo "stop exit=$?"
+
+      - name: "REM5 fleet refresh (transient: public source URLs disabled; forge from committed seed)"
+        run: |
+          set -e
+          cp resolvers.yaml ci/b5_resolvers_runtime_before.yaml
+          python3 - <<'PY'
+          import pathlib
+          import yaml
+          p = pathlib.Path("resolvers.yaml")
+          d = yaml.safe_load(p.read_text(encoding="utf-8"))
+          n = len(d.get("sources") or [])
+          d["sources"] = []
+          p.write_text(yaml.safe_dump(d, sort_keys=False), encoding="utf-8")
+          print(f"ENV-ACCOMMODATION REM5: disabled {n} public source URLs at run time; fleet = resolvers/seed.txt (15 pinned anycast). Transient working-copy edit only - never committed.")
+          PY
+          PYTHONPATH=. python3 - <<'PY'
+          import tempfile
+          from pathlib import Path
+          from pipeline.params import Params
+          from pipeline.adapter import Adapter
+          from pipeline.breaker import CircuitBreaker
+          from pipeline.ceiling import ResourceCeiling
+          from pipeline.resolver_forge import forge_resolvers
+          params = Params(Path("."))
+          tdir = Path(tempfile.mkdtemp()) / "forge-warmup"
+          tdir.mkdir(parents=True)
+          breaker = CircuitBreaker(params, target_dir=tdir, target="example.com")
+          ceiling = ResourceCeiling(params)
+          adapter = Adapter(params, tdir, breaker, ceiling)
+          forge_resolvers(params, adapter, tdir, "example.com")
+          fleet = [ln for ln in (Path("resolvers/forge/custom-resolvers.txt")).read_text().splitlines() if ln.strip()]
+          assert len(fleet) >= 10, f"fleet too small: {len(fleet)}"
+          print(f"REM5 fleet refresh: healthy={len(fleet)} resolvers from committed seed")
+          PY
+
+      - name: "Vehicle bounding overrides (transient: the proven B4 set)"
+        run: |
+          set -e
+          cp tools.yaml ci/b5_tools_runtime_before.yaml
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("tools.yaml")
+          lines = p.read_text(encoding="utf-8").splitlines()
+          out: list[str] = []
+          skipping = False
+          for line in lines:
+              key = line.split(":")[0].strip() if line.startswith("  ") and line.strip().endswith(":") else None
+              if key is not None:
+                  skipping = key == "active_branch_modules"
+                  if skipping:
+                      out.append("  active_branch_modules: []  # TRANSIENT vehicle bounding (never committed): passive chain produces assets. Committed order restored on checkout.")
+                      continue
+              if skipping:
+                  continue  # drop entries/comments of the bounded block
+              if line.startswith("  passive_branch_budget_sec:"):
+                  out.append("  passive_branch_budget_sec: 3000  # TRANSIENT vehicle accommodation (never committed): amass 20-min cap + recursion must fit the branch budget.")
+                  continue
+              if line.startswith("  passive_recursion_depth:"):
+                  out.append("  passive_recursion_depth: 1  # TRANSIENT vehicle accommodation (never committed): keeps recursion bounded on example.com. Committed default 2 stays (I6 checks git HEAD).")
+                  continue
+              if line.startswith("  portsweep_profile:"):
+                  out.append("  portsweep_profile: custom  # TRANSIENT vehicle accommodation (never committed): bounded custom profile; committed default full stays (I6).")
+                  continue
+              if line.startswith("  portsweep_custom_ports:"):
+                  out.append('  portsweep_custom_ports: "80,443,8080"  # TRANSIENT vehicle accommodation (never committed): bounded CI sweep; committed default "" stays.')
+                  continue
+              if line.startswith("  portsweep_duration_hours:"):
+                  out.append("  portsweep_duration_hours: 1  # TRANSIENT vehicle accommodation (never committed): spec-floor window; committed default 24 stays.")
+                  continue
+              out.append(line)
+          p.write_text("\n".join(out) + "\n", encoding="utf-8")
+          print("VEHICLE OVERRIDE: the proven B4 bounding set applied (transient; before-copy ci/b5_tools_runtime_before.yaml).")
+          PY
+          PYTHONPATH=. python3 - <<'PY'
+          from pathlib import Path
+          from pipeline.params import Params
+          params = Params(Path("."))
+          assert params.require("active_branch_modules") == [], params.require("active_branch_modules")
+          assert int(params.require("passive_branch_budget_sec")) == 3000
+          assert int(params.require("passive_recursion_depth")) == 1
+          assert params.require("passive_branch_modules") == ["passive-recon"]
+          assert params.require("portsweep_profile") == "custom"
+          assert params.require("portsweep_custom_ports") == "80,443,8080"
+          assert int(params.require("portsweep_duration_hours")) == 1
+          assert int(params.require("digest_threshold")) == 10
+          assert int(params.require("scheduler_min_interval_min")) == 10
+          print("Vehicle validation: frozen loader parses tools.yaml; B4 bounding set + B5 committed notification defaults intact.")
+          PY
+
+      - name: Run vehicle (example.com — passive chain + MERGE + sweep + notify fan-out)
+        run: |
+          set +e
+          ./recon.sh run example.com 2>&1 | tee ci/b5_run_console.log
+          echo "run exit=${PIPESTATUS[0]}" | tee ci/b5_run_exit.txt
+
+      - name: Assertions (B5 notifications table I1..I8)
+        run: |
+          PYTHONPATH=. python3 ci/b5_assertions.py 2>&1 | tee ci/b5_assertions_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Teardown (always)
+        if: always()
+        run: |
+          docker ps -q --filter "label=recon.pipeline" | xargs -r docker rm -f || true
+
+      - name: Upload evidence artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b5-notifications-evidence
+          path: |
+            ci/b5_verdict.txt
+            ci/b5_run_exit.txt
+            ci/b5_run_console.log
+            ci/b5_assertions_console.log
+            ci/b5_pull_report.txt
+            ci/b5_resolvers_runtime_before.yaml
+            ci/b5_tools_runtime_before.yaml
+            resolvers/forge/custom-resolvers.txt
+            resolvers/forge/quarantine.txt
+            recon/example.com/logs/run.log
+            recon/example.com/logs/out_of_scope.log
+            recon/example.com/state.json
+            recon/example.com/runs.json
+            recon/example.com/diff.json
+            recon/example.com/00_assets/assets.json
+            recon/example.com/10_subdomains/passive/**
+          if-no-files-found: warn

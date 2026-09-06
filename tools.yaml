@@ -362,6 +362,16 @@ settings:
   # CT fallback (§8 PSV-2): the swap is a tools.yaml profile switch, never a
   # pipeline edit — crtsh.fallback chains to this registered tool.
   ct_fallback_tool: certspotter
+  # B5 NOTIFICATIONS & SCHEDULER (§4.5/§4.6/§4.7 + §9.2-e dashboard Settings).
+  # digest_threshold is the dashboard-editable default; dashboard/config.json
+  # overrides it at runtime (gitignored, never committed). Credential env names
+  # were registered at B0 (telegram_bot_token_env / telegram_chat_id_env).
+  dashboard_config_relpath: dashboard/config.json
+  digest_threshold: 10
+  report_dirname: 90_report
+  scheduler_filename: scheduler.json
+  scheduler_default_interval_min: 240
+  scheduler_min_interval_min: 10
 
 tools:
   # TEST FIXTURE (verify_b1)

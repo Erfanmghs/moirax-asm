@@ -15,7 +15,7 @@ from pipeline.history import append_run, previous_timestamp, snapshot, utc_stamp
 from pipeline.jsonio import read_json
 from pipeline.merge import load_tool_doc, merge_branches
 from pipeline.modules import RUNNERS
-from pipeline.notify import send_status
+from pipeline.notify import run_end_notifications, send_status
 from pipeline.params import Params
 from pipeline.scope import ScopeGate
 from pipeline.wordlist_forge import EmptyWordlistError, ingest_if_completed
@@ -45,6 +45,7 @@ def run_pipeline(
         failing_module=None,
     )
     clock = clock or Clock()
+    run_started = clock.time()
     alerts: list[tuple[str, str, str]] = []
 
     def _on_anomaly(status: str, module: str, reason: str) -> None:
@@ -203,6 +204,22 @@ def run_pipeline(
     prev = previous_timestamp(params, target_dir, stamp)
     append_run(params, target_dir, stamp, status, counts)
     write_diff(params, target_dir, prev, stamp)
+    notify_ledger = run_end_notifications(
+        params,
+        target_dir,
+        target,
+        status,
+        reason,
+        failing_module,
+        counts,
+        clock.time() - run_started,
+    )
+    print(
+        "notify: "
+        f"summary={notify_ledger.get('summary_sent')} "
+        f"status_alert={notify_ledger.get('status_alert_sent')} "
+        f"alerts={notify_ledger.get('alerts')}"
+    )
     code = _exit_code(params, status)
     print(f"run {status}: {target_dir}")
     print(f"history: {target_dir / params.require('history_dirname') / stamp}")

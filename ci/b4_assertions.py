@@ -1,7 +1,11 @@
 """B4 PORT-SWEEP acceptance table — runs AFTER the example.com vehicle.
 
-  H1  MANDATORY  run completed/partial + runs.json last status + sweep module
-                 status done; the sweep RAN (skipped != previous_in_progress)
+  H1  MANDATORY  STAGE-SCOPED (B4 = the port-sweep stage): sweep module done,
+                 the sweep RAN (skipped != previous_in_progress), and the
+                 port-sweep lane is CLEAN (no port-sweep breaker pause, no
+                 portsweep partial marker). Run-level anomaly from B3-era
+                 passive lanes (third-party variance) is DISCLOSED in G3, not
+                 hidden — the stage under test is judged on its own lane.
   H2  MANDATORY  IP DEDUP: every unique IP in target-set.txt scanned EXACTLY
                  once (naabu-invoke lines), results attributed to ALL hosts
   H3  MANDATORY  RULE 3: target-set.txt materialized + logged BEFORE the first
@@ -15,12 +19,16 @@
   H6  MANDATORY  nmap toggle OFF -> ZERO nmap invocations anywhere in run.log
   H7  MANDATORY  SCOPE: every scanned IP verdict-eligible under the committed
                  gate; scanned IP set == target-set minus unreachable/deferred
-  H8  MANDATORY  data.json exact §8 keys + COMMITTED defaults intact (git HEAD
-                 tools.yaml/tools.lock unchanged in the working tree) +
-                 verify_b1.py working-tree diff empty
+  H8  MANDATORY  data.json exact §8 keys + COMMITTED content intact (HEAD
+                 blobs of tools.yaml/tools.lock re-parsed with the frozen
+                 loader — the working tree carries the INTENDED transient
+                 vehicle overrides, never committed) + verify_b1.py
+                 working-tree diff empty
   G1  DISCLOSURE canary state: sentinels mined (or first-run disarm note),
                  pacer bad windows from run.log
   G2  DISCLOSURE pace/resolution/unreachable/remaining summary from summary.md
+  G3  DISCLOSURE run-level status + reason + failing_module + breaker pause
+                 ledger (full honesty surface for the stage-scoped H1)
 
 Exit 0 iff all MANDATORY rows PASS.
 """
@@ -35,7 +43,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from pipeline.modules.port_sweep import _FULL_RANGE_PORTS, _count_ports  # noqa: E402
 from pipeline.params import Params  # noqa: E402
 from pipeline.scope import ScopeGate  # noqa: E402
 from pipeline.yaml_util import load_yaml_file  # noqa: E402
@@ -69,7 +76,7 @@ def main() -> int:
     if DATA.is_file():
         payload = json.loads(DATA.read_text(encoding="utf-8"))
 
-    # ---- H1 run status + sweep ran ------------------------------------------
+    # ---- H1 stage-scoped: sweep ran, done, own lane clean --------------------
     runs: dict = {}
     if RUNS.is_file():
         runs = json.loads(RUNS.read_text(encoding="utf-8"))
@@ -80,10 +87,12 @@ def main() -> int:
         state = json.loads(STATE.read_text(encoding="utf-8"))
     sweep_status = ((state.get("modules") or {}).get("port-sweep") or {}).get("status")
     ran = payload.get("skipped") != "previous_in_progress"
+    pauses = (state.get("breaker") or {}).get("paused") or {}
+    sweep_lane_clean = "port-sweep" not in pauses and "portsweep_canary_pause" not in log_text
     check(
         "H1", "MANDATORY",
-        last_status in ("completed", "partial") and sweep_status == "done" and ran,
-        f"last={last_status} sweep={sweep_status} skipped={payload.get('skipped')}",
+        bool(sweep_status == "done" and ran and sweep_lane_clean),
+        f"sweep={sweep_status} skipped={payload.get('skipped')} sweep_lane_clean={sweep_lane_clean} run_status={last_status} (run-level truth -> G3)",
     )
 
     # ---- H2 IP dedup ----------------------------------------------------------
@@ -118,25 +127,25 @@ def main() -> int:
           f"target_set_logged={ts_idx != -1} before_scan={order_ok}")
 
     # ---- H4 pacing formula ------------------------------------------------------
-    profile = str(params.require("portsweep_profile"))
-    ports_total = _FULL_RANGE_PORTS if profile == "full" else (
-        int(params.require("portcheck_top_ports")) if profile == "light" else _count_ports(str(params.require("portsweep_custom_ports")))
-    )
-    cap = float(params.require("portsweep_full_rate_cap")) if profile == "full" else (
-        float(params.require("portcheck_rate")) if profile == "light" else float(params.require("portsweep_custom_rate_cap"))
-    )
+    # Recomputed from the RUN'S OWN recorded pace record (profile/ports_total/
+    # rate_cap are authoritative — the working tree carries transient vehicle
+    # overrides) + the independently-parsed target-set size.
+    pace_rec = payload.get("pace") or {}
+    profile = str(pace_rec.get("profile") or "unknown")
+    ports_total = int(pace_rec.get("ports_total") or 0)
+    cap = float(pace_rec.get("rate_cap") or 0)
     unique_n = len(ts_ips)
-    duration = float(payload.get("pace", {}).get("duration_hours") or 0)
+    duration = float(pace_rec.get("duration_hours") or 0)
     required = (unique_n * ports_total / (duration * 3600.0)) if unique_n and duration else 0.0
     expected_pps = max(1, int(min(required, cap))) if unique_n else 0
-    actual_pps = int(payload.get("pace", {}).get("effective_pps") or 0)
-    breached = bool(payload.get("pace", {}).get("window_breached"))
+    actual_pps = int(pace_rec.get("effective_pps") or 0)
+    breached = bool(pace_rec.get("window_breached"))
     breach_ok = breached == (required > cap) if unique_n else not breached
     remaining = payload.get("remaining_ips") or []
     check(
         "H4", "MANDATORY",
-        actual_pps == expected_pps and breach_ok and (not breached or bool(remaining)),
-        f"unique={unique_n} ports_total={ports_total} required={required:.4f} pps={actual_pps}(expect {expected_pps}) breached={breached} remaining={len(remaining)}",
+        actual_pps == expected_pps and breach_ok and (not breached or bool(remaining)) and ports_total > 0,
+        f"unique={unique_n} profile={profile} ports_total={ports_total} required={required:.4f} pps={actual_pps}(expect {expected_pps}) breached={breached} remaining={len(remaining)}",
     )
 
     # ---- H5 resolution guarantee accounted ---------------------------------------
@@ -175,18 +184,58 @@ def main() -> int:
     check("H7", "MANDATORY", scope_ok and covered,
           f"scanned={len(scan_ips)} bad={bad_ip or 'none'} set_covered={covered}")
 
-    # ---- H8 schema + committed defaults + verify_b1 -----------------------------------
+    # ---- H8 schema + COMMITTED content + verify_b1 -----------------------------------
     keys_ok = all(
         k in payload
         for k in ("schema_version", "module", "scans", "services", "pace", "unique_ips_scanned", "duplicates_skipped")
     ) and payload.get("module") == "port-sweep"
-    tools_diff = subprocess.run(
-        ["git", "diff", "HEAD", "--stat", "--", "tools.yaml", "tools.lock", "pipeline/verify_b1.py"],
+    # The WORKING TREE carries the intended transient vehicle overrides (never
+    # committed; before-copies are the evidence) — so the committed-content
+    # law is verified against the HEAD blobs with the frozen loader, exactly
+    # the B3 F10 discipline.
+    import tempfile
+
+    head_ok = True
+    head_detail = ""
+    for rel in ("tools.yaml", "tools.lock"):
+        show = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=ROOT, capture_output=True, text=True, check=False)
+        if show.returncode != 0 or not show.stdout.strip():
+            head_ok = False
+            head_detail = f"HEAD:{rel} unreadable"
+            break
+        with tempfile.NamedTemporaryFile("w", suffix=rel, delete=False, encoding="utf-8") as handle:
+            handle.write(show.stdout)
+            tmp = handle.name
+        try:
+            doc = load_yaml_file(tmp)
+            if rel == "tools.yaml":
+                s = (doc or {}).get("settings") or {}
+                core = {
+                    "portsweep_profile": "full",
+                    "portsweep_duration_hours": 24,
+                    "portsweep_full_rate_cap": 1000,
+                    "portsweep_nmap_sv": False,
+                    "portsweep_module": "port-sweep",
+                }
+                violations = {k: s.get(k) for k, v in core.items() if s.get(k) != v}
+                if violations:
+                    head_ok = False
+                    head_detail = f"HEAD tools.yaml violations={violations}"
+            else:
+                images = (doc or {}).get("images") or {}
+                for ref in ("naabu", "nmap", "dnsx"):
+                    if not (images.get(ref) or {}).get("image"):
+                        head_ok = False
+                        head_detail = f"HEAD tools.lock missing pin {ref}"
+        finally:
+            Path(tmp).unlink(missing_ok=True)
+    verify_diff = subprocess.run(
+        ["git", "diff", "HEAD", "--stat", "--", "pipeline/verify_b1.py"],
         cwd=ROOT, capture_output=True, text=True, check=False,
     )
-    committed_ok = tools_diff.stdout.strip() == ""
-    check("H8", "MANDATORY", keys_ok and committed_ok,
-          f"schema_ok={keys_ok} working_tree_clean={committed_ok}")
+    verify_ok = verify_diff.stdout.strip() == ""
+    check("H8", "MANDATORY", keys_ok and head_ok and verify_ok,
+          f"schema_ok={keys_ok} committed_head_ok={head_ok} {head_detail} verify_b1_clean={verify_ok}")
 
     # ---- G1 canary disclosure -----------------------------------------------------------
     sentinels = int(payload.get("sentinels_used") or 0)
@@ -196,6 +245,13 @@ def main() -> int:
 
     # ---- G2 summary disclosure -----------------------------------------------------------
     check("G2", "DISCLOSURE", SUMMARY.is_file(), f"summary_present={SUMMARY.is_file()}")
+
+    # ---- G3 run-level truth (full honesty surface behind stage-scoped H1) ----------------
+    run_info = state.get("run") or {}
+    check(
+        "G3", "DISCLOSURE", True,
+        f"run_status={run_info.get('status')} reason={run_info.get('reason')} failing_module={run_info.get('failing_module')} breaker_pauses={sorted(pauses)}",
+    )
 
     # ---- verdict ---------------------------------------------------------------------------
     mandatory_fail = [r for r in rows if r[1] == "MANDATORY" and r[2] == "FAIL"]

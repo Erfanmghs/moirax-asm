@@ -3,6 +3,13 @@
 # themselves and directed the validation against that real estate with the
 # FROZEN 200-record smoke wordlist only (no synthetic test network).
 #
+# REM29 (run #42 evidence): the committed 24h sweep window paced naabu-full
+# to 1pps on a REAL target (18h/IP) and the job hit the 150-min ceiling.
+# The window is now bounded transiently to the committed 1h floor and the
+# job ceiling is 240 min. Run #42 still proved every lane BEFORE the sweep
+# (passive 21 candidates, DNS brute resolved www/api/my/mail+apex, vhost
+# probes, httpx fingerprints, naabu-light ports 80/443/8080/8443).
+#
 # Flow: checkout -> toolchain -> SecLists -> suite deps -> ffuf image ->
 # transient accommodations (RECORDED, never committed):
 #   1. scope.yaml = bugdasht.ir + *.bugdasht.ir (operator-authorized target)
@@ -31,7 +38,7 @@ concurrency:
 jobs:
   live-validation:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 240
     steps:
       - name: "Checkout (branch: private)"
         uses: actions/checkout@v4
@@ -69,6 +76,9 @@ jobs:
             echo "2. resolvers.yaml sources=[] (fleet = resolvers/seed.txt, 15 pinned anycast; REM5 pattern)"
             echo "3. wordlists.yaml selection=[test_smoke_200] on DNSR-1 / FFUF-0 / FFUF-2 (the frozen 200-record list)"
             echo "4. forge caches + recon/bugdasht.ir reset (no stale inflation; REM27b lesson)"
+            echo "5. tools.yaml portsweep_duration_hours 24 -> 1 (REM29, run #42 evidence: the 24h window"
+            echo "   paced naabu-full to 1pps = 18h/IP against a REAL target - no CI window fits; 1h is"
+            echo "   the committed portsweep_duration_hours_min floor and still ~36pps gentle pacing)"
           } > ci/live_transient_edits.log
           cp resolvers.yaml ci/live_resolvers_runtime_before.yaml
           cp wordlists.yaml ci/live_wordlists_runtime_before.yaml
@@ -112,6 +122,17 @@ jobs:
                   out.append("      - test_smoke_200")
           w.write_text("\n".join(out) + "\n", encoding="utf-8")
           print("wordlists.yaml: DNSR-1/FFUF-0/FFUF-2 selection = [test_smoke_200]")
+
+          # 5) REM29: sweep window 24h -> 1h (committed min floor). The pacer
+          # then computes ~36pps over 2 IPs x 65535 ports - well under the
+          # 1000pps cap - and the sweep fits the vehicle window.
+          t = pathlib.Path("tools.yaml")
+          ttext = t.read_text(encoding="utf-8")
+          assert "  portsweep_duration_hours: 24" in ttext
+          ttext = ttext.replace("  portsweep_duration_hours: 24",
+                                "  portsweep_duration_hours: 1")
+          t.write_text(ttext, encoding="utf-8")
+          print("tools.yaml: portsweep_duration_hours 24 -> 1 (REM29)")
 
           # NOTE: the frozen anchor applies to the FORGED output (the project
           # normalizes the raw list), not to the raw local file. The anchor is

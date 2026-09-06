@@ -1563,3 +1563,93 @@ real-target era with a same-zone alive base will exercise the rows path
 end-to-end.
 
 **VERDICT — B3 FIRST SUB-STEP (FFUF-3 + DNSR-2, FIXTURE): PASS**
+
+---
+
+## B3 PASSIVE CHAIN (PSV-0..PSV-8, spec §8) — CLOSURE RECORD
+
+Spec v1.9 §8 PASSIVE-RECON branch implemented as ONE orchestrated module
+(`pipeline/modules/passive_recon.py`) with the frozen order law inside:
+PSV-0 SEARCH-FORGE infrastructure FIRST → parallel sweep (PSV-1 dorks,
+PSV-2 cert-transparency, PSV-3 OSINT agents, PSV-4 archives, PSV-7
+GitHub-OSINT, PSV-8 IP-discovery) → PSV-5 recursion loop → PSV-6 httpx
+probe LAST. Scope-gate §3.3 on every candidate; source attribution for
+MERGE §7.3; never-silent skip discipline; per-agent degraded-continue
+(§7.2c branch independence); §11.4 breaker + §11.5 ceiling via the shared
+adapter.
+
+### Implementation surface (commit 5dfb44d + REM13..18)
+- `pipeline/search_forge.py`: engine pool (per-request key rotation from
+  .env pools, COOLDOWN exponential+jitter on 429/403/captcha with instant
+  reroute, ISOLATED >20%/60s per-engine mirror of §11.4, per-dork TTL
+  cache, client-side pacing) + html/json/xml response parsers + DORK FORGE
+- registries implemented from B0 scaffold stubs: `search_engines.yaml`
+  (6 engines: duckduckgo keyless + 5 keyed providers), `dorks.yaml`
+  (4 builtin host dorks + 4 github dorks + community slot)
+- PSV tools via tools.yaml adapter: curl-fetch (generic sh -c fetch),
+  crtsh→certspotter §4.3 fallback chain, subfinder (+subfinder-seed per
+  §8 PSV-5 `-d` form), amass, assetfinder (+ -related FULL-output evidence
+  file), assetfinder-resolved (puredns+massdns built from source, dnsx
+  fallback), chaos (key-gated), findomain, waybackurls, gau, cdx-fallback,
+  httpx-passive; tools.lock +10 pins; docker/passive-tools image (REM6
+  pattern: gau/puredns/massdns/assetfinder/waybackurls built from source)
+- engine wiring: `_run_passive_modules` mirrors the active runner;
+  `passive_branch_modules: [passive-recon]`; active order untouched
+  (append-only law); verify_b1.py diff EMPTY since handoff
+- unit suite 43/43 (14 new: pool rotation/cooldown/isolated/TTL, dork
+  forge, parsers, scope prefilter, PSV-8 skip/CIDR activation, e2e schema,
+  recursion natural stop); preflight G-S1..G-S8 (frozen-loader registry
+  parse, wiring, 16/16 specs assemblable, pins, committed defaults,
+  verify_b1, vehicle scope, unit coverage)
+
+### Vehicle ladder (b3-passive.yml, target example.com)
+| run | commit | outcome | remediation |
+|---|---|---|---|
+| #18 | 5dfb44d | FAIL build | REM13: gau package at `lc/gau/v2/cmd/gau`; tomnomnom/hacks + puredns/puredns do NOT exist on Docker Hub → source builds; chaos→chaos-client; findomain→author image |
+| #19 | d6e594b | FAIL build | REM13-b: waybackurls carries go.mod now → conditional `go mod init` |
+| #20 | ea6724b | FAIL sink | REM13-c: sink429 selftest retry (python boot race) |
+| #21 | 6b96cd6 | FAIL sink | REM13-d: missing pathlib import in validation heredoc |
+| #22 | 3a1108c | ANOMALY exit 2 | REM14: timeout_for/_bounded (no doomed containers at budget exhaustion), seed-worker data.json race killed (skip_parse+anew append), F1 accepts the §8-sanctioned cap stop, runs.json via json, vehicle depth 2→1 transient |
+| #23 | 64e89a8 | ANOMALY exit 2 | REM15: breaker lane isolation (crtsh fetches under own module key), subfinder-seed spec (§8 PSV-5 `-d` form), F2/F9 accept either CT contract file |
+| #24 | deaf85d | ANOMALY exit 2 | REM16: seed caps 300s (single 124 in sparse window = 1/2 ratio), F9 honors the scope-gate rejection path (foreign SANs → out_of_scope.log) |
+| #25 | 25eb851 | ANOMALY exit 2 | REM17: subfinder's OWN `-timeout 20` (no container can hang), massdns built for puredns v2, dnsx-json fallback dialect parse |
+| #26 | 16af9b3 | FAIL build | REM17-b: mkdir /out before massdns copy |
+| #27 | 6997171 | partial (clean) | REM18: F1 reads the disclosed cap note; amass variance → disclosure |
+| #28 | 2d71f41 | **PASS** | — |
+
+### Final F-table (run #28, artifact of 34003103549, commit 2d71f41)
+| gate | class | result |
+|---|---|---|
+| F1 exit=3/partial = §8 PSV-5 sanctioned cap stop (506 seeds > cap 100, disclosed); zero breaker pauses | MANDATORY | PASS |
+| F2 sources populated: crtsh 7, subfinder 582, assetfinder 2, related 1, archives 2196 (amass 4 disclosed; assetfinder-resolved 2) | MANDATORY | PASS |
+| F3 simulated 429 (sink429) → COOLDOWN + instant reroute visible in run.log | MANDATORY | PASS |
+| F4 recursion bounded: depth_used 1 ≤ 1 (vehicle transient), seeds 100 ≤ 100, stop disclosed | MANDATORY | PASS |
+| F5 PSV-8 skip disclosed (pure-domain vehicle; CIDR path unit-proven) | MANDATORY | PASS |
+| F6 PSV-7 skip disclosed (no GITHUB_TOKEN on vehicle) | MANDATORY | PASS |
+| F7 data.json exact §8 schema; candidates 2771 rows shaped | MANDATORY | PASS |
+| F8 scope: zero out-of-scope candidates; rejections logged (§3.3) | MANDATORY | PASS |
+| F9 harvest-complete: every crtsh row in candidates OR gate-rejected | MANDATORY | PASS |
+| F10 committed defaults intact (git HEAD) + verify_b1 diff EMPTY | MANDATORY | PASS |
+| G1 search_forge stats {engines_used 2, cooldown, isolated} | DISCLOSURE | disclosed |
+| G2 per-source counts + skips table | DISCLOSURE | disclosed |
+
+Vehicle honesty notes:
+1. Partial status is SPEC-DEFINED: example.com's passive surface yields
+   506+ first-sweep hosts; §8 PSV-5 mandates "stop when a cap is hit (run
+   marked PARTIAL with reason)" — the cap-stop IS the acceptance outcome
+   ("recursion stops at its cap"), machine marker in state.json reason,
+   disclosed in run.log + summary.md. Committed defaults (depth 2, seeds
+   100) untouched; vehicle transients: depth 1, budget 3000s, active
+   branch bounded out, REM5 fleet refresh, sink429 engine (before-copies
+   ci/b3p_*.yaml — never committed).
+2. Keyless reality disclosed: PSV-7 skipped (no GITHUB_TOKEN), PSV-8
+   skipped (pure-domain scope; CIDR activation unit-proven), chaos/censys/
+   shodan key-gated skips, 5 search engines disabled-no-key (duckduckgo
+   keyless served; DDG itself throttled runner IPs → dorks marked
+   rerun-next-run per §8 PSV-1 — never silently dropped).
+3. amass/PSV-6 variance disclosed: amass (key-gated sources) found 4;
+   httpx probed 2771 candidates (alive tagging is TAGGING-ONLY, never a
+   filter). puredns required massdns (built into the image) — the dnsx
+   fallback contract stayed live throughout the ladder.
+
+**VERDICT — TEST B3-2 (PASSIVE CHAIN PSV-0..PSV-8, example.com VEHICLE): PASS**

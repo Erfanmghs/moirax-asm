@@ -51,7 +51,7 @@ jobs:
           python3 --version
 
       - name: "Install dashboard deps (fastapi + uvicorn + httpx for TestClient — B6 unit suite shares this job)"
-        run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1"
+        run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5"
 
       - name: Preflight gates (G-Y1..G-Y8)
         run: PYTHONPATH=. python3 ci/b5_preflight.py

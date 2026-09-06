@@ -1,0 +1,10 @@
+id	class	status	detail
+L1	MANDATORY	PASS	agent_journal_created=False agent_console_lines=0 (§12.1 standalone)
+L2	MANDATORY	PASS	verdict={"engaged": true, "module": "subfinder", "branch": "passive", "autonomy": "auto-fix", "attempts": 0, "actions": [{"action": "refresh_resolver_forge_retry", "mod scope_untouched=True
+L3	MANDATORY	PASS	active_verdict={"engaged": true, "module": "naabu", "branch": "active", "autonomy": "suggest", "attempts": 0, "actions": [{"action": "halve_concurrency_ret
+L4	MANDATORY	PASS	4th_verdict={"engaged": true, "module": "subfinder", "branch": "passive", "autonomy": "auto-fix", "attempts": 3, "actions": [], "fixed": false, "escalat
+L5	MANDATORY	PASS	llm_hook_calls=1 report={"llm_calls": 1, "budget": 1, "cached_signatures": 0, "event_driven": true}
+L6	MANDATORY	PASS	rows=16 events=['engage', 'escalate', 'remediation', 'suggest']
+L7	MANDATORY	PASS	allow_list=['halve_concurrency_retry', 'quarantine_and_rerun', 'refresh_resolver_forge_retry', 'repin_and_restart', 'rotate_key_pool'] corrupt_signature=True
+L8	MANDATORY	FAIL	head_carries_defaults=False verify_b1_clean=True
+G1	DISCLOSURE	PASS	playbook_entries=7 allow_list=5 defaults=passive:auto-fix/active:suggest budget=20 llm_plugged=False

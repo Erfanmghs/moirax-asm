@@ -211,6 +211,20 @@ def run_log(target: str, offset: int = Query(default=0, ge=0), authorization: st
                          "total": len(lines), "lines": chunk})
 
 
+@app.get("/api/run/agent-journal/{target}")
+def agent_journal(target: str, offset: int = Query(default=0, ge=0), authorization: str | None = Header(default=None)) -> Any:
+    """§12.7: agent journal streamed live in Run Control (append-only source)."""
+    _auth(authorization)
+    params = _params_obj()
+    path = ROOT / "recon" / target / str(params.require("agent_journal_relpath"))
+    if not path.is_file():
+        return JSONResponse({"exists": False, "offset": offset, "rows": []})
+    lines = [l for l in path.read_text(encoding="utf-8", errors="replace").splitlines() if l.strip()]
+    chunk = lines[offset:offset + 200]
+    return JSONResponse({"exists": True, "offset": offset, "next_offset": offset + len(chunk),
+                         "total": len(lines), "rows": chunk})
+
+
 @app.post("/api/run/start")
 async def run_start(body: dict[str, Any], authorization: str | None = Header(default=None)) -> Any:
     _auth(authorization)

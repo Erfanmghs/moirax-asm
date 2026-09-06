@@ -374,6 +374,15 @@ settings:
   scheduler_filename: scheduler.json
   scheduler_default_interval_min: 240
   scheduler_min_interval_min: 10
+  # B8 SUPERVISOR AGENT (§12) — opt-in overseer; default OFF (§12.1: the
+  # pipeline is fully deterministic and runs standalone without it).
+  agent_enabled: false
+  agent_max_llm_calls: 20
+  agent_autonomy_passive: "auto-fix"
+  agent_autonomy_active: "suggest"
+  agent_max_remediation_attempts: 3
+  agent_journal_relpath: logs/agent-journal.jsonl
+  remediation_filename: remediation.yaml
 
 tools:
   # TEST FIXTURE (verify_b1)

@@ -1,2 +1,26 @@
 schema_version: 1
-playbook: []
+# §12.5 SUPERVISOR AGENT PLAYBOOK (config-driven, dashboard-editable — never
+# hardcoded). signature = lowercase substring matched against the failure
+# reason/stderr; action MUST be inside the §12.5 allow-list
+# (pipeline/agent.py ALLOWED_ACTIONS); level overrides the branch autonomy
+# default (§12.6) when present: observe | suggest | auto-fix.
+playbook:
+  - signature: "oom"
+    action: halve_concurrency_retry
+    # container OOM -> halve concurrency + retry
+  - signature: "resolver"
+    action: refresh_resolver_forge_retry
+    # resolver failures -> refresh RESOLVER FORGE + retry
+  - signature: "403"
+    action: rotate_key_pool
+    # 403/quota on a third-party source -> rotate key pool / engine COOLDOWN (§8 PSV-0)
+  - signature: "quota"
+    action: rotate_key_pool
+  - signature: "corrupt"
+    action: quarantine_and_rerun
+    # corrupt/partial output -> quarantine file + re-run module
+  - signature: "schema-invalid"
+    action: quarantine_and_rerun
+  - signature: "drift"
+    action: repin_and_restart
+    # flag/image drift vs tools.lock -> re-pin + restart container

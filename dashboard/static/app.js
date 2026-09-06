@@ -230,6 +230,25 @@ function startLogStream() {
   }, 2000);
 }
 
+function startJournalStream() {
+  clearInterval(window.__journalTimer);
+  let joffset = 0;
+  const pre = $("#agent-journal");
+  pre.textContent = "";
+  window.__journalTimer = setInterval(async () => {
+    if ($("#panel-run").classList.contains("hidden")) return;
+    try {
+      const doc = await api("GET", `/api/run/agent-journal/${encodeURIComponent(CURRENT.target)}?offset=${joffset}`);
+      if (!doc.exists) return;
+      if (doc.rows.length) {
+        pre.textContent += doc.rows.map((l) => { try { const r = JSON.parse(l); return `[${r.ts}] ${r.event}: ${JSON.stringify(r)}\n`; } catch (_e) { return l + "\n"; } }).join("");
+        pre.scrollTop = pre.scrollHeight;
+      }
+      joffset = doc.next_offset;
+    } catch (_e) { /* keep polling */ }
+  }, 2000);
+}
+
 /* ---------------- d) API KEYS ---------------- */
 async function loadKeys() {
   const doc = await api("GET", "/api/keys");
@@ -276,6 +295,10 @@ async function loadSettings() {
   $("#s-digest").value = s.digest_threshold || 10;
   $("#s-cpu").value = (s.resource_budget || {}).cpu_cores || "";
   $("#s-ram").value = (s.resource_budget || {}).ram_mb || "";
+  $("#s-agent-enabled").value = String((s.agent || {}).enabled === true);
+  $("#s-agent-passive").value = (s.agent || {}).autonomy_passive || "auto-fix";
+  $("#s-agent-active").value = (s.agent || {}).autonomy_active || "suggest";
+  $("#s-agent-budget").value = (s.agent || {}).max_llm_calls ?? 20;
   const editor = $("#rules-editor");
   editor.innerHTML = "";
   for (const rule of s.alert_rules || [{ class: "hosts", enabled: true }, { class: "ports", enabled: true }]) {
@@ -299,6 +322,13 @@ async function saveSettings() {
   if (token || chat) patch.telegram = { ...(chat ? { chat_id: chat } : {}), ...(token ? { bot_token: token } : {}) };
   const cpu = parseInt($("#s-cpu").value, 10), ram = parseInt($("#s-ram").value, 10);
   if (!isNaN(cpu) || !isNaN(ram)) patch.resource_budget = { ...(isNaN(cpu) ? {} : { cpu_cores: cpu }), ...(isNaN(ram) ? {} : { ram_mb: ram }) };
+  patch.agent = {
+    enabled: $("#s-agent-enabled").value === "true",
+    autonomy_passive: $("#s-agent-passive").value,
+    autonomy_active: $("#s-agent-active").value,
+  };
+  const budget = parseInt($("#s-agent-budget").value, 10);
+  if (!isNaN(budget)) patch.agent.max_llm_calls = budget;
   try {
     await api("PUT", "/api/settings", patch);
     $("#s-msg").textContent = "saved " + new Date().toISOString();
@@ -371,7 +401,7 @@ function loadPanel(name) {
   if (!TOKEN) { toast("set DASHBOARD_TOKEN first (top right)"); return; }
   if (name === "tools") { loadTools(); loadWordlists(); }
   if (name === "results") loadResults();
-  if (name === "run") { loadRun(); startLogStream(); }
+  if (name === "run") { loadRun(); startLogStream(); startJournalStream(); }
   if (name === "keys") loadKeys();
   if (name === "settings") loadSettings();
 }

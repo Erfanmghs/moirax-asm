@@ -57,6 +57,22 @@ def run_pipeline(
         print(f"proxy: {proxy_reason}")
     alerts: list[tuple[str, str, str]] = []
 
+    # §12 opt-in supervisor: lazily created ONLY when enabled (§12.1/§12.4 —
+    # event-driven, zero cost and zero LLM calls on healthy runs).
+    agent_holder: dict[str, Any] = {}
+
+    def _engage_agent(module: str, branch: str, reason: str, hooks: dict[str, Any] | None = None) -> None:
+        from pipeline.agent import Supervisor
+
+        if "supervisor" not in agent_holder:
+            agent_holder["supervisor"] = Supervisor(params, target_dir)
+        supervisor = agent_holder["supervisor"]
+        if not supervisor.enabled():
+            return
+        verdict = supervisor.on_module_failure(module, branch, str(reason), hooks=hooks)
+        print(f"agent: {module} verdict={ {k: v for k, v in verdict.items() if k != 'engaged'} }")
+
+
     def _on_anomaly(status: str, module: str, reason: str) -> None:
         alerts.append((status, module, reason))
         send_status(params, status, module, reason)
@@ -202,6 +218,7 @@ def run_pipeline(
                 state_engine.set_status(params, target_dir, sweep_name, "failed")
                 partial.append(f"portsweep:{exc}")
                 _append_log(params, target_dir, sweep_name, sweep_name, 1, str(exc))
+                _engage_agent(sweep_name, "active", str(exc))
                 traceback.print_exc()
 
     stamp = utc_stamp()
@@ -286,6 +303,7 @@ def run_module(
         except Exception as exc:
             state_engine.set_status(params, target_dir, tool_name, "failed")
             _append_log(params, target_dir, tool_name, tool_name, 1, str(exc))
+            _engage_agent(tool_name, "active", str(exc))
             print(f"module {tool_name} failed: {exc}")
             return 1
         state_engine.set_status(params, target_dir, tool_name, "done")
@@ -471,6 +489,7 @@ def _run_passive_modules(
             state_engine.set_status(params, target_dir, name, "failed")
             _append_log(params, target_dir, name, name, 1, str(exc))
             partial.append(f"passive:{name}:{exc}")
+            _engage_agent(name, "passive", str(exc))
             traceback.print_exc()
             continue
     return docs

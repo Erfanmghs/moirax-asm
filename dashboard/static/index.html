@@ -77,6 +77,8 @@
     </div>
     <h2 class="mt">LIVE LOG <span class="hint">streaming tail of logs/run.log</span></h2>
     <pre id="live-log" class="json-inspector"></pre>
+    <h2 class="mt">AGENT JOURNAL <span class="hint">logs/agent-journal.jsonl — every decision + action (§12.7, append-only)</span></h2>
+    <pre id="agent-journal" class="json-inspector"></pre>
   </section>
 
   <!-- d) API KEYS -->
@@ -98,6 +100,13 @@
     </div>
     <h3 class="mt">ALERT FILTER RULES (§4.7 — which new assets are alert-worthy)</h3>
     <div id="rules-editor"></div>
+    <h3 class="mt">SUPERVISOR AGENT (§12 — opt-in overseer)</h3>
+    <div class="grid">
+      <label>AGENT ENABLED (opt-in; pipeline runs standalone without it §12.1)<select id="s-agent-enabled"><option value="false">off</option><option value="true">on</option></select></label>
+      <label>PASSIVE BRANCH AUTONOMY (§12.6 default auto-fix)<select id="s-agent-passive" class="mono"><option>observe</option><option>suggest</option><option selected>auto-fix</option></select></label>
+      <label>ACTIVE BRANCH AUTONOMY (§12.6 default suggest)<select id="s-agent-active" class="mono"><option>observe</option><option selected>suggest</option><option>auto-fix</option></select></label>
+      <label>MAX LLM CALLS / RUN (§12.4 budget)<input id="s-agent-budget" type="number" min="0" class="mono"></label>
+    </div>
     <div class="row">
       <button id="s-add-rule">+ RULE</button>
       <button id="s-save">SAVE SETTINGS</button>

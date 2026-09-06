@@ -158,6 +158,16 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
             for key in ("cpu_cores", "ram_mb"):
                 if key in budget and (not isinstance(budget[key], int) or isinstance(budget[key], bool) or budget[key] <= 0):
                     errors.append(f"resource_budget.{key} must be a positive integer (§11.5)")
+    if "agent" in patch:
+        agent = patch.get("agent")
+        if not isinstance(agent, dict):
+            errors.append("agent must be an object (§12.6)")
+        else:
+            for key in ("autonomy_passive", "autonomy_active"):
+                if key in agent and agent[key] not in ("observe", "suggest", "auto-fix"):
+                    errors.append(f"agent.{key} must be observe|suggest|auto-fix (§12.6)")
+            if "max_llm_calls" in agent and (not isinstance(agent["max_llm_calls"], int) or isinstance(agent["max_llm_calls"], bool) or agent["max_llm_calls"] < 0):
+                errors.append("agent.max_llm_calls must be a non-negative integer (§12.4)")
     return errors
 
 

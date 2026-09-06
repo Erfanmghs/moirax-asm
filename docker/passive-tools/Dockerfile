@@ -18,6 +18,7 @@ RUN go install github.com/lc/gau/v2/cmd/gau@latest \
 RUN apk add --no-cache build-base \
  && git clone --depth 1 https://github.com/blechschmidt/massdns /src/massdns \
  && make -C /src/massdns \
+ && mkdir -p /out \
  && cp /src/massdns/bin/massdns /out/massdns
 RUN mkdir -p /out \
  && cp /go/bin/gau /out/gau \

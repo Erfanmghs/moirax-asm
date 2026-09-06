@@ -1,0 +1,5 @@
+dev.app
+k8s.dev
+api.dev.app
+git.staging.app
+mail.api.dev.app

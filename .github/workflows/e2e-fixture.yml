@@ -1,0 +1,227 @@
+# E2E FIXTURE VEHICLE — full pipeline vs a LOCAL test web server with
+# several vhosts, NESTED subdomains (up to 4 labels under the apex) and
+# multiple open ports (53/udp DNS, 80, 8080, 8443/TLS, 2222, 6379, 9200).
+#
+# Flow (b2-rem4r lineage): fixture up -> self-check -> preflight units ->
+# transient env accommodations (recorded, never committed) -> FULL pipeline
+# run (./recon.sh run fixture-target.test) -> E0..E10 assertion table ->
+# teardown -> evidence artifact.
+#
+# Transient accommodations (all disclosed in ci/e2e_transient_edits.log):
+#  - resolvers.yaml: fleet = fixture DNS (172.17.0.1) via manual_add, public
+#    sources disabled (REM5 pattern, run-time working-copy edit only)
+#  - tools.yaml: resolver_min_healthy_count 100 -> 1 (single local resolver);
+#    resolver_validate_domains + canary_sentinel_hosts -> fixture zone names
+#    (the fixture DNS is authoritative ONLY for the fixture zone)
+#  - wordlists.yaml: DNSR-1 selection = [dns_fast_top5000, e2e_nested_fixture]
+#    (dotted fixture names prove NESTED subdomain discovery)
+# The committed scope.yaml carries 172.17.0.1/32 as the ONLY private include
+# (the E2E fixture host-gateway; every other loopback/RFC1918 stays rejected).
+
+name: e2e-fixture
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-fixture
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: "Checkout (branch: private)"
+        uses: actions/checkout@v4
+        with:
+          ref: private
+
+      - name: Toolchain sanity (docker + python3 + sudo)
+        run: |
+          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          python3 --version
+          sudo -n true && echo "sudo-ok"
+
+      - name: "Clone SecLists (DNSR-1 default key materialization source)"
+        run: |
+          set -e
+          git clone --depth 1 https://github.com/danielmiessler/SecLists "$HOME/seclists"
+          test -f "$HOME/seclists/Discovery/DNS/subdomains-top1million-5000.txt" && echo "seclists-ok"
+
+      - name: "Start E2E fixture (host network: 53/udp, 80, 8080, 8443, 2222, 6379, 9200)"
+        run: |
+          set -e
+          docker compose -f docker-compose.yml -f docker-compose.e2e-fixture.yml --profile e2e-fixture up -d --build
+          sleep 2
+          docker compose -f docker-compose.yml -f docker-compose.e2e-fixture.yml --profile e2e-fixture ps
+
+      - name: "Map fixture zone into /etc/hosts + fixture self-check (DNS + HTTP + ports)"
+        run: |
+          set -e
+          sudo -n python3 docker/e2e-fixture/hosts.py install
+          grep -n "recon-pipeline e2e-fixture" /etc/hosts
+          python3 - <<'PY'
+          import json, socket, struct, urllib.request
+
+          def dns_query(name: str, server: str = "172.17.0.1") -> list[str] | None:
+              q = b"".join(bytes([len(p)]) + p.encode() for p in name.split(".")) + b"\x00"
+              payload = struct.pack("!HHHHHH", 0x1234, 0x0100, 1, 0, 0, 0) + q + struct.pack("!HH", 1, 1)
+              s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(3)
+              s.sendto(payload, (server, 53))
+              data, _ = s.recvfrom(4096); s.close()
+              flags = struct.unpack("!H", data[2:4])[0]
+              rcode = flags & 0xF
+              ancount = struct.unpack("!H", data[6:8])[0]
+              if rcode != 0 or ancount < 1:
+                  return None
+              ips = [socket.inet_ntoa(data[-4:])]
+              return ips
+
+          flat = dns_query("www.fixture-target.test"); assert flat == ["172.17.0.1"], flat
+          nested = dns_query("mail.api.dev.app.fixture-target.test"); assert nested == ["172.17.0.1"], nested
+          miss = dns_query("not-in-zone.fixture-target.test"); assert miss is None, miss
+          print("dns-self-check ok (flat+nested resolve, honest NXDOMAIN outside zone)")
+
+          def http(host: str, port: int = 80, scheme: str = "http") -> str:
+              req = urllib.request.Request(f"{scheme}://127.0.0.1:{port}/", headers={"Host": host})
+              with urllib.request.urlopen(req, timeout=5, context=None) as resp:
+                  return resp.read(40).decode(errors="replace").strip()
+
+          assert "WWW-E2E" in http("www.fixture-target.test")
+          assert "API-DEV-APP-E2E" in http("api.dev.app.fixture-target.test")
+          assert "HTTP-ALT-E2E" in http("whatever.fixture-target.test", port=8080)
+          print("http-self-check ok (vhost bodies + alt port)")
+
+          s = socket.create_connection(("127.0.0.1", 2222), timeout=3)
+          assert b"SSH-2.0-FixtureE2E" in s.recv(64); s.close()
+          s = socket.create_connection(("127.0.0.1", 6379), timeout=3)
+          assert b"ERR" in s.recv(64); s.close()
+          body = json.loads(urllib.request.urlopen("http://127.0.0.1:9200/", timeout=5).read())
+          assert body["cluster_name"] == "fixture-e2e"
+          print("banner-self-check ok (2222, 6379, 9200)")
+          PY
+
+      - name: "Build pinned local tool image (REM6: ffuf v2.1.0)"
+        run: |
+          set -e
+          docker build -t recon-pipeline/ffuf:v2.1.0 -f docker/ffuf/Dockerfile docker/ffuf
+          docker image inspect recon-pipeline/ffuf:v2.1.0 --format 'ffuf-image-ok {{.Id}}'
+
+      - name: Unit proof (full suite)
+        run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
+
+      - name: Reconcile stale live state (frozen stop path; expect EXIT 4 or usage)
+        run: |
+          set +e
+          ./recon.sh stop fixture-target.test
+          echo "stop exit=$?"
+
+      - name: "Transient env accommodations (recorded; never committed)"
+        run: |
+          set -e
+          cp resolvers.yaml ci/e2e_resolvers_runtime_before.yaml
+          {
+            echo "E2E transient working-copy edits (never committed):"
+            echo "1. resolvers.yaml sources=[] + manual_add=[172.17.0.1] (fleet = fixture DNS)"
+            echo "2. tools.yaml resolver_min_healthy_count 100 -> 1"
+            echo "3. tools.yaml resolver_validate_domains -> [www, app].fixture-target.test"
+            echo "4. tools.yaml canary_sentinel_hosts -> [www, app].fixture-target.test"
+            echo "5. wordlists.yaml DNSR-1 selection -> [dns_fast_top5000, e2e_nested_fixture]"
+          } > ci/e2e_transient_edits.log
+          python3 - <<'PY'
+          import pathlib
+          import yaml
+
+          # 1) resolver fleet = fixture DNS
+          p = pathlib.Path("resolvers.yaml")
+          d = yaml.safe_load(p.read_text(encoding="utf-8"))
+          n = len(d.get("sources") or [])
+          d["sources"] = []
+          d["manual_add"] = ["172.17.0.1"]
+          p.write_text(yaml.safe_dump(d, sort_keys=False), encoding="utf-8")
+          print(f"resolvers.yaml: disabled {n} public sources; manual_add=[172.17.0.1]")
+
+          # 2-4) tools.yaml targeted line edits (comments/format preserved)
+          t = pathlib.Path("tools.yaml")
+          text = t.read_text(encoding="utf-8")
+          text = text.replace("  resolver_min_healthy_count: 100", "  resolver_min_healthy_count: 1")
+          lines = text.splitlines()
+          out, i = [], 0
+          while i < len(lines):
+              line = lines[i]
+              out.append(line)
+              if line == "  resolver_validate_domains:":
+                  i += 1
+                  while i < len(lines) and lines[i].startswith("    - "):
+                      i += 1
+                  out.append("    - www.fixture-target.test")
+                  out.append("    - app.fixture-target.test")
+                  continue
+              if line == "  canary_sentinel_hosts:":
+                  i += 1
+                  while i < len(lines) and lines[i].startswith("    - "):
+                      i += 1
+                  out.append("    - www.fixture-target.test")
+                  out.append("    - app.fixture-target.test")
+                  continue
+              i += 1
+          t.write_text("\n".join(out) + "\n", encoding="utf-8")
+          print("tools.yaml: min_healthy=1, validate+sentinel domains -> fixture zone")
+
+          # 5) DNSR-1 selection += dotted fixture names (dashboard-shaped insert)
+          w = pathlib.Path("wordlists.yaml")
+          wl = w.read_text(encoding="utf-8").splitlines()
+          idx = wl.index("  DNSR-1:")
+          wl[idx + 1:idx + 1] = ["    selection:", "      - dns_fast_top5000", "      - e2e_nested_fixture"]
+          w.write_text("\n".join(wl) + "\n", encoding="utf-8")
+          print("wordlists.yaml: DNSR-1 selection = [dns_fast_top5000, e2e_nested_fixture]")
+          PY
+
+      - name: "FULL pipeline run vs fixture (fixture-target.test)"
+        run: |
+          set +e
+          export E2E_RUN_STARTED_AT=$(date +%s)
+          echo "$E2E_RUN_STARTED_AT" > ci/e2e_run_started_at.txt
+          ./recon.sh run fixture-target.test 2>&1 | tee ci/e2e_run_console.log
+          echo "run exit=${PIPESTATUS[0]}" | tee -a ci/e2e_run_console.log
+
+      - name: "E2E acceptance table (E0..E10)"
+        run: |
+          export E2E_RUN_STARTED_AT=$(cat ci/e2e_run_started_at.txt)
+          PYTHONPATH=. python3 ci/e2e_assertions.py 2>&1 | tee ci/e2e_assertions_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Teardown (always)
+        if: always()
+        run: |
+          sudo -n python3 docker/e2e-fixture/hosts.py remove || true
+          docker compose -f docker-compose.yml -f docker-compose.e2e-fixture.yml --profile e2e-fixture down -v || true
+
+      - name: Upload evidence artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-fixture-evidence
+          path: |
+            ci/e2e_verdict.txt
+            ci/e2e_run_console.log
+            ci/e2e_assertions_console.log
+            ci/e2e_transient_edits.log
+            ci/e2e_resolvers_runtime_before.yaml
+            resolvers/forge/custom-resolvers.txt
+            wordlists/forge/counts.log
+            wordlists/forge/effective-DNSR-1.txt
+            recon/fixture-target.test/logs/run.log
+            recon/fixture-target.test/logs/out_of_scope.log
+            recon/fixture-target.test/state.json
+            recon/fixture-target.test/runs.json
+            recon/fixture-target.test/diff.json
+            recon/fixture-target.test/00_assets/summary.md
+            recon/fixture-target.test/10_subdomains/passive/**
+            recon/fixture-target.test/15_vhosts/ffuf-3/**
+            recon/fixture-target.test/20_dns/dnsx/summary.md
+            recon/fixture-target.test/20_dns/dnsx/data.json
+            recon/fixture-target.test/30_ports/naabu-full/**
+            recon/fixture-target.test/90_report/report_manifest.json
+          if-no-files-found: warn

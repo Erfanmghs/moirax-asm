@@ -1,0 +1,26 @@
+# TEST FIXTURE (E2E) — full-pipeline vehicle: nested subdomains + multi-port.
+# Activation:
+#   docker compose -f docker-compose.yml -f docker-compose.e2e-fixture.yml --profile e2e-fixture up -d --build
+#   sudo -n python3 docker/e2e-fixture/hosts.py install
+# Deactivation:
+#   docker compose -f docker-compose.yml -f docker-compose.e2e-fixture.yml --profile e2e-fixture down
+#   sudo -n python3 docker/e2e-fixture/hosts.py remove
+#
+# HOST network: the fixture binds 53/udp + 80/8080/8443/2222/6379/9200 on the
+# runner itself. dnsx (bridge container) reaches the DNS at 172.17.0.1 (the
+# docker bridge gateway = the host); httpx/ffuf (host network) resolve via
+# /etc/hosts -> 127.0.0.1. The DNS answers ONLY seeded zone names (honest
+# discovery): apex + 5 flat (SecLists top-5000 labels) + 5 nested (dotted
+# fixture wordlist, registered as e2e_nested_fixture).
+
+name: recon-pipeline
+
+services:
+  e2e-fixture:
+    profiles: [e2e-fixture]
+    build:
+      context: ./docker/e2e-fixture
+      dockerfile: Dockerfile
+    image: recon-pipeline/e2e-fixture:v1
+    network_mode: host
+    restart: "no"

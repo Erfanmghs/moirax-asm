@@ -111,6 +111,14 @@ lists:
     entries: 200
     shape: hostname
     rationale: "TEST FIXTURE (B2 acceptance smoke): first 200 normalized dns_fast_top5000 labels."
+  e2e_nested_fixture:
+    # TEST FIXTURE (E2E): DOTTED multi-label names — proves the DNS lane
+    # discovers NESTED subdomains (word.fixture-target.test -> a.b.c.fixture-
+    # target.test) when the selected wordlist carries dotted entries.
+    path: wordlists/local/e2e-nested.txt
+    entries: 5
+    shape: hostname
+    rationale: "E2E fixture nested names (dev.app, api.dev.app, mail.api.dev.app, git.staging.app, k8s.dev); selectable, NOT in any default selection."
 
 tasks:
   DNSR-1:
@@ -123,6 +131,10 @@ tasks:
       - dns_fast_services
       - dns_fast_deepmagic500
       - test_smoke_200
+    sources:
+      # TEST FIXTURE (E2E): selectable nested-name source; the E2E workflow
+      # selects it TRANSIENTLY (never committed in a selection).
+      - e2e_nested_fixture
     expansion:
       - dns_exp_top20000
       - dns_exp_top110000

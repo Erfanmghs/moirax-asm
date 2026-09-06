@@ -1793,3 +1793,34 @@ Implementation surface: pipeline/agent.py (deterministic-first Supervisor: §12.
 Vehicle: run #37 (3420d79) — **L1..L8 ALL PASS in-CI.** L1 §12.1 opt-in proof on the REAL vehicle (agent off → NO journal, NO agent lines, pipeline standalone) · L2 passive failure → auto-fix default → playbook action applied via fake hook, scope.yaml sha256 untouched · L3 active → suggest waits · L4 4th attempt escalates (≤3 budget) · L5 frugality: deterministic-only = ZERO LLM calls; budget cap + cache replay proven with a hooked run · L6 append-only JSONL journal · L7 guardrail closure (allow-list contains no scope/breaker/log-deletion actions) · L8 HEAD-blob + verify_b1 clean.
 
 Vehicle honesty notes: (1) the LLM diagnosis hook ships UNPLUGGED — the deterministic playbook is the knowledge base and healthy runs consume ZERO LLM calls (§12.4); the budget/cache machinery is frozen and ready for a provider; (2) simulated remediation hooks prove the loop without mutating real containers; the shipped actions map to the adapter's existing deterministic capabilities.
+
+---
+
+## B7 REPORTING — CLOSURE RECORD
+
+Implementation surface: pipeline/reporting.py (§10.1 deliverables: report.md executive summary · report.html in the §9.4 cyber theme with diff badges · flat export.csv per asset class · full-run export.json · report.pdf via reportlab with a DISCLOSED graceful fallback · report_manifest.json; §10.2 precision contract — every format rendered FROM the canonical data.json/assets.json only, embedding run timestamp + scope.yaml sha256; verify_bundle tamper check), engine run-end generation for EVERY terminal status, dashboard on-demand GET /api/report/{target} + POST /api/report/{target}/generate.
+
+Vehicle ladder: run #36 (c14dedf) — the vehicle ended ANOMALY (third-party crtsh/subfinder-seed variance) and the engine's generation condition (completed|partial) skipped run-end reporting → K1..K4 failed until the dashboard on-demand POST created the bundle mid-assertions (K7/K8 incidentally green on that generated set). REM24 (64efe1c): §10.1 "generated on run end" reads as EVERY terminal status — completed|partial|failed|anomaly|stopped all generate; unit suite updated to pin the terminal set. Run #38 (64efe1c): **K1..K8 ALL PASS in-CI.**
+
+Final K-table (run #38): K1 all six deliverables + `report: generated=True` on the real run PASS · K2 precision: md == export.json == export.csv == manifest counts (535 == 535) PASS · K3 traceability: manifest scope_digest == recomputed scope.yaml sha256, run timestamp = 20260906T114517Z PASS · K4 tamper: untouched verifies True, a tampered COPY fails the digest check PASS · K5 dashboard on-demand: verified=True, regeneration returns the same counts PASS · K6 HEAD-blob + verify_b1 clean PASS · K7 real %PDF (2690 bytes) PASS · K8 §9.4 dark theme + badges embedded PASS. G1: real counts hosts=535, alive=0 (probe lane variance on this runner), module_docs=116.
+
+Vehicle honesty notes: (1) alive_hosts=0 on this runner — the httpx probe lane was breaker-throttled by upstream latency drift during the window; hosts are still enumerated with their passive attributions (the report reports the canonical data faithfully, whatever the run produced); (2) PDF text layer is reportlab-rendered from the same bundle (byte-consistency spot check decompresses the stream in units); (3) export.csv emits a `class` column + flat rows; zero-row classes emit zero rows (precision over padding).
+
+---
+
+## B PROTOCOL — FINAL COMPLETION RECORD (B0..B8)
+
+| Phase | Verdict | Vehicle runs | Final table |
+|---|---|---|---|
+| B0 scaffold+contracts | ACCEPTED | — | — |
+| B1 verify-b1 | ACCEPTED | — | verify_b1 diff EMPTY since handoff |
+| B2 acceptance (4 tests) | ACCEPTED | #1–#16 | run #17 ladders closed |
+| B3 first sub-step (FFUF-3+DNSR-2) | CLOSED PASS | #17 | A1–A10 |
+| B3 passive chain (PSV-0..8) | CLOSED PASS | #18–#28 | F1–F10+G1/G2 (REM13..18) |
+| B4 port-sweep | CLOSED PASS | #29–#30 | H1–H8+G1..G3 (REM19) |
+| B5 notifications+scheduler | CLOSED PASS | #31–#35 | I1–I8 (REM21..23) |
+| B6 dashboard | CLOSED PASS | #33 | J1–J8 (REM20) |
+| B7 reporting | CLOSED PASS | #36+#38 | K1–K8 (REM24) |
+| B8 supervisor agent | CLOSED PASS | #37 | L1–L8 |
+
+Frozen integrity to the last commit: pipeline/verify_b1.py working-tree diff EMPTY since handoff; unit suite 151/151; every acceptance table executed in-CI against a REAL example.com vehicle with transient bounding overrides (before-copies as evidence, committed defaults verified against git HEAD with the frozen loader).

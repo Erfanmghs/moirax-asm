@@ -168,6 +168,14 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
                     errors.append(f"agent.{key} must be observe|suggest|auto-fix (§12.6)")
             if "max_llm_calls" in agent and (not isinstance(agent["max_llm_calls"], int) or isinstance(agent["max_llm_calls"], bool) or agent["max_llm_calls"] < 0):
                 errors.append("agent.max_llm_calls must be a non-negative integer (§12.4)")
+    if "retention" in patch:
+        retention = patch.get("retention")
+        if not isinstance(retention, dict):
+            errors.append("retention must be an object (storage management)")
+        else:
+            for key in ("keep_runs", "log_max_mb", "journal_max_mb", "log_keep_gz", "max_total_mb"):
+                if key in retention and (not isinstance(retention[key], int) or isinstance(retention[key], bool) or retention[key] < 1):
+                    errors.append(f"retention.{key} must be a positive integer (storage management)")
     return errors
 
 

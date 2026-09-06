@@ -197,6 +197,33 @@ function renderDiff(diff) {
   pre.onclick = () => pre.classList.toggle("collapsed");
 }
 
+/* ---------------- b2) REPORTS ---------------- */
+async function loadReports() {
+  const target = ($("#rep-target").value.trim() || CURRENT.target);
+  $("#rep-target").value = target;
+  const badge = $("#rep-status");
+  const tbody = $("#reports-table tbody");
+  tbody.innerHTML = "";
+  const doc = await api("GET", "/api/report/" + encodeURIComponent(target));
+  if (!doc.exists) {
+    badge.textContent = "no bundle"; badge.className = "badge dead";
+    tbody.innerHTML = '<tr><td colspan="4" class="dim">no report bundle yet — press GENERATE NOW</td></tr>';
+    $("#rep-manifest").textContent = "";
+    return;
+  }
+  badge.textContent = doc.verified ? "VERIFIED" : "TAMPER/DRIFT";
+  badge.className = "badge " + (doc.verified ? "ok" : "alert");
+  const m = doc.manifest || {};
+  const files = m.files || {};
+  tbody.innerHTML = Object.entries(files).map(([name, f]) =>
+    `<tr><td>${esc(name)}</td><td class="dim">${esc(f.path)}</td><td class="dim">${esc(String(f.sha256 || "").slice(0, 16))}…</td>` +
+    `<td><a class="badge ok" href="/static-file/${esc(target)}/${esc(f.path)}" target="_blank">OPEN</a></td></tr>`).join("") ||
+    '<tr><td colspan="4" class="dim">manifest has no files</td></tr>';
+  const pre = $("#rep-manifest");
+  pre.textContent = JSON.stringify(m, null, 2);
+  pre.onclick = () => pre.classList.toggle("collapsed");
+}
+
 /* ---------------- c) RUN CONTROL ---------------- */
 async function loadRun() {
   const st = await api("GET", "/api/run/status/" + encodeURIComponent(CURRENT.target));
@@ -299,6 +326,12 @@ async function loadSettings() {
   $("#s-agent-passive").value = (s.agent || {}).autonomy_passive || "auto-fix";
   $("#s-agent-active").value = (s.agent || {}).autonomy_active || "suggest";
   $("#s-agent-budget").value = (s.agent || {}).max_llm_calls ?? 20;
+  const ret = s.retention || {};
+  $("#s-ret-runs").value = ret.keep_runs ?? 20;
+  $("#s-ret-log").value = ret.log_max_mb ?? 10;
+  $("#s-ret-journal").value = ret.journal_max_mb ?? 5;
+  $("#s-ret-gz").value = ret.log_keep_gz ?? 3;
+  $("#s-ret-total").value = ret.max_total_mb ?? 1024;
   const editor = $("#rules-editor");
   editor.innerHTML = "";
   for (const rule of s.alert_rules || [{ class: "hosts", enabled: true }, { class: "ports", enabled: true }]) {
@@ -329,6 +362,14 @@ async function saveSettings() {
   };
   const budget = parseInt($("#s-agent-budget").value, 10);
   if (!isNaN(budget)) patch.agent.max_llm_calls = budget;
+  const ret = {
+    keep_runs: parseInt($("#s-ret-runs").value, 10),
+    log_max_mb: parseInt($("#s-ret-log").value, 10),
+    journal_max_mb: parseInt($("#s-ret-journal").value, 10),
+    log_keep_gz: parseInt($("#s-ret-gz").value, 10),
+    max_total_mb: parseInt($("#s-ret-total").value, 10),
+  };
+  if (Object.values(ret).every((v) => !isNaN(v) && v >= 1)) patch.retention = ret;
   try {
     await api("PUT", "/api/settings", patch);
     $("#s-msg").textContent = "saved " + new Date().toISOString();
@@ -386,6 +427,18 @@ $("#sched-save").addEventListener("click", async () => {
 });
 $("#s-add-rule").addEventListener("click", () => $("#rules-editor").appendChild(ruleRow({ class: "hosts", enabled: true })));
 $("#s-save").addEventListener("click", saveSettings);
+$("#rep-check").addEventListener("click", async () => {
+  try { await loadReports(); toast("bundle checked (tamper-check runs server-side)"); }
+  catch (e) { toast(e.message, true); }
+});
+$("#rep-generate").addEventListener("click", async () => {
+  const target = ($("#rep-target").value.trim() || CURRENT.target);
+  try {
+    await api("POST", "/api/report/" + encodeURIComponent(target) + "/generate");
+    toast("report bundle generated for " + target);
+    await loadReports();
+  } catch (e) { toast(e.message, true); }
+});
 
 async function health() {
   const el = $("#conn");
@@ -401,6 +454,7 @@ function loadPanel(name) {
   if (!TOKEN) { toast("set DASHBOARD_TOKEN first (top right)"); return; }
   if (name === "tools") { loadTools(); loadWordlists(); }
   if (name === "results") loadResults();
+  if (name === "reports") loadReports();
   if (name === "run") { loadRun(); startLogStream(); startJournalStream(); }
   if (name === "keys") loadKeys();
   if (name === "settings") loadSettings();

@@ -73,3 +73,15 @@ button.danger:hover { border-color: var(--alert); }
 .toast.err { border-color: var(--alert); color: var(--alert); }
 #live-log { max-height: 45vh; }
 .rule-row { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
+
+/* ---- post-B polish (user directive 2026-09-06): platform branding + glow ---- */
+.topbar { background: linear-gradient(180deg, #0d1420 0%, var(--bg2) 100%); }
+.topbar::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  background: repeating-linear-gradient(90deg, var(--accent) 0 24px, transparent 24px 48px); opacity: .35; }
+.brand { font-size: 15px; text-transform: uppercase; text-shadow: 0 0 12px rgba(34, 211, 238, .35); }
+.brand .glyph { color: var(--accent); text-shadow: 0 0 10px var(--accent); }
+.panel h2 { text-shadow: 0 0 8px rgba(34, 211, 238, .18); }
+button:hover { box-shadow: 0 0 10px rgba(34, 211, 238, .18); }
+.tab.active { text-shadow: 0 0 8px rgba(34, 211, 238, .5); }
+a.badge { text-decoration: none; cursor: pointer; }
+a.badge:hover { box-shadow: 0 0 10px rgba(52, 211, 153, .35); }

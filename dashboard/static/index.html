@@ -3,15 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>recon-pipeline · control center</title>
+<title>Attack Vector Detection Platform · recon-pipeline</title>
 <link rel="stylesheet" href="/static/theme.css">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="glyph">▚</span> RECON<span class="accent">·</span>PIPELINE <span class="sub">control center</span></div>
+  <div class="brand"><span class="glyph">▚</span> ATTACK VECTOR <span class="accent">DETECTION</span> PLATFORM <span class="sub">recon-pipeline · control center</span></div>
   <nav class="tabs" id="tabs">
     <button data-panel="tools" class="tab">TOOLS</button>
     <button data-panel="results" class="tab">RESULTS</button>
+    <button data-panel="reports" class="tab">REPORTS</button>
     <button data-panel="run" class="tab">RUN CONTROL</button>
     <button data-panel="keys" class="tab">API KEYS</button>
     <button data-panel="settings" class="tab">SETTINGS</button>
@@ -55,6 +56,21 @@
     <div id="overlap" class="mono dim"></div>
     <h2 class="mt">DIFF VIEW <span class="hint">added / removed / changed since previous run (§6.6)</span></h2>
     <pre id="diff-view" class="json-inspector collapsed"></pre>
+  </section>
+
+  <!-- b2) REPORTS -->
+  <section id="panel-reports" class="panel hidden">
+    <h2>REPORTS <span class="hint">B7 bundle generated from canonical data.json only (§10.2) · md / html / csv / json / pdf · tamper-checked</span></h2>
+    <div class="row">
+      <input id="rep-target" placeholder="target (example.com)">
+      <button id="rep-check">CHECK BUNDLE</button>
+      <button id="rep-generate">GENERATE NOW</button>
+      <span id="rep-status" class="badge">·</span>
+    </div>
+    <div class="table-wrap"><table id="reports-table"><thead>
+      <tr><th>ARTIFACT</th><th>PATH</th><th>SHA256</th><th>OPEN</th></tr>
+    </thead><tbody></tbody></table></div>
+    <pre id="rep-manifest" class="json-inspector collapsed" title="report_manifest.json"></pre>
   </section>
 
   <!-- c) RUN CONTROL -->
@@ -106,6 +122,14 @@
       <label>PASSIVE BRANCH AUTONOMY (§12.6 default auto-fix)<select id="s-agent-passive" class="mono"><option>observe</option><option>suggest</option><option selected>auto-fix</option></select></label>
       <label>ACTIVE BRANCH AUTONOMY (§12.6 default suggest)<select id="s-agent-active" class="mono"><option>observe</option><option selected>suggest</option><option>auto-fix</option></select></label>
       <label>MAX LLM CALLS / RUN (§12.4 budget)<input id="s-agent-budget" type="number" min="0" class="mono"></label>
+    </div>
+    <h3 class="mt">STORAGE / LOG RETENTION (run-end housekeeping — gzip rotation + history retention + total cap)</h3>
+    <div class="grid">
+      <label>KEEP LAST N RUN SNAPSHOTS<input id="s-ret-runs" type="number" min="1" class="mono"></label>
+      <label>RUN LOG ROTATION CAP (MB)<input id="s-ret-log" type="number" min="1" class="mono"></label>
+      <label>JOURNAL ROTATION CAP (MB)<input id="s-ret-journal" type="number" min="1" class="mono"></label>
+      <label>GZ ARCHIVES TO KEEP PER LOG<input id="s-ret-gz" type="number" min="1" class="mono"></label>
+      <label>TOTAL SIZE CAP PER TARGET (MB)<input id="s-ret-total" type="number" min="1" class="mono"></label>
     </div>
     <div class="row">
       <button id="s-add-rule">+ RULE</button>

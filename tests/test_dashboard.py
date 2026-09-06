@@ -125,6 +125,13 @@ class TestSettingsPanelE(unittest.TestCase):
         self.assertTrue(validate_settings({"resource_budget": {"ram_mb": -1}}))
         self.assertEqual(validate_settings({"proxy_url": "socks5://1.2.3.4:1080"}), [])
 
+    def test_retention_validation(self):
+        self.assertTrue(validate_settings({"retention": "nope"}))
+        self.assertTrue(validate_settings({"retention": {"keep_runs": 0}}))
+        self.assertTrue(validate_settings({"retention": {"log_max_mb": True}}))
+        self.assertTrue(validate_settings({"retention": {"max_total_mb": -5}}))
+        self.assertEqual(validate_settings({"retention": {"keep_runs": 5, "log_max_mb": 10, "journal_max_mb": 5, "log_keep_gz": 3, "max_total_mb": 1024}}), [])
+
     def test_scheduler_floor_enforced_via_panel(self):
         with self.assertRaises(DashboardError):
             scheduler_save(self._params(), {"interval_minutes": 5, "enabled": True, "last_run": None})

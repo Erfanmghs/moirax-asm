@@ -368,6 +368,24 @@ def report_generate(target: str, authorization: str | None = Header(default=None
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+_REPORT_VIEWABLE = {".md", ".html", ".csv", ".json", ".pdf", ".txt"}
+
+
+@app.get("/static-file/{target}/{relpath:path}")
+def artifact_view(target: str, relpath: str, authorization: str | None = Header(default=None)) -> Any:
+    """Read-only report-artifact viewer (REPORTS panel OPEN links).
+    Traversal-safe: confined to recon/<target>/ with a viewable-extension
+    allow-list; auth'd like every other API surface."""
+    _auth(authorization)
+    root = (ROOT / "recon" / target).resolve()
+    full = (root / relpath).resolve()
+    if not str(full).startswith(str(root)) or not full.is_file():
+        raise HTTPException(status_code=404, detail="not found")
+    if full.suffix.lower() not in _REPORT_VIEWABLE:
+        raise HTTPException(status_code=403, detail="extension not viewable")
+    return FileResponse(full)
+
+
 @app.exception_handler(DashboardError)
 def dashboard_error_handler(_request: Any, exc: DashboardError) -> JSONResponse:
     return JSONResponse(status_code=422, content={"detail": str(exc)})

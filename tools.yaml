@@ -143,6 +143,9 @@ settings:
   crtsh_max_time_sec: 120
   crtsh_retries: 3
   amass_timeout_min: 20
+  # subfinder-seed per-source timeout (seconds) — bounds the container so a
+  # dead third-party source can never hang it into a breaker window.
+  subfinder_seed_timeout: 20
   passive_recursion_depth: 2
   max_seeds_per_iteration: 100
   httpx_threads: 200
@@ -817,6 +820,10 @@ tools:
       - -d
       - "{target_domain}"
       - -silent
+      # subfinder's OWN per-source timeout: the container must ALWAYS finish
+      # (run #25: 4 simultaneous 300s hangs -> 4/7 error window -> pause)
+      - -timeout
+      - "{subfinder_seed_timeout}"
     output_mode: text
     parser: host_lines
     data_kind: passive

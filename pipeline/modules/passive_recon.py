@@ -547,30 +547,20 @@ def _psv3_resolve(params, adapter, target_dir, target, extra, planned, subs_host
                        "skip_parse": True},
                       planned, 600.0, timeout_for)
     if result.exit_code == 0 and result.stdout.strip():
-        hosts = _hosts_from_lines(result.stdout)
+        # The adapter fallback chain returns the FALLBACK's stdout here: when
+        # puredns fails, puredns-fallback-dnsx served the contract with
+        # `-json` lines (run #25: json lines hit the host-lines parser and
+        # were swallowed). Detect the dialect, never lose the rows.
+        if result.stdout.lstrip().startswith("{"):
+            hosts, ips = _dnsx_rows(result.stdout)
+        else:
+            hosts, ips = _hosts_from_lines(result.stdout), {}
         _write_lines(target_dir / sources_rel / "assetfinder-resolved.txt", hosts)
-        return hosts, {}
-    # adapter fallback chain -> puredns-fallback-dnsx (json lines with -a -resp)
-    try:
-        rows = [json.loads(line) for line in result.stdout.splitlines() if line.strip().startswith("{")]
-    except ValueError:
-        rows = []
-    hosts: list[str] = []
-    ips: dict[str, list[str]] = {}
-    for row in rows:
-        host = normalize_fqdn(str(row.get("host") or ""))
-        if not host:
-            continue
-        hosts.append(host)
-        a_rows = row.get("a") or []
-        if a_rows:
-            ips[host] = [str(a) for a in a_rows]
-    if hosts:
-        _write_lines(target_dir / sources_rel / "assetfinder-resolved.txt", hosts)
-        note("psv-3: puredns fallback (dnsx) served the resolve contract after primary failure")
-    else:
-        note("psv-3: puredns resolve failed and fallback produced no rows — degraded, disclosed")
-    return hosts, ips
+        if hosts:
+            note("psv-3: resolve contract served (primary puredns or dnsx fallback)")
+        return hosts, ips
+    note("psv-3: puredns resolve failed and fallback produced no rows — degraded, disclosed")
+    return [], {}
 
 
 # ---------------------------------------------------------------------------
@@ -1083,6 +1073,28 @@ def _walk_ip_payload(body: str, target: str) -> tuple[list[str], list[str]]:
 
     walk(payload)
     return ips, [h.lower().rstrip(".") for h in hosts]
+
+
+def _dnsx_rows(text: str) -> tuple[list[str], dict[str, list[str]]]:
+    """Parse dnsx `-a -resp -json` lines into (hosts, ip-map)."""
+    hosts: list[str] = []
+    ips: dict[str, list[str]] = {}
+    for line in (text or "").splitlines():
+        token = line.strip()
+        if not token.startswith("{"):
+            continue
+        try:
+            row = json.loads(token)
+        except ValueError:
+            continue
+        host = normalize_fqdn(str(row.get("host") or ""))
+        if not host:
+            continue
+        hosts.append(host)
+        a_rows = row.get("a") or []
+        if a_rows:
+            ips[host] = [str(a) for a in a_rows]
+    return hosts, ips
 
 
 def _shodan_payload(body: str) -> tuple[list[str], list[str]]:

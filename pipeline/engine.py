@@ -18,6 +18,7 @@ from pipeline.modules import RUNNERS
 from pipeline.notify import run_end_notifications, send_status
 from dashboard.service import proxy_gate
 from pipeline.params import Params
+from pipeline.reporting import generate_all
 from pipeline.scope import ScopeGate
 from pipeline.wordlist_forge import EmptyWordlistError, ingest_if_completed
 from pipeline import state as state_engine
@@ -228,6 +229,14 @@ def run_pipeline(
         f"status_alert={notify_ledger.get('status_alert_sent')} "
         f"alerts={notify_ledger.get('alerts')}"
     )
+    report_ledger: dict[str, Any] = {"generated": False}
+    if status in (str(params.require("run_status_completed")), str(params.require("run_status_partial"))):
+        try:
+            report_ledger = generate_all(params, target_dir, stamp)
+            report_ledger["generated"] = True
+        except Exception as exc:  # noqa: BLE001 — reporting must never flip a verdict
+            report_ledger = {"generated": False, "error": str(exc)}
+    print(f"report: generated={report_ledger.get('generated')} dir={target_dir / params.require('report_dirname')} counts={report_ledger.get('counts')}")
     code = _exit_code(params, status)
     print(f"run {status}: {target_dir}")
     print(f"history: {target_dir / params.require('history_dirname') / stamp}")

@@ -321,6 +321,39 @@ def proxy_check(authorization: str | None = Header(default=None)) -> Any:
     return JSONResponse({"ok": ok, "reason": reason})
 
 
+# --------------------------------------------------------------- reporting (B7)
+
+@app.get("/api/report/{target}")
+def report_view(target: str, authorization: str | None = Header(default=None)) -> Any:
+    _auth(authorization)
+    from pipeline.reporting import _read_json, verify_bundle
+
+    target_dir = ROOT / "recon" / target
+    report_dir = target_dir / str(_params_obj().require("report_dirname"))
+    manifest_path = report_dir / "report_manifest.json"
+    verified, verify_reason = verify_bundle(_params_obj(), target_dir)
+    return JSONResponse({
+        "exists": manifest_path.is_file(),
+        "verified": verified,
+        "verify_reason": verify_reason,
+        "manifest": _read_json(manifest_path),
+    })
+
+
+@app.post("/api/report/{target}/generate")
+def report_generate(target: str, authorization: str | None = Header(default=None)) -> Any:
+    _auth(authorization)
+    from pipeline.reporting import generate_all
+
+    target_dir = ROOT / "recon" / target
+    if not target_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"no recon data for {target}")
+    try:
+        return JSONResponse(generate_all(_params_obj(), target_dir))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.exception_handler(DashboardError)
 def dashboard_error_handler(_request: Any, exc: DashboardError) -> JSONResponse:
     return JSONResponse(status_code=422, content={"detail": str(exc)})

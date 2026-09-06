@@ -75,7 +75,11 @@ def main() -> int:
     # spec-sanctioned stop reason is a PASS; a breaker ANOMALY (exit 2) is a
     # FAIL. runs.json is JSON — the frozen YAML loader cannot read it.
     sanctioned_stop = (
-        "passive_recursion_seeds_cap" in log_text or "passive_budget" in log_text
+        "passive_recursion_seeds_cap" in log_text
+        or "passive_budget" in log_text
+        # the module's human-readable cap note (the machine marker lives in
+        # state.json's reason; run.log carries the disclosed sentence)
+        or ("run marked PARTIAL with reason" in log_text and "max_seeds_per_iteration" in log_text)
     )
     if exit_text == "run exit=0" and last_status == "completed":
         ok_f1 = True
@@ -94,7 +98,11 @@ def main() -> int:
     # serve the SAME output contract (§8 PSV-2) — either file proves the
     # cert-transparency sub-step populated sources.
     ct_name = "crtsh.txt" if (sources_dir / "crtsh.txt").is_file() else "certspotter.txt"
-    core = [ct_name, "subfinder.txt", "amass.txt", "assetfinder.txt",
+    # MANDATORY core: deterministic-ish providers on the keyless vehicle.
+    # amass is DISCLOSED separately (G2): its passive data sources are largely
+    # §9.2-d key-gated and rate-limit runner IPs — run #27 saw amass finish
+    # ok with 0 rows (third-party variance), which must not mask the chain.
+    core = [ct_name, "subfinder.txt", "assetfinder.txt",
             "assetfinder-related.txt", "archives.txt"]
     counts: dict[str, int] = {}
     for name in core:
@@ -109,8 +117,13 @@ def main() -> int:
         len([ln for ln in resolved_path.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()])
         if resolved_path.is_file() else -1
     )
+    amass_path = sources_dir / "amass.txt"
+    amass_n = (
+        len([ln for ln in amass_path.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()])
+        if amass_path.is_file() else -1
+    )
     check("F2", "MANDATORY", populated,
-          f"{counts} assetfinder-resolved={resolved_n}")
+          f"{counts} amass(disclosed)={amass_n} assetfinder-resolved={resolved_n}")
 
     # ---- F3 simulated 429 -> COOLDOWN + reroute ---------------------------
     cooldown_line = "engine=sink429 status=429 -> COOLDOWN" in log_text

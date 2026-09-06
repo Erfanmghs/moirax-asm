@@ -247,7 +247,15 @@ def run_pipeline(
         f"alerts={notify_ledger.get('alerts')}"
     )
     report_ledger: dict[str, Any] = {"generated": False}
-    if status in (str(params.require("run_status_completed")), str(params.require("run_status_partial"))):
+    # §10.1 "generated on run end": EVERY terminal status gets its report —
+    # REM24 (run #36 evidence): an anomaly-terminated run still owns canonical
+    # data.json files and the operator needs the report most when it degraded.
+    terminal = {
+        str(params.require("run_status_completed")), str(params.require("run_status_partial")),
+        str(params.require("run_status_failed")), str(params.require("run_status_anomaly")),
+        str(params.require("run_status_stopped")),
+    }
+    if status in terminal:
         try:
             report_ledger = generate_all(params, target_dir, stamp)
             report_ledger["generated"] = True

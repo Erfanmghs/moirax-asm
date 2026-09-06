@@ -162,6 +162,10 @@ class TestWiring(unittest.TestCase):
         text = (_ROOT / "pipeline" / "engine.py").read_text(encoding="utf-8")
         self.assertIn("generate_all(params, target_dir, stamp)", text)
         self.assertIn("report: generated=", text, "never-silent ledger line")
+        # REM24 (run #36 evidence): anomaly-terminated runs get reports too (§10.1)
+        terminal_block = text.split("terminal = {")[1].split("}")[0]
+        for status_param in ("run_status_completed", "run_status_partial", "run_status_failed", "run_status_anomaly", "run_status_stopped"):
+            self.assertIn(status_param, terminal_block, f"{status_param} must be a report-generating terminal status")
 
     def test_dashboard_on_demand_endpoints(self):
         text = (_ROOT / "dashboard" / "app.py").read_text(encoding="utf-8")

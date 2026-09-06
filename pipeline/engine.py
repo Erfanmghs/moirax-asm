@@ -16,6 +16,7 @@ from pipeline.jsonio import read_json
 from pipeline.merge import load_tool_doc, merge_branches
 from pipeline.modules import RUNNERS
 from pipeline.notify import run_end_notifications, send_status
+from dashboard.service import proxy_gate
 from pipeline.params import Params
 from pipeline.scope import ScopeGate
 from pipeline.wordlist_forge import EmptyWordlistError, ingest_if_completed
@@ -46,6 +47,13 @@ def run_pipeline(
     )
     clock = clock or Clock()
     run_started = clock.time()
+    # §9.3 PROXY RULE: set-but-unreachable -> FAIL FAST (never silent direct).
+    proxy_ok, proxy_reason = proxy_gate(params)
+    if not proxy_ok:
+        print(f"PROXY RULE fail-fast (§9.3): {proxy_reason}")
+        return _exit_code(params, str(params.require("run_status_failed")))
+    if proxy_reason != "proxy unset — direct connection (§9.3)":
+        print(f"proxy: {proxy_reason}")
     alerts: list[tuple[str, str, str]] = []
 
     def _on_anomaly(status: str, module: str, reason: str) -> None:

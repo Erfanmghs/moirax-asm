@@ -1,0 +1,223 @@
+# B6 DASHBOARD (spec §9.1/§9.2/§9.3/§9.4) — acceptance vehicle.
+#
+# Vehicle: example.com (committed scope), the proven bounding set, PLUS the
+# dashboard acceptance layer executed against the REAL repo + the REAL
+# vehicle output:
+#   - preflight G-Z1..G-Z9 (backend surface, SPA/theme, views.yaml contract,
+#     proxy rule wiring, compose service)
+#   - full unit suite (incl. dashboard TestClient smoke)
+#   - after the vehicle: assertions J1..J8 boot the FastAPI app and prove the
+#     companion acceptances (parameter edit visible in next run command; URL
+#     filter state restores correctly) + panels a-e contracts on the REAL
+#     recon/example.com data. Panel writes are pointed at an ISOLATED root —
+#     the committed repo is never mutated by the dashboard under test.
+#
+# Transient runtime accommodations (NEVER committed; before-copies kept) —
+# the exact proven B4/B5 set (REM5 fleet refresh, active branch bounded out,
+# passive budget 3000, recursion depth 1, sweep custom 80,443,8080 / 1h).
+#
+# Steps: checkout -> toolchain -> pip deps (fastapi/uvicorn/httpx) ->
+# preflight -> units -> image pulls (soft) -> passive-tools build ->
+# reconcile -> REM5 fleet refresh -> bounding overrides -> run example.com ->
+# assertions J1..J8 -> teardown -> evidence upload.
+
+name: b6-dashboard
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: b6-dashboard
+  cancel-in-progress: false
+
+jobs:
+  b6-dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - name: "Checkout (branch: private)"
+        uses: actions/checkout@v4
+        with:
+          ref: private
+
+      - name: Toolchain sanity (docker + python3)
+        run: |
+          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          python3 --version
+
+      - name: "Install dashboard deps (fastapi + uvicorn + httpx for TestClient)"
+        run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1"
+
+      - name: Preflight gates (G-Z1..G-Z9)
+        run: PYTHONPATH=. python3 ci/b6_preflight.py
+
+      - name: Unit proof (full regression suite incl. B6 dashboard)
+        run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
+
+      - name: "Pull tool images (soft — passive fleet + sweep)"
+        run: |
+          set +e
+          : > ci/b6_pull_report.txt
+          for img in \
+            projectdiscovery/naabu:v2.3.5 \
+            projectdiscovery/dnsx:v1.2.2 \
+            projectdiscovery/httpx:v1.10.0 \
+            projectdiscovery/subfinder:v2.6.7 \
+            caffix/amass:latest \
+            edu4rdshl/findomain:latest \
+            projectdiscovery/chaos-client:latest \
+            curlimages/curl:8.10.1; do
+            if docker pull "$img"; then
+              echo "pull-ok $img" >> ci/b6_pull_report.txt
+            else
+              echo "pull-FAILED $img" >> ci/b6_pull_report.txt
+            fi
+          done
+          cat ci/b6_pull_report.txt
+
+      - name: "Build pinned local images (passive-tools; REM6 pattern + dashboard)"
+        run: |
+          set -e
+          docker build -t recon-pipeline/passive-tools:v1 -f docker/passive-tools/Dockerfile docker/passive-tools
+          docker build -t recon-pipeline/dashboard:v1 -f docker/dashboard/Dockerfile .
+          docker image inspect recon-pipeline/dashboard:v1 --format 'dashboard-image-ok {{.Id}}'
+
+      - name: "Dashboard image smoke (auth fail-closed + health, no host network)"
+        run: |
+          set -e
+          docker run -d --name dash-smoke -e DASHBOARD_TOKEN=ci-smoke -p 127.0.0.1:8081:8080 recon-pipeline/dashboard:v1 >/dev/null
+          for i in $(seq 1 20); do
+            if curl -s http://127.0.0.1:8081/api/health | grep -q '"ok":true'; then echo "health-ok"; break; fi
+            sleep 1
+          done
+          curl -s -o /dev/null -w "no-token=%{http_code}\n" http://127.0.0.1:8081/api/tools | tee ci/b6_dash_smoke.txt
+          curl -s -H "Authorization: Bearer ci-smoke" http://127.0.0.1:8081/api/health | tee -a ci/b6_dash_smoke.txt
+          docker rm -f dash-smoke >/dev/null
+
+      - name: Reconcile stale live state (frozen stop path; expect EXIT 4 or usage)
+        run: |
+          set +e
+          ./recon.sh stop example.com
+          echo "stop exit=$?"
+
+      - name: "REM5 fleet refresh (transient: public source URLs disabled; forge from committed seed)"
+        run: |
+          set -e
+          cp resolvers.yaml ci/b6_resolvers_runtime_before.yaml
+          python3 - <<'PY'
+          import pathlib
+          import yaml
+          p = pathlib.Path("resolvers.yaml")
+          d = yaml.safe_load(p.read_text(encoding="utf-8"))
+          n = len(d.get("sources") or [])
+          d["sources"] = []
+          p.write_text(yaml.safe_dump(d, sort_keys=False), encoding="utf-8")
+          print(f"ENV-ACCOMMODATION REM5: disabled {n} public source URLs at run time; fleet = resolvers/seed.txt (15 pinned anycast). Transient working-copy edit only - never committed.")
+          PY
+          PYTHONPATH=. python3 - <<'PY'
+          import tempfile
+          from pathlib import Path
+          from pipeline.params import Params
+          from pipeline.adapter import Adapter
+          from pipeline.breaker import CircuitBreaker
+          from pipeline.ceiling import ResourceCeiling
+          from pipeline.resolver_forge import forge_resolvers
+          params = Params(Path("."))
+          tdir = Path(tempfile.mkdtemp()) / "forge-warmup"
+          tdir.mkdir(parents=True)
+          breaker = CircuitBreaker(params, target_dir=tdir, target="example.com")
+          ceiling = ResourceCeiling(params)
+          adapter = Adapter(params, tdir, breaker, ceiling)
+          forge_resolvers(params, adapter, tdir, "example.com")
+          fleet = [ln for ln in (Path("resolvers/forge/custom-resolvers.txt")).read_text().splitlines() if ln.strip()]
+          assert len(fleet) >= 10, f"fleet too small: {len(fleet)}"
+          print(f"REM5 fleet refresh: healthy={len(fleet)} resolvers from committed seed")
+          PY
+
+      - name: "Vehicle bounding overrides (transient: the proven B4/B5 set)"
+        run: |
+          set -e
+          cp tools.yaml ci/b6_tools_runtime_before.yaml
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("tools.yaml")
+          lines = p.read_text(encoding="utf-8").splitlines()
+          out: list[str] = []
+          skipping = False
+          for line in lines:
+              key = line.split(":")[0].strip() if line.startswith("  ") and line.strip().endswith(":") else None
+              if key is not None:
+                  skipping = key == "active_branch_modules"
+                  if skipping:
+                      out.append("  active_branch_modules: []  # TRANSIENT vehicle bounding (never committed). Committed order restored on checkout.")
+                      continue
+              if skipping:
+                  continue
+              if line.startswith("  passive_branch_budget_sec:"):
+                  out.append("  passive_branch_budget_sec: 3000  # TRANSIENT vehicle accommodation (never committed).")
+                  continue
+              if line.startswith("  passive_recursion_depth:"):
+                  out.append("  passive_recursion_depth: 1  # TRANSIENT vehicle accommodation (never committed).")
+                  continue
+              if line.startswith("  portsweep_profile:"):
+                  out.append("  portsweep_profile: custom  # TRANSIENT vehicle accommodation (never committed).")
+                  continue
+              if line.startswith("  portsweep_custom_ports:"):
+                  out.append('  portsweep_custom_ports: "80,443,8080"  # TRANSIENT vehicle accommodation (never committed).')
+                  continue
+              if line.startswith("  portsweep_duration_hours:"):
+                  out.append("  portsweep_duration_hours: 1  # TRANSIENT vehicle accommodation (never committed).")
+                  continue
+              out.append(line)
+          p.write_text("\n".join(out) + "\n", encoding="utf-8")
+          print("VEHICLE OVERRIDE: proven B4/B5 bounding set applied (transient; before-copy ci/b6_tools_runtime_before.yaml).")
+          PY
+          PYTHONPATH=. python3 - <<'PY'
+          from pathlib import Path
+          from pipeline.params import Params
+          params = Params(Path("."))
+          assert params.require("active_branch_modules") == []
+          assert int(params.require("passive_branch_budget_sec")) == 3000
+          assert int(params.require("passive_recursion_depth")) == 1
+          assert params.require("portsweep_profile") == "custom"
+          assert int(params.require("portsweep_duration_hours")) == 1
+          print("Vehicle validation: frozen loader parses tools.yaml; bounding set intact.")
+          PY
+
+      - name: Run vehicle (example.com — full pipeline under proven bounding)
+        run: |
+          set +e
+          ./recon.sh run example.com 2>&1 | tee ci/b6_run_console.log
+          echo "run exit=${PIPESTATUS[0]}" | tee ci/b6_run_exit.txt
+
+      - name: Assertions (B6 dashboard table J1..J8 + G1..G2)
+        run: |
+          PYTHONPATH=. python3 ci/b6_assertions.py 2>&1 | tee ci/b6_assertions_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Teardown (always)
+        if: always()
+        run: |
+          docker ps -q --filter "label=recon.pipeline" | xargs -r docker rm -f || true
+
+      - name: Upload evidence artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b6-dashboard-evidence
+          path: |
+            ci/b6_verdict.txt
+            ci/b6_run_exit.txt
+            ci/b6_run_console.log
+            ci/b6_assertions_console.log
+            ci/b6_pull_report.txt
+            ci/b6_dash_smoke.txt
+            ci/b6_resolvers_runtime_before.yaml
+            ci/b6_tools_runtime_before.yaml
+            resolvers/forge/custom-resolvers.txt
+            recon/example.com/logs/run.log
+            recon/example.com/state.json
+            recon/example.com/runs.json
+            recon/example.com/diff.json
+            recon/example.com/00_assets/assets.json
+          if-no-files-found: warn

@@ -285,6 +285,8 @@ settings:
   echo_active_hosts: "www.example.com api.example.com"
   echo_fail_script: "exit 1"
   proxy_url: ""
+  # §9.3 PROXY RULE reachability probe (set-but-unreachable -> FAIL FAST)
+  proxy_check_timeout_sec: 3
   ffuf_host_header: ""
   ffuf_mode: host
   ffuf_data_json: 10_subdomains/ffuf/data.json
@@ -376,7 +378,7 @@ settings:
 tools:
   # TEST FIXTURE (verify_b1)
   echo-tool:
-    enabled: false
+    enabled: true
     branch: passive
     fallback: echo-tool-fallback
     image_ref: echo-tool
@@ -390,6 +392,9 @@ tools:
     output_data_json: logs/raw/echo-tool/data.json
     output_summary: logs/raw/echo-tool/summary.md
     output_raw_dir: logs/raw/echo-tool
+    params:
+      echo_passive_hosts: edited.example.com
+      target_domain: probe.example.com
   echo-tool-fallback:
     enabled: false
     branch: passive

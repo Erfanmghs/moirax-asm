@@ -2,14 +2,21 @@ name: recon-pipeline
 
 services:
   dashboard:
-    image: ${DASHBOARD_IMAGE:-busybox:1.36.1}
-    command: ["sleep", "infinity"]
+    build:
+      context: .
+      dockerfile: docker/dashboard/Dockerfile
+    command: ["uvicorn", "dashboard.app:app", "--host", "0.0.0.0", "--port", "8080"]
     ports:
       - "${DASHBOARD_BIND_HOST:-127.0.0.1}:${DASHBOARD_BIND_PORT:-8080}:8080"
     volumes:
-      - ${RECON_VOLUME:-./recon}:/recon
+      - ${RECON_VOLUME:-./recon}:/app/recon
       - ${SECLISTS_HOST_PATH:-${HOME}/seclists}:${SECLISTS_CONTAINER_PATH:-/usr/share/seclists}:ro
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./.env:/app/.env
+      - ./tools.yaml:/app/tools.yaml
+      - ./wordlists.yaml:/app/wordlists.yaml
+      - ./scheduler.json:/app/scheduler.json
+      - ./dashboard/config.json:/app/dashboard/config.json
     environment:
       DASHBOARD_TOKEN: ${DASHBOARD_TOKEN:-}
     restart: unless-stopped

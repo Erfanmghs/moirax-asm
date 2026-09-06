@@ -383,6 +383,15 @@ settings:
   agent_max_remediation_attempts: 3
   agent_journal_relpath: logs/agent-journal.jsonl
   remediation_filename: remediation.yaml
+  # STORAGE / LOG RETENTION (post-B user directive 2026-09-06) — run-end
+  # housekeeping (pipeline/logstore.py): history snapshot retention, size-capped
+  # gzip log rotation, total cap per target. dashboard/config.json `retention.*`
+  # overrides these defaults (dashboard-editable, §9.2-e pattern of agent.*).
+  retention_keep_runs: 20
+  retention_log_max_mb: 10
+  retention_journal_max_mb: 5
+  retention_log_keep_gz: 3
+  retention_max_total_mb: 1024
 
 tools:
   # TEST FIXTURE (verify_b1)

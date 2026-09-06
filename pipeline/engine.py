@@ -262,6 +262,23 @@ def run_pipeline(
         except Exception as exc:  # noqa: BLE001 — reporting must never flip a verdict
             report_ledger = {"generated": False, "error": str(exc)}
     print(f"report: generated={report_ledger.get('generated')} dir={target_dir / params.require('report_dirname')} counts={report_ledger.get('counts')}")
+    # Storage hygiene (user directive 2026-09-06): run-end housekeeping —
+    # history retention + size-capped log rotation + total cap. Never-fail
+    # exactly like reporting: a storage error must never flip a verdict.
+    storage_ledger: dict[str, Any] = {"applied": False}
+    try:
+        from pipeline.logstore import housekeep
+
+        storage_ledger = housekeep(params, target_dir)
+    except Exception as exc:  # noqa: BLE001
+        storage_ledger = {"applied": False, "error": str(exc)}
+    print(
+        f"storage: applied={storage_ledger.get('applied')} "
+        f"freed_bytes={storage_ledger.get('freed_bytes', 0)} "
+        f"rotated={len(storage_ledger.get('rotated', []))} "
+        f"pruned_runs={len(storage_ledger.get('pruned_runs', []))} "
+        f"capped={storage_ledger.get('capped', False)}"
+    )
     code = _exit_code(params, status)
     print(f"run {status}: {target_dir}")
     print(f"history: {target_dir / params.require('history_dirname') / stamp}")

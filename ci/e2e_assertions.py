@@ -142,8 +142,13 @@ def main() -> int:
     check("E7 report-bundle-verified", bool(manifest_path.is_file()) and verified, str(reason))
 
     # --- E8 storage housekeeping engaged --------------------------------------
-    run_log = TARGET_DIR / "logs" / "run.log"
-    storage_lines = [ln for ln in run_log.read_text(encoding="utf-8").splitlines() if ln.startswith("storage: applied=")] if run_log.is_file() else []
+    # The ledger line is printed on engine STDOUT — read the console tee (and
+    # run.log defensively; stdout is block-buffered if the job is killed).
+    candidates = [ROOT / "ci" / "e2e_run_console.log", TARGET_DIR / "logs" / "run.log"]
+    storage_lines = []
+    for log in candidates:
+        if log.is_file():
+            storage_lines += [ln for ln in log.read_text(encoding="utf-8", errors="replace").splitlines() if ln.startswith("storage: applied=")]
     check("E8 storage-housekeeping", any("storage: applied=True" in ln for ln in storage_lines), f"{len(storage_lines)} ledger line(s)")
 
     # --- E9 scope clean ---------------------------------------------------------

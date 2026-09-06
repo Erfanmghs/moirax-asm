@@ -136,14 +136,21 @@ jobs:
           import pathlib
           import yaml
 
-          # 1) resolver fleet = fixture DNS
+          # 1) resolver fleet = fixture DNS — HANDCRAFTED in the frozen-loader
+          # shape (2-space-indented block items): yaml.safe_dump writes indent-0
+          # list items that the frozen yaml_util parser rejects (run #40 evidence).
           p = pathlib.Path("resolvers.yaml")
           d = yaml.safe_load(p.read_text(encoding="utf-8"))
           n = len(d.get("sources") or [])
-          d["sources"] = []
-          d["manual_add"] = ["172.17.0.1"]
-          p.write_text(yaml.safe_dump(d, sort_keys=False), encoding="utf-8")
-          print(f"resolvers.yaml: disabled {n} public sources; manual_add=[172.17.0.1]")
+          p.write_text(
+              "schema_version: 1\n"
+              "sources: []\n"
+              "manual_add:\n"
+              "  - 172.17.0.1\n"
+              "manual_remove: []\n",
+              encoding="utf-8",
+          )
+          print(f"resolvers.yaml: disabled {n} public sources; manual_add=[172.17.0.1] (frozen-loader shape)")
 
           # 2-4) tools.yaml targeted line edits (comments/format preserved)
           t = pathlib.Path("tools.yaml")
@@ -180,6 +187,15 @@ jobs:
           w.write_text("\n".join(wl) + "\n", encoding="utf-8")
           print("wordlists.yaml: DNSR-1 selection = [dns_fast_top5000, e2e_nested_fixture]")
           PY
+
+      - name: "Reset the E2E vehicle state (stale B2-era recon/fixture-target.test must not contaminate merge/port-sweep; transient, never committed)"
+        run: |
+          set -e
+          rm -rf recon/fixture-target.test
+          rm -f wordlists/forge/effective-FFUF-0.txt wordlists/forge/effective-DNSR-1.txt
+          rm -rf wordlists/forge/cache
+          echo "6. reset vehicle state: rm -rf recon/fixture-target.test + wordlist forge caches (stale B2-era data must not inflate merge/port-sweep target-set)" >> ci/e2e_transient_edits.log
+          echo "vehicle-state reset ok"
 
       - name: "FULL pipeline run vs fixture (fixture-target.test)"
         run: |

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -64,7 +66,12 @@ def load_state(params: Params, target_dir: Path, target: str) -> dict[str, Any]:
 def save_state(params: Params, target_dir: Path, state: dict[str, Any]) -> Path:
     state["updated_at"] = _now()
     path = state_path(params, target_dir)
-    tmp = path.with_suffix(path.suffix + ".tmp")
+    # REM26 (run #40 evidence): the passive and active branches run CONCURRENTLY
+    # and both persist state — a SHARED tmp filename races (thread A replaces
+    # tmp -> state.json while thread B still holds the same tmp path, B's
+    # replace then raises FileNotFoundError and the whole branch dies). Unique
+    # tmp per (pid, thread) keeps every writer's replace atomic.
+    tmp = path.with_suffix(f"{path.suffix}.{os.getpid()}.{threading.get_ident()}.tmp")
     tmp.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
     return path

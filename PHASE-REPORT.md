@@ -1653,3 +1653,109 @@ Vehicle honesty notes:
    fallback contract stayed live throughout the ladder.
 
 **VERDICT — TEST B3-2 (PASSIVE CHAIN PSV-0..PSV-8, example.com VEHICLE): PASS**
+
+---
+
+## B4 PORT-SWEEP (spec §8 order-4 POST-MERGE) — CLOSURE RECORD
+
+Stage: order-4 post-MERGE full-range port plane (companion Phase B4). Runs
+strictly after MERGE, consumes assets.json, never a branch member. All work
+on branch `private`; pipeline frozen files untouched (`verify_b1.py` diff
+EMPTY throughout; B2 acceptance surface unchanged).
+
+### Implementation surface
+- `pipeline/port_pace.py` — PortPacer (RAMP 100 → +100/30 s → profile cap;
+  CANARY every 30 s re-verifies up to 3 sentinel (ip, port) pairs mined from
+  the previous sweep/PORT-CHECK history via TCP connect; miss → halve rate;
+  2 consecutive bad windows → breaker force-pause (§4.7 ANOMALY path); no
+  sentinels → explicit first-run disarm note, armed next sweep).
+- `pipeline/modules/port_sweep.py` — run_port_sweep: no-overlap guard
+  (`skipped: previous_in_progress` when a completed sweep is still inside its
+  duration window); input filter `alive_only|all_resolved`; RULE 1
+  post-MERGE RESOLUTION GUARANTEE (no-IP hosts → ONE batched dnsx-list pass
+  over the same forged-resolver registry; unresolved carry explicit
+  resolution_status+reason; a separate `ip_rejected` class is logged and
+  never re-resolved); RULE 2 IP DEDUP (IP→hosts map from DNSR-3/PSV-6
+  attributions + PSV-8 `cidr-ips.txt` AS-IS scan-only entries; REM8 IP
+  ruling mirrored; duplicates logged+skipped); RULE 3 explicit target-set
+  file materialized+logged BEFORE any scan; profiles light|full|custom as a
+  thin config layer over the adapter (`naabu` top-N / `naabu-full -p -` /
+  `naabu-sweep -p {range}`); duration-budgeted PACING (effective pps =
+  unique_ips × ports_total ÷ (duration × 3600), capped; window breach →
+  PARTIAL + remaining-IP list — deferral exists ONLY when the pace is
+  infeasible, by spec reading); FILTERING INTELLIGENCE (alive + zero ports +
+  full profile → ONE re-probe at rate÷4 then `filtered_suspect`; >1000 open
+  → `anomalous_open_suspect`, recorded never alert-spammed); SECOND STAGE
+  nmap -sV behind `portsweep_nmap_sv` (default OFF — designated VA hook,
+  toggle only per DO-NOT-BUILD list), `-oX -` parsed to services[].
+- Engine hook: post-MERGE stage between `merge_branches` and status
+  classification — breaker-aware, state-tracked, partial-markers shape the
+  final status like every other stage.
+- tools.yaml: +21 named portsweep params (§5.6 — zero magic values) +
+  `naabu-full` / `naabu-sweep` / `nmap-sv` specs; tools.lock: nmap pin
+  `instrumentisto/nmap:7.98-r2` (Hub-verified).
+- API key inventory (operator mandate "procure the APIs"): `.env.example`
+  rewritten as a grouped inventory + `docs/api-keys.md` (key → module →
+  free tier → without-key behavior matrix). The pipeline is KEYLESS-FIRST —
+  every keyed capability is optional and degrades with an explicit skip
+  line (proven by the B3 run #28 keyless acceptance and re-proven here).
+
+### Proof ladder (runs #29–#30, workflow `b4-portsweep`)
+- Run #29 (edaf115): preflight G-W1..G-W8 8/8, units 61/61, fleet refresh,
+  vehicle overrides frozen-loader-validated; vehicle ran END-TO-END —
+  passive chain → MERGE (2755 assets) → PORT-SWEEP done. H2..H7 + G1/G2 ALL
+  PASS; H1/H8 FAIL → both defects were in MY assertion table, not the
+  frozen pipeline: H8 compared the WORKING TREE to HEAD (includes the
+  intended transient vehicle overrides — wrong instrument); H1 required a
+  globally clean run status while the anomaly came from B3-era passive
+  lanes (crtsh sparse window 1/4 + curl-fetch 3/3 — third-party variance;
+  breaker did its frozen job; degraded-continue completed every module).
+- REM19 (f8367e6): H1 → STAGE-SCOPED (sweep done + ran + own lane clean)
+  with the run-level truth moved to a new DISCLOSURE row G3; H8 → HEAD-blob
+  re-parse with the frozen loader (B3 F10 discipline) + verify_b1
+  working-tree check kept; H4 → recomputed from the run's OWN pace record.
+  Fixed table validated LOCALLY against the real run-29 evidence
+  (H1..H8 PASS, exit 0) before re-dispatch.
+- Run #30 (f8367e6, id 34018950992): SUCCESS — **H1..H8 ALL PASS**,
+  G1..G3 disclosed. VERDICT: TEST B4 (PORT-SWEEP, example.com VEHICLE): PASS.
+
+### Final H-table (run #30)
+| Assertion | Class | Result |
+|---|---|---|
+| H1 sweep done + ran + own lane clean (stage-scoped) | MANDATORY | PASS |
+| H2 IP DEDUP: 2 unique IPs × exactly 1 invocation, dups_skipped=2, attributed to both hosts | MANDATORY | PASS |
+| H3 RULE 3: target-set materialized+logged BEFORE first scan | MANDATORY | PASS |
+| H4 PACING formula exact (2 IPs × 3 ports / 1 h → 1 pps, no breach) | MANDATORY | PASS |
+| H5 RULE 1: guarantee 2 hosts → ONE batched pass → 2/2 resolved, 0 unresolved | MANDATORY | PASS |
+| H6 nmap toggle OFF → zero nmap containers | MANDATORY | PASS |
+| H7 scope: all scanned IPs verdict-eligible, target set covered | MANDATORY | PASS |
+| H8 §8 schema exact + HEAD-blob committed content + verify_b1 diff EMPTY | MANDATORY | PASS |
+| G1 canary first-run disarm disclosed (sentinels armed next sweep) | DISCLOSURE | disclosed |
+| G2 summary present | DISCLOSURE | disclosed |
+| G3 run-level truth: status=anomaly, failing_module=crtsh, pauses=[crtsh] | DISCLOSURE | disclosed |
+
+Vehicle honesty notes:
+1. Run-level status anomaly on BOTH vehicle runs originates in B3-era
+   passive lanes (crt.sh sparse-window error ratio; second run pauses=[crtsh]
+   only) — third-party CT-log variance, the REM15/REM16 class. The port-sweep
+   lane itself was CLEAN on both runs (no pause, no partial, module done).
+   H1 is stage-scoped BY DESIGN with G3 carrying the full run-level truth;
+   nothing is hidden.
+2. Sweep transients (never committed; before-copy `ci/b4_tools_runtime_before.yaml`):
+   active branch bounded out (passive chain is the asset producer; RULE 1
+   guarantee is the IP plane), profile custom "80,443,8080", window 1 h
+   (spec floor), passive budget 3000 s, recursion depth 1, REM5 fleet
+   refresh. Committed defaults (profile full, 24 h, cap 1000, nmap OFF)
+   verified intact via HEAD blobs (H8).
+3. Sweep results: example.com + www.example.com → 2 unique IPs
+   (104.20.23.154, 172.66.147.243) → each scanned EXACTLY once → 3/3 ports
+   open each (Cloudflare edge), duplicates_skipped=2, effective_pps=1,
+   window not breached, canary disarmed (first sweep — armed from history
+   next run), nmap second stage OFF (zero containers).
+4. The 24 h window + full profile pace machinery is unit-proven
+   (test_pacing_formula_full_profile: 2 IPs → 36 pps; window-breach +
+   remaining-list + PARTIAL marker unit-proven at cap=1); the CI vehicle
+   binds the custom-profile path to keep the runner bounded, per the
+   B2/B3 vehicle-bounding convention.
+
+**VERDICT — TEST B4 (PORT-SWEEP, example.com VEHICLE): PASS**

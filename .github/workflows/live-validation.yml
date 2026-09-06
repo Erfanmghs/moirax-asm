@@ -1,0 +1,175 @@
+# LIVE VALIDATION VEHICLE — full pipeline vs the OPERATOR-OWNED domain
+# bugdasht.ir. The operator deployed the apex, its subdomains and vhosts
+# themselves and directed the validation against that real estate with the
+# FROZEN 200-record smoke wordlist only (no synthetic test network).
+#
+# Flow: checkout -> toolchain -> SecLists -> suite deps -> ffuf image ->
+# transient accommodations (RECORDED, never committed):
+#   1. scope.yaml = bugdasht.ir + *.bugdasht.ir (operator-authorized target)
+#   2. resolver fleet = committed 15-anycast seed (REM5 pattern)
+#   3. wordlists.yaml selection = [test_smoke_200] on DNSR-1 / FFUF-0 / FFUF-2
+#   4. stale forge caches + vehicle state reset (REM27b lesson)
+# -> preflight (verify_b1 diff-empty + smoke-200 anchor + seed fleet) ->
+# full unit suite -> FULL pipeline run (./recon.sh run bugdasht.ir) ->
+# L-table assertions + FINDINGS extraction (subdomains / vhosts / ports /
+# passive counts printed to the console) -> evidence upload (full vehicle
+# tree recon/bugdasht.ir).
+#
+# Authorization: bugdasht.ir is owned and operated by the repo owner
+# (Erfanmghs); the engagement is the operator validating their own estate
+# with a bounded 200-record wordlist and the pipeline's built-in pacing.
+
+name: live-validation
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: live-validation
+  cancel-in-progress: false
+
+jobs:
+  live-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: "Checkout (branch: private)"
+        uses: actions/checkout@v4
+        with:
+          ref: private
+
+      - name: Toolchain sanity (docker + python3 + sudo)
+        run: |
+          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          python3 --version
+          sudo -n true && echo "sudo-ok"
+
+      - name: "Clone SecLists (registry materialization root: ~/seclists)"
+        run: |
+          set -e
+          git clone --depth 1 https://github.com/danielmiessler/SecLists "$HOME/seclists"
+          test -f "$HOME/seclists/Discovery/DNS/subdomains-top1million-5000.txt" && echo "seclists-ok"
+
+      - name: "Install suite deps (REM22/REM23 parity: fastapi + uvicorn + httpx + reportlab)"
+        run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5"
+
+      - name: "Build pinned local tool image (REM6: ffuf v2.1.0)"
+        run: |
+          set -e
+          docker build -t recon-pipeline/ffuf:v2.1.0 -f docker/ffuf/Dockerfile docker/ffuf
+          docker image inspect recon-pipeline/ffuf:v2.1.0 --format 'ffuf-image-ok {{.Id}}'
+
+      - name: "Transient accommodations (recorded; never committed)"
+        run: |
+          set -e
+          mkdir -p ci
+          {
+            echo "LIVE-VALIDATION transient working-copy edits (never committed):"
+            echo "1. scope.yaml = bugdasht.ir + *.bugdasht.ir (operator-owned target)"
+            echo "2. resolvers.yaml sources=[] (fleet = resolvers/seed.txt, 15 pinned anycast; REM5 pattern)"
+            echo "3. wordlists.yaml selection=[test_smoke_200] on DNSR-1 / FFUF-0 / FFUF-2 (the frozen 200-record list)"
+            echo "4. forge caches + recon/bugdasht.ir reset (no stale inflation; REM27b lesson)"
+          } > ci/live_transient_edits.log
+          cp resolvers.yaml ci/live_resolvers_runtime_before.yaml
+          cp wordlists.yaml ci/live_wordlists_runtime_before.yaml
+          python3 - <<'PY'
+          import pathlib, shutil
+
+          # 1) scope.yaml — operator-owned target, wildcard subdomains included
+          pathlib.Path("scope.yaml").write_text(
+              "engagement:\n"
+              "  name: bugdasht-live-validation\n"
+              "  authorization_date: \"2026-09-07\"\n"
+              "includes:\n"
+              "  - bugdasht.ir\n"
+              "  - \"*.bugdasht.ir\"\n"
+              "excludes: []\n",
+              encoding="utf-8",
+          )
+          print("scope.yaml: bugdasht.ir + *.bugdasht.ir")
+
+          # 2) resolver fleet = committed seed, handcrafted in the frozen-loader
+          # shape (yaml.safe_dump indent-0 list items are rejected; run #40)
+          pathlib.Path("resolvers.yaml").write_text(
+              "schema_version: 1\n"
+              "sources: []\n"
+              "manual_add: []\n"
+              "manual_remove: []\n",
+              encoding="utf-8",
+          )
+          print("resolvers.yaml: sources=[]; fleet = resolvers/seed.txt (15 pinned anycast)")
+
+          # 3) wordlist selection = the frozen 200-record list on every task.
+          # tasks.<task>.selection is the operator-tick override (first priority
+          # in wordlist_forge.selection_keys) so default_selection is inert.
+          w = pathlib.Path("wordlists.yaml")
+          lines = w.read_text(encoding="utf-8").splitlines()
+          out = []
+          for line in lines:
+              out.append(line)
+              if line in ("  DNSR-1:", "  FFUF-0:", "  FFUF-2:"):
+                  out.append("    selection:")
+                  out.append("      - test_smoke_200")
+          w.write_text("\n".join(out) + "\n", encoding="utf-8")
+          print("wordlists.yaml: DNSR-1/FFUF-0/FFUF-2 selection = [test_smoke_200]")
+
+          # NOTE: the frozen anchor applies to the FORGED output (the project
+          # normalizes the raw list), not to the raw local file. The anchor is
+          # verified by ci/live_validation_preflight.py via the project's own
+          # forge_custom_subdomains() — the authoritative G-P1 pattern.
+          raw = pathlib.Path("wordlists/local/test-smoke-200.txt").read_text(encoding="utf-8")
+          print(f"smoke-200 raw source present: {len(raw.splitlines())} raw lines")
+
+          # 4) stale-state reset (REM27b: stale forge caches inflate target sets;
+          # custom-subdomains.txt is unioned into every forge — must start empty)
+          shutil.rmtree("recon/bugdasht.ir", ignore_errors=True)
+          for name in ("custom-subdomains.txt", "effective-FFUF-0.txt",
+                       "effective-DNSR-1.txt", "effective-FFUF-2.txt"):
+              p = pathlib.Path("wordlists/forge") / name
+              if p.is_file():
+                  p.unlink()
+          shutil.rmtree("wordlists/forge/cache", ignore_errors=True)
+          print("stale-state reset ok")
+          PY
+
+      - name: Preflight gates (verify_b1 diff-empty + smoke-200 anchor + seed fleet)
+        run: PYTHONPATH=. python3 ci/live_validation_preflight.py
+
+      - name: Unit proof (full suite)
+        run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
+
+      - name: Reconcile stale live state (frozen stop path; expect EXIT 4 or usage)
+        run: |
+          set +e
+          ./recon.sh stop bugdasht.ir
+          echo "stop exit=$?"
+
+      - name: "FULL pipeline run vs operator target (bugdasht.ir)"
+        run: |
+          set +e
+          export LIVE_RUN_STARTED_AT=$(date +%s)
+          echo "$LIVE_RUN_STARTED_AT" > ci/live_run_started_at.txt
+          ./recon.sh run bugdasht.ir 2>&1 | tee ci/live_run_console.log
+          echo "run exit=${PIPESTATUS[0]}" | tee ci/live_run_exit.txt
+
+      - name: "L-table assertions + FINDINGS extraction"
+        run: |
+          export LIVE_RUN_STARTED_AT=$(cat ci/live_run_started_at.txt)
+          PYTHONPATH=. python3 ci/live_validation_assertions.py 2>&1 | tee ci/live_assertions_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload evidence artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-validation-evidence
+          path: |
+            ci/live_run_console.log
+            ci/live_assertions_console.log
+            ci/live_transient_edits.log
+            ci/live_resolvers_runtime_before.yaml
+            ci/live_wordlists_runtime_before.yaml
+            ci/live_run_exit.txt
+            wordlists/forge/counts.log
+            recon/bugdasht.ir/**
+          if-no-files-found: warn

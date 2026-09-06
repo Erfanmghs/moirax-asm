@@ -1759,3 +1759,37 @@ Vehicle honesty notes:
    B2/B3 vehicle-bounding convention.
 
 **VERDICT — TEST B4 (PORT-SWEEP, example.com VEHICLE): PASS**
+
+---
+
+## B5 NOTIFICATIONS & SCHEDULER — CLOSURE RECORD
+
+Implementation surface: pipeline/notify.py (§4.5 run summary · §4.6 watchtower instant alerts NEW-SUBDOMAIN/NEWLY-OPENED-PORT · §4.7 digest threshold + dashboard-editable alert filters + self-monitoring FAILED/ANOMALY/STOPPED with reason+module; never-fails-a-run fan-out with printed ledger), pipeline/scheduler.py (§4.6 state machine, 10-min floor), credentials = dashboard/config.json telegram → .env fallback → skip-silently, engine run-end fan-out after write_diff.
+
+Vehicle ladder: run #31 (dd5f4d9) — machinery proven on the REAL run: 529 alertable new assets → digest_sent=True, delivered=False (no creds in CI — honest skip-silently); I1/I5/I8 failed on ASSERTION SOURCE only (ledger goes to the engine stdout console tee, not run.log). REM21 (f5fa335): I-table reads both sources; validated against real run-31 evidence in a scratch clone (I1..I8 PASS, no re-roll). Run #32/#34: harness dep ladders (REM22 fastapi, REM23 reportlab) — the shared unit suite grew with B6/B7 while the b5 workflow stayed bare. Run #35 (c14dedf): **I1..I8 ALL PASS in-CI.**
+
+Final I-table (run #35): I1 notify fan-out on real vehicle PASS · I2 forced-failure → exactly one FAILED alert naming module+reason PASS · I3 12-asset flood → exactly ONE digest PASS · I4 closed-port-only diff → ZERO messages PASS · I5 real diff.json + disclosed §4.6 ledger (542 alertable → digest) PASS · I6 HEAD-blob committed content + verify_b1 clean PASS · I7 scheduler 10-min floor PASS · I8 honest skip-silently disclosure PASS.
+
+Vehicle honesty notes: (1) run-level status anomaly (third-party crtsh variance, REM15/16/19 class) — stage-scoped verdict, B5 lanes clean; (2) `delivered=False` is the DESIGN proof: no Telegram credentials exist in CI, §4.5 skip-silently; (3) alert filters default to both §4.6 classes enabled; require_new_ip mines the previous run's IPs from diff removed/changed rows.
+
+---
+
+## B6 DASHBOARD — CLOSURE RECORD
+
+Implementation surface: dashboard/app.py (FastAPI, fail-closed DASHBOARD_TOKEN auth — unset→503 everywhere, wrong→401; panels a–e routes; §9.3 proxy gate on start/resume; §10 on-demand report endpoints), dashboard/service.py (pure logic: KEYS_REGISTRY allow-list, .env masked writes, settings validation, SURGICAL tools.yaml/wordlists.yaml editors preserving comments, global filters + URL round-trip, coverage analytics, proxy gate), dashboard/static/* (zero-build SPA, §9.4 dark cyber theme, monospace technicals, sticky sortable tables, badges, collapsible JSON inspector, URL-shareable filters), docker/dashboard/Dockerfile + real compose service (127.0.0.1:8080, docker.sock ONLY to the backend).
+
+REM20: the committed views.yaml was double-broken since the B0 scaffold — 4 lines lost their `[h` AND all fields used inline flow sequences the frozen stdlib loader parses as STRINGS; rewritten as block lists (frozen-loader contract verified). REM21 validated on run-31 evidence; runs #32/#34 harness-dep ladders REM22/23.
+
+Vehicle: run #33 (f5fa335) — **J1..J8 ALL PASS in-CI.** J1 fail-closed auth · J2 tools-panel flag_overrides edit visible in the NEXT RUN COMMAND (adapter.assemble argv carries the edited value) · J3 URL filter state round-trip · J4 API-keys .env round-trip, masked `ci-****42`, repo .env untouched · J5 settings masked + scheduler floor 422 · J6 REAL vehicle data through results/diff/coverage (2776 assets, 9 sources) · J7 proxy rule · J8 HEAD-blob + verify_b1 clean.
+
+Vehicle honesty notes: (1) SPA ships as a zero-build vanilla front-end behind the clean §9.1 API contract — the spec marks the front-end stack swappable; React/Vite can be dropped in without backend changes (disclosed in G2); (2) panel writes in the acceptance run against an ISOLATED root — the committed repo is never mutated by the dashboard under test; (3) real coverage analytics disclosed in G1 (archives 2196, subfinder 505, recursion 84 — the operator sees which sources pay off).
+
+---
+
+## B8 SUPERVISOR AGENT — CLOSURE RECORD
+
+Implementation surface: pipeline/agent.py (deterministic-first Supervisor: §12.3 deterministic checks first → playbook diagnose → bounded remediation ≤3/module/run → escalate with diagnosis; §12.5 remediation.yaml playbook with the 5 spec signatures + CLOSED allow-list; §12.6 autonomy observe|suggest|auto-fix, passive=auto-fix/active=suggest frozen defaults, dashboard-config wins; §12.4 event-driven + zero-LLM-by-default + budget(20) + same-signature cache; §12.7 append-only agent-journal.jsonl + code-enforced guardrails), engine lazy wiring at 3 failure sites, CLI `info-gather` (§12.2 one-command: scope validation → run → monitor → remediate → report, never modifies scope.yaml), dashboard journal stream + agent toggle.
+
+Vehicle: run #37 (3420d79) — **L1..L8 ALL PASS in-CI.** L1 §12.1 opt-in proof on the REAL vehicle (agent off → NO journal, NO agent lines, pipeline standalone) · L2 passive failure → auto-fix default → playbook action applied via fake hook, scope.yaml sha256 untouched · L3 active → suggest waits · L4 4th attempt escalates (≤3 budget) · L5 frugality: deterministic-only = ZERO LLM calls; budget cap + cache replay proven with a hooked run · L6 append-only JSONL journal · L7 guardrail closure (allow-list contains no scope/breaker/log-deletion actions) · L8 HEAD-blob + verify_b1 clean.
+
+Vehicle honesty notes: (1) the LLM diagnosis hook ships UNPLUGGED — the deterministic playbook is the knowledge base and healthy runs consume ZERO LLM calls (§12.4); the budget/cache machinery is frozen and ready for a provider; (2) simulated remediation hooks prove the loop without mutating real containers; the shipped actions map to the adapter's existing deterministic capabilities.

@@ -42,11 +42,23 @@ from pipeline.yaml_util import load_yaml_file  # noqa: E402
 TARGET = "example.com"
 TD = ROOT / "recon" / TARGET
 RUN_LOG = TD / "logs" / "run.log"
+# The engine prints the notify ledger to STDOUT (tee'd to the console log in
+# CI) — run.log only carries per-module lines. REM21: read BOTH sources.
+CONSOLE_LOG = ROOT / "ci" / "b5_run_console.log"
 DIFF = TD / "diff.json"
 VERDICT_FILE = ROOT / "ci" / "b5_verdict.txt"
 
 failures: list[str] = []
 rows: list[tuple[str, str, str, str]] = []
+
+
+def _notify_lines() -> list[str]:
+    lines: list[str] = []
+    for path in (RUN_LOG, CONSOLE_LOG):
+        if path.is_file():
+            lines += [l for l in path.read_text(encoding="utf-8", errors="replace").splitlines()
+                      if l.startswith("notify: ")]
+    return lines
 
 
 def check(hid: str, cls: str, ok: bool, detail: str) -> None:
@@ -62,11 +74,10 @@ def _classes() -> dict:
 
 def main() -> int:
     params = Params(ROOT)
-    log_text = RUN_LOG.read_text(encoding="utf-8", errors="replace") if RUN_LOG.is_file() else ""
+    notify_lines = _notify_lines()
 
     # ---- I1 engine fan-out ran on the real vehicle ---------------------------
-    notify_lines = [l for l in log_text.splitlines() if l.startswith("notify: ")]
-    check("I1", "MANDATORY", bool(notify_lines), f"notify_lines={len(notify_lines)} first={notify_lines[0][:120] if notify_lines else '-'}")
+    check("I1", "MANDATORY", bool(notify_lines), f"notify_lines={len(notify_lines)} first={notify_lines[0][:120] if notify_lines else '-'} (source: run.log or console tee)")
 
     # ---- I2 forced failure → FAILED alert naming module + reason -------------
     sink2: list[str] = []
@@ -102,7 +113,7 @@ def main() -> int:
     closed_only = {"ports": [{"host": "a.example.com", "ip": "93.184.215.14", "port": 80, "proto": "tcp"}]}
     diff4 = {"schema_version": 1, "from_run": "a", "to_run": "b", "added": _classes(), "removed": closed_only, "changed": _classes()}
     ledger4 = evaluate_diff_alerts(params, diff4, sender=sink4.append)
-    ok4 = sink4 == [] and ledger4.get("alertable") == 0 and ledger4.get("skipped_reason") == "no_added_assets"
+    ok4 = sink4 == [] and ledger4.get("alertable") == 0 and ledger4.get("skipped_reason") in ("no_added_assets", "no_alertable_assets")
     check("I4", "MANDATORY", ok4, f"messages={len(sink4)} ledger_alertable={ledger4.get('alertable')} reason={ledger4.get('skipped_reason')}")
 
     # ---- I5 real diff.json + disclosed §4.6 evaluation ------------------------

@@ -6,12 +6,17 @@
 #   docker compose -f docker-compose.yml -f docker-compose.e2e-fixture.yml --profile e2e-fixture down
 #   sudo -n python3 docker/e2e-fixture/hosts.py remove
 #
-# HOST network: the fixture binds 53/udp + 80/8080/8443/2222/6379/9200 on the
-# runner itself. dnsx (bridge container) reaches the DNS at 172.17.0.1 (the
-# docker bridge gateway = the host); httpx/ffuf (host network) resolve via
-# /etc/hosts -> 127.0.0.1. The DNS answers ONLY seeded zone names (honest
-# discovery): apex + 5 flat (SecLists top-5000 labels) + 5 nested (dotted
-# fixture wordlist, registered as e2e_nested_fixture).
+# BRIDGE + published ports (run #41 evidence): host-network mode made the DNS
+# unreachable from the dnsx BRIDGE container (runner host firewall drops
+# bridge->host traffic on unpublished ports) — every lane starved: dnsx 0
+# answers, merge 0 ips, port-sweep empty target-set. Published ports make
+# docker-proxy serve every lane:
+#   - dnsx (bridge)        -> DNS at 172.17.0.1:53/udp (docker0 gateway)
+#   - ffuf/httpx (host)    -> 127.0.0.1 via /etc/hosts (hosts.py)
+#   - naabu/nmap (host)    -> 172.17.0.1 (docker-proxy binds 0.0.0.0)
+# The DNS answers ONLY seeded zone names (honest discovery): apex + 5 flat
+# (SecLists top-5000 labels) + 5 nested (dotted fixture wordlist, registered
+# as e2e_nested_fixture), every answer -> 172.17.0.1.
 
 name: recon-pipeline
 
@@ -21,6 +26,13 @@ services:
     build:
       context: ./docker/e2e-fixture
       dockerfile: Dockerfile
-    image: recon-pipeline/e2e-fixture:v1
-    network_mode: host
+    image: recon-pipeline/e2e-fixture:v2
+    ports:
+      - "53:53/udp"
+      - "80:80"
+      - "8080:8080"
+      - "8443:8443"
+      - "2222:2222"
+      - "6379:6379"
+      - "9200:9200"
     restart: "no"

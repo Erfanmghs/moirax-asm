@@ -162,6 +162,7 @@ def main() -> int:
     mutable_prefixes = (
         "resolvers.yaml", "tools.yaml", "wordlists.yaml",
         "resolvers/forge/", "wordlists/forge/", "recon/", "logs/", "ci/", "dashboard/config.json",
+        "dorks/forge/",  # SEARCH-FORGE writes its dork output at run time (run #41 evidence)
     )
     outside = [ln for ln in status.splitlines() if ln.strip() and not ln.startswith("?? ") and not any(ln[3:].startswith(p) for p in mutable_prefixes)]
     untracked_outside = [

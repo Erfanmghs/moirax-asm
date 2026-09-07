@@ -61,6 +61,17 @@ jobs:
           ./recon.sh wordlist-add release-fixtures /tmp/release-fixtures.txt | tee ci/c2_add_console.log
           cat wordlists/custom/index.yaml
 
+      - name: "Resolve a real generated slug (guard against slug drift)"
+        run: |
+          PYTHONPATH=. python3 - <<'PY'
+          from pathlib import Path
+          from pipeline.yaml_util import load_yaml_file
+          doc = load_yaml_file("wordlists/seclists-index.yaml")
+          key = "sl_discovery__dns__bitquark_subdomains_top100000"
+          assert key in doc["lists"], sorted(doc["lists"])[:20]
+          print("slug present:", key, doc["lists"][key]["entries"], "entries")
+          PY
+
       - name: "Transient selection override (FFUF-0 -> generated key + platform_learned)"
         run: |
           cp wordlists.yaml ci/c2_wordlists_before.yaml
@@ -76,7 +87,7 @@ jobs:
               if m and not inserted:
                   indent = " " * (len(line) - len(line.lstrip()) + 2)
                   out.append(f"{indent}selection:")
-                  out.append(f"{indent}  - sl_discovery__dns__bitquark-subdomains-top100000")
+                  out.append(f"{indent}  - sl_discovery__dns__bitquark_subdomains_top100000")
                   out.append(f"{indent}  - release-fixtures")
                   inserted = True
           assert inserted, "FFUF-0 block not found"
@@ -88,7 +99,7 @@ jobs:
           from pipeline.params import Params
           from pipeline.wordlist_forge import selected_keys
           keys = selected_keys(Params(Path(".")), "FFUF-0")
-          assert keys == ["sl_discovery__dns__bitquark-subdomains-top100000", "release-fixtures"], keys
+          assert keys == ["sl_discovery__dns__bitquark_subdomains_top100000", "release-fixtures"], keys
           print("C2 selection honored by the frozen loader:", keys)
           PY
 

@@ -175,6 +175,10 @@ settings:
   passive_httpx_probe: true
   github_search_req_per_min: 30
   wordlists_registry: wordlists.yaml
+  # C2 (release directive): generated full-SecLists index + operator custom
+  # lists index; the WordlistRegistry merges both IN (curated keys win).
+  wordlists_generated_index: wordlists/seclists-index.yaml
+  wordlists_custom_index: wordlists/custom/index.yaml
   seclists_root: /usr/share/seclists
   wordlist_forge_output: wordlists/forge/custom-subdomains.txt
   dnsr_1_wordlist_key: dns_fast_top5000

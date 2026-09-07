@@ -26,6 +26,39 @@ class WordlistRegistry:
         self.lists: dict[str, Any] = data["lists"]
         self.tasks: dict[str, Any] = data["tasks"]
         self.seclists_root = str(params.require("seclists_root"))
+        self.generated_index: dict[str, Any] = {}
+        self.custom_index: dict[str, Any] = {}
+        self._merge_generated_and_custom()
+
+    def _merge_generated_and_custom(self) -> None:
+        """C2 (release directive): the selectable universe grows beyond the
+        curated registry -- the generated full-SecLists index and the custom
+        lists index (platform-learned + operator uploads) merge IN. Curated
+        entries always win on key collision; generated entries never clobber
+        operator data. Index files are repo-relative, frozen-loader dialect,
+        and OPTIONAL (absent index == curated-only registry)."""
+        for attr, param_name in (
+            ("generated_index", "wordlists_generated_index"),
+            ("custom_index", "wordlists_custom_index"),
+        ):
+            try:
+                rel = str(self.params.require(param_name))
+            except KeyError:
+                continue
+            _safe_repo_rel(rel, param_name)
+            idx_path = self.params.root / rel
+            if not idx_path.is_file():
+                continue
+            doc = load_yaml_file(str(idx_path))
+            if not isinstance(doc, dict) or not isinstance(doc.get("lists"), dict):
+                raise WordlistError(f"{rel} must contain a lists mapping")
+            merged: dict[str, Any] = {}
+            for key, entry in doc["lists"].items():
+                if str(key) in self.lists:
+                    continue  # curated wins
+                merged[str(key)] = entry
+            setattr(self, attr, merged)
+            self.lists.update(merged)
 
     def resolve(self, list_key: str, task: str) -> str:
         if _looks_like_path(list_key):
@@ -51,6 +84,11 @@ class WordlistRegistry:
         default = spec.get("default_key")
         if default:
             keys.add(str(default))
+        if spec.get("allow_registry_wide"):
+            # C2 (release directive): ALL registered lists are selectable for
+            # this task -- the registry-wide universe includes the generated
+            # full-SecLists index and custom lists (platform-learned + uploads).
+            keys.update(str(k) for k in self.lists)
         return keys
 
     def default_key(self, task: str) -> str:
@@ -84,3 +122,17 @@ def _looks_like_path(value: str) -> bool:
     if Path(value).suffix in {".txt", ".lst", ".wordlist"}:
         return True
     return False
+
+
+def _safe_repo_rel(value: str, param_name: str) -> None:
+    """C2: index params ARE repo-relative paths (with directories), unlike
+    registry KEYS; the law is: relative, no traversal, no escapes."""
+    bad = (
+        not value
+        or value.startswith(("/", ".", "~"))
+        or "\\" in value
+        or ".." in Path(value).parts
+        or value.endswith("/")
+    )
+    if bad:
+        raise WordlistError(f"{param_name} must be a safe repo-relative path, got {value!r}")

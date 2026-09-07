@@ -305,7 +305,7 @@ def _upsert_subkey(block: list[str], header: str, key: str, value: Any) -> list[
 
 # ------------------------------------------------------------- wordlists (a)
 
-def validate_wordlists_edit(doc: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+def validate_wordlists_edit(doc: dict[str, Any], patch: dict[str, Any], params: Params | None = None) -> dict[str, Any]:
     tasks = doc.get("tasks") or {}
     clean: dict[str, Any] = {}
     for task, keys in patch.items():
@@ -313,7 +313,7 @@ def validate_wordlists_edit(doc: dict[str, Any], patch: dict[str, Any]) -> dict[
             raise DashboardError(f"unknown task {task!r}")
         if not isinstance(keys, list):
             raise DashboardError(f"selection for {task!r} must be a list of wordlist keys")
-        registered = _registered_keys(doc, task)
+        registered = _registered_keys(doc, task, params)
         unknown = [k for k in keys if k not in registered]
         if unknown:
             raise DashboardError(f"unregistered wordlist keys for {task!r}: {unknown}")
@@ -329,23 +329,38 @@ def apply_wordlists_edit(params: Params, patch: dict[str, Any]) -> dict[str, Any
     clean = validate_wordlists_edit(doc, patch)
     text = path.read_text(encoding="utf-8")
     for task, keys in clean.items():
-        text = _patch_task_selection(text, task, keys, doc)
+        text = _patch_task_selection(text, task, keys, doc, params)
     atomic_write_text(path, text)
     return {"applied": clean}
 
 
-def _registered_keys(doc: dict[str, Any], task: str) -> list[str]:
+def _registered_keys(doc: dict[str, Any], task: str, params: Params | None = None) -> list[str]:
     spec = (doc.get("tasks") or {}).get(task) or {}
     keys: list[str] = []
     for field in ("fast", "expansion", "sources", "default_selection"):
         for k in spec.get(field) or []:
             if k not in keys:
                 keys.append(k)
+    # C2 (release directive): registry-wide tasks also offer the generated
+    # full-SecLists index + custom lists (platform-learned + uploads).
+    if spec.get("allow_registry_wide"):
+        for index_rel in ("wordlists/seclists-index.yaml", "wordlists/custom/index.yaml"):
+            root = params.root if params is not None else Path(__file__).resolve().parents[1]
+            p = root / index_rel
+            if not p.is_file():
+                continue
+            try:
+                idx = load_yaml_file(str(p))
+            except Exception:  # noqa: BLE001 -- an unreadable index never breaks the panel
+                continue
+            for k in (idx or {}).get("lists") or {}:
+                if k not in keys:
+                    keys.append(k)
     return keys
 
 
-def _patch_task_selection(text: str, task: str, keys: list[str], doc: dict[str, Any]) -> str:
-    registered = _registered_keys(doc, task)
+def _patch_task_selection(text: str, task: str, keys: list[str], doc: dict[str, Any], params: Params | None = None) -> str:
+    registered = _registered_keys(doc, task, params)
     unknown = [k for k in keys if k not in registered]
     if unknown:
         raise DashboardError(f"unregistered wordlist keys for {task!r}: {unknown}")

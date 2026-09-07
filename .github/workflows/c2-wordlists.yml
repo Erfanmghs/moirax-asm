@@ -1,0 +1,152 @@
+# C2 WORDLIST UNIVERSE vehicle (release phase).
+#
+# Operator mandate: ALL SecLists available and selectable in the platform,
+# new lists addable, and passive finds feeding a selectable
+# platform-learned list. This vehicle proves the whole chain in-CI against
+# the REAL SecLists clone:
+#
+#   sync (recon.sh wordlist-sync)      -> wordlists/seclists-index.yaml
+#   registry merge                     -> WordlistRegistry offers everything
+#   registry-wide selection            -> DNSR-1/FFUF-0/FFUF-2 accept any key
+#   custom add (recon.sh wordlist-add) -> wordlists/custom/index.yaml
+#   materialization                    -> effective-FFUF-0.txt from a
+#                                         GENERATED key selection
+#   platform learning                  -> synthetic run tree ingested into
+#                                         wordlists/custom/platform-learned.txt
+#
+# Transient accommodations (never committed): FFUF-0 selection text-edit to
+# a generated key + platform_learned (before-copy ci/c2_wordlists_before.yaml).
+
+name: c2-wordlists
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [private]
+
+concurrency:
+  group: c2-wordlists
+  cancel-in-progress: false
+
+jobs:
+  c2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: "Checkout (branch: private)"
+        uses: actions/checkout@v4
+        with:
+          ref: private
+
+      - name: Toolchain
+        run: python3 --version
+
+      - name: "Clone SecLists (full tree for the sync)"
+        run: |
+          git clone --depth 1 https://github.com/danielmiessler/SecLists "$HOME/seclists"
+          find "$HOME/seclists" -name '*.txt' | wc -l
+
+      - name: "Unit suite (shared regression + C2 atomic units)"
+        run: PYTHONPATH=. python3 -m unittest discover -s tests -t . 2>&1 | tail -3
+
+      - name: "Sync the full SecLists index (recon.sh wordlist-sync)"
+        run: |
+          ./recon.sh wordlist-sync | tee ci/c2_sync_console.log
+          test -s wordlists/seclists-index.yaml
+          wc -l wordlists/seclists-index.yaml
+
+      - name: "Custom list via CLI (recon.sh wordlist-add)"
+        run: |
+          printf 'admin\nbackup\ndev\nstaging\n' > /tmp/release-fixtures.txt
+          ./recon.sh wordlist-add release-fixtures /tmp/release-fixtures.txt | tee ci/c2_add_console.log
+          cat wordlists/custom/index.yaml
+
+      - name: "Transient selection override (FFUF-0 -> generated key + platform_learned)"
+        run: |
+          cp wordlists.yaml ci/c2_wordlists_before.yaml
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          p = Path("wordlists.yaml")
+          lines = p.read_text(encoding="utf-8").splitlines()
+          out, inserted = [], False
+          for line in lines:
+              out.append(line)
+              m = re.match(r"^  FFUF-0:\s*(#.*)?$", line)
+              if m and not inserted:
+                  indent = " " * (len(line) - len(line.lstrip()) + 2)
+                  out.append(f"{indent}selection:")
+                  out.append(f"{indent}  - sl_discovery__dns__bitquark-subdomains-top100000")
+                  out.append(f"{indent}  - release-fixtures")
+                  inserted = True
+          assert inserted, "FFUF-0 block not found"
+          p.write_text("\n".join(out) + "\n", encoding="utf-8")
+          print("C2 vehicle override: FFUF-0 selection -> generated bitquark list + custom list (transient).")
+          PY
+          PYTHONPATH=. python3 - <<'PY'
+          from pathlib import Path
+          from pipeline.params import Params
+          from pipeline.wordlist_forge import selected_keys
+          keys = selected_keys(Params(Path(".")), "FFUF-0")
+          assert keys == ["sl_discovery__dns__bitquark-subdomains-top100000", "release-fixtures"], keys
+          print("C2 selection honored by the frozen loader:", keys)
+          PY
+
+      - name: "Materialize effective-FFUF-0 from the generated + custom selection"
+        run: |
+          PYTHONPATH=. python3 - <<'PY'
+          from pathlib import Path
+          from pipeline.params import Params
+          from pipeline.wordlist_forge import materialize_effective
+          eff = materialize_effective(Params(Path(".")), "FFUF-0")
+          n = sum(1 for ln in eff.read_text(encoding="utf-8").splitlines() if ln.strip())
+          assert n > 100000, f"expected the bitquark volume, got {n}"
+          assert "admin" in eff.read_text(encoding="utf-8").splitlines(), "custom entries missing"
+          print(f"C2 materialized effective-FFUF-0: {n} entries (generated + custom union)")
+          PY
+
+      - name: "Platform learning: synthetic run tree -> platform_learned"
+        run: |
+          PYTHONPATH=. python3 - <<'PY'
+          import json
+          from pathlib import Path
+          tdir = Path("recon/synthetic.example.test")
+          (tdir / "10_subdomains" / "passive").mkdir(parents=True)
+          (tdir / "20_dns" / "dnsx").mkdir(parents=True)
+          (tdir / "10_subdomains" / "passive" / "data.json").write_text(json.dumps({
+              "candidates": [{"host": "api.synthetic.example.test"},
+                              {"host": "x.dev.synthetic.example.test"},
+                              {"host": "foreign.invalid"}]}), encoding="utf-8")
+          (tdir / "20_dns" / "dnsx" / "data.json").write_text(json.dumps({
+              "resolved": [{"host": "www.synthetic.example.test"}]}), encoding="utf-8")
+          print("synthetic run tree prepared")
+          PY
+          PYTHONPATH=. python3 - <<'PY'
+          from pathlib import Path
+          from pipeline.params import Params
+          from pipeline.custom_lists import ingest_learned_labels
+          ledger = ingest_learned_labels(Params(Path(".")), Path("recon/synthetic.example.test"),
+                                         "synthetic.example.test")
+          assert ledger["added"] == 3, ledger  # api, x.dev, www (foreign.invalid skipped)
+          print("C2 platform learning ledger:", ledger)
+          PY
+
+      - name: "Assertions (C2-1..C2-8)"
+        run: |
+          PYTHONPATH=. python3 ci/c2_assertions.py 2>&1 | tee ci/c2_assertions_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload evidence (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c2-wordlists-evidence
+          path: |
+            ci/c2_verdict.txt
+            ci/c2_sync_console.log
+            ci/c2_add_console.log
+            ci/c2_assertions_console.log
+            ci/c2_wordlists_before.yaml
+            wordlists/custom/index.yaml
+            wordlists/custom/platform-learned.txt
+          if-no-files-found: warn

@@ -21,6 +21,9 @@ USAGE = """Usage:
   ./recon.sh module <name> <target> [--aggressive]
   ./recon.sh reset-breaker <target>
   ./recon.sh info-gather <target|*.wildcard>   # section 12.2 one-command autonomy (agent on)
+  ./recon.sh wordlist-sync                     # C2: index the full SecLists clone (all lists selectable)
+  ./recon.sh wordlist-add <name> <file>        # C2: register an operator custom list
+  ./recon.sh wordlist-rm <name>                # C2: remove an operator custom list
 """
 
 
@@ -56,6 +59,12 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_reset_breaker(params, _need(args, 1))
     if command == "info-gather":
         return cmd_info_gather(params, _need(args, 1))
+    if command == "wordlist-sync":
+        return cmd_wordlist_sync(params)
+    if command == "wordlist-add":
+        return cmd_wordlist_add(params, _need(args, 1), _need(args, 2))
+    if command == "wordlist-rm":
+        return cmd_wordlist_rm(params, _need(args, 1))
     sys.stderr.write(USAGE)
     return 2
 
@@ -219,6 +228,48 @@ def _fail_scope(exc: ScopeError) -> int:
     if exc.instructions:
         print(SETUP_INSTRUCTIONS, file=sys.stderr)
     return 2
+
+
+# ----------------------------------------------------------- C2 wordlists
+
+def cmd_wordlist_sync(params: Params) -> int:
+    """C2: index the local SecLists clone -- every list becomes selectable."""
+    from pipeline.seclists_sync import sync_seclists_index
+
+    ledger = sync_seclists_index(params)
+    print(
+        f"wordlist-sync: lists={ledger['lists']} "
+        f"total_entries={ledger['total_entries']} index={ledger['index']}"
+    )
+    return 0
+
+
+def cmd_wordlist_add(params: Params, name: str, file_arg: str) -> int:
+    """C2: register an operator custom list (validated, secret-scanned)."""
+    from pathlib import Path as _Path
+
+    from pipeline.custom_lists import CustomListError, add_custom_list
+
+    try:
+        ledger = add_custom_list(params, name.strip(), _Path(file_arg))
+    except (CustomListError, UnicodeDecodeError, OSError) as exc:
+        print(f"wordlist-add: REFUSED {name!r}: {exc}")
+        return 1
+    print(f"wordlist-add: registered {ledger['name']} entries={ledger['entries']} path={ledger['path']}")
+    return 0
+
+
+def cmd_wordlist_rm(params: Params, name: str) -> int:
+    """C2: remove an operator custom list (platform-learned is protected)."""
+    from pipeline.custom_lists import CustomListError, remove_custom_list
+
+    try:
+        ledger = remove_custom_list(params, name.strip())
+    except CustomListError as exc:
+        print(f"wordlist-rm: REFUSED {name!r}: {exc}")
+        return 1
+    print(f"wordlist-rm: removed {ledger['removed']}")
+    return 0
 
 
 if __name__ == "__main__":

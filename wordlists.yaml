@@ -122,6 +122,8 @@ lists:
 
 tasks:
   DNSR-1:
+    # C2 (release directive): every registered list is selectable here
+    allow_registry_wide: true
     default_key: dns_fast_top5000
     # TEST 4: B2 test-mode selection override REMOVED (restore). Default_key
     # dns_fast_top5000 is active again (TEST-1-proven materialization).
@@ -149,6 +151,8 @@ tasks:
       - dns_exp_fuzzsubs2
       - dns_exp_trickest
   FFUF-0:
+    # C2 (release directive): every registered list is selectable here
+    allow_registry_wide: true
     default_key: dns_exp_combined
     # section 8 operator ticks (B6 dashboard later). No UI in B2.
     # Committed / real-run default_selection -- RESTORED at TEST 4:
@@ -176,6 +180,8 @@ tasks:
       - dns_exp_fuzzsubs2
       - dns_exp_trickest
   FFUF-2:
+    # C2 (release directive): every registered list is selectable here
+    allow_registry_wide: true
     default_key: vhost_top5000
     # TEST 4: B2 test-mode selection override REMOVED (restore). Default_key
     # vhost_top5000 is active again.

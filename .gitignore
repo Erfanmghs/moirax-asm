@@ -28,3 +28,4 @@ ci/rem4r_run_exit.txt
 ci/c1_verdict.txt
 ci/c1_gate_console.log
 ci/c1_verifyb1_diff.txt
+wordlists/seclists-index.yaml

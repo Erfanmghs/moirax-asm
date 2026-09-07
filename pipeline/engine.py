@@ -279,6 +279,20 @@ def run_pipeline(
         f"pruned_runs={len(storage_ledger.get('pruned_runs', []))} "
         f"capped={storage_ledger.get('capped', False)}"
     )
+    # C2 (release directive): run-end platform-learning -- in-scope discovered
+    # hosts feed the selectable platform-learned wordlist. Append-only,
+    # deduplicated, never-fail exactly like reporting/storage above.
+    learned_ledger: dict[str, Any] = {"added": 0, "total": 0}
+    try:
+        from pipeline.custom_lists import ingest_learned_labels
+
+        learned_ledger = ingest_learned_labels(params, target_dir, target, gate=gate)
+    except Exception as exc:  # noqa: BLE001 -- learning must never flip a verdict
+        learned_ledger = {"added": 0, "total": 0, "error": str(exc)}
+    print(
+        f"learned: target={target} added={learned_ledger.get('added')} "
+        f"total={learned_ledger.get('total')} selectable=platform_learned"
+    )
     code = _exit_code(params, status)
     print(f"run {status}: {target_dir}")
     print(f"history: {target_dir / params.require('history_dirname') / stamp}")

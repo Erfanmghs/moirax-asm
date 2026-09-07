@@ -1,0 +1,8 @@
+schema_version: 1
+root: wordlists/custom
+lists:
+  platform_learned:
+    path: wordlists/custom/platform-learned.txt
+    entries: 0
+    shape: hostname
+    origin: platform

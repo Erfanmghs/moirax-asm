@@ -31,6 +31,23 @@ function toast(msg, err) {
 
 function esc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
 
+/* ---------------- global target selector (D-protocol UI completion) --------
+   RESULTS and RUN CONTROL follow the topbar TARGET; RESULTS previously had a
+   hard-wired example.com default with no control -- every capability must be
+   reachable from the UI. */
+function currentTarget() {
+  const el = $("#global-target");
+  return (el && el.value.trim()) || CURRENT.target || "example.com";
+}
+
+$("#global-target").addEventListener("change", () => {
+  CURRENT.target = currentTarget();
+  const active = document.querySelector(".tab.active");
+  if (active && active.dataset.panel && !$("#panel-" + active.dataset.panel).classList.contains("hidden")) {
+    loadPanel(active.dataset.panel);
+  }
+});
+
 /* ---------------- panel switching ---------------- */
 $("#tabs").addEventListener("click", (ev) => {
   const btn = ev.target.closest(".tab");
@@ -95,21 +112,163 @@ async function loadWordlists() {
     const all = ev.target.closest("[data-all]");
     const save = ev.target.closest("[data-save]");
     if (all) {
-      const task = all.dataset.all;
-      const spec = (await api("GET", "/api/wordlists")).tasks[task];
-      const keys = [...new Set([].concat(spec.fast || [], spec.expansion || [], spec.sources || [], spec.default_selection || []))];
-      const tables = [...root.querySelectorAll("table")];
-      const box = tables.find((t) => t.querySelector(`[data-save="${task}"]`)) || null;
-      root.querySelectorAll("input[type=checkbox][data-key]").forEach((cb) => { cb.checked = true; });
+      // D-protocol bugfix: select-all is task-scoped (its own table block only)
+      const table = all.closest(".row").nextElementSibling;
+      table.querySelectorAll("input[type=checkbox][data-key]").forEach((cb) => { cb.checked = true; });
       toast("select-all ticked -- remember SAVE SELECTION");
     }
     if (save) {
+      // D-protocol bugfix (found by the UI journey): task-scoped save --
+      // only the checkboxes INSIDE this task's own table block are submitted,
+      // never the whole panel's checked boxes (cross-task 422 bug).
       const task = save.dataset.save;
-      const boxes = [...root.querySelectorAll("input[type=checkbox][data-key]:checked")].map((cb) => cb.dataset.key);
+      const table = save.closest(".row").nextElementSibling;
+      const boxes = [...table.querySelectorAll("input[type=checkbox][data-key]:checked")].map((cb) => cb.dataset.key);
       await api("PUT", "/api/wordlists", { [task]: boxes });
       toast(`${task} selection saved (${boxes.length} keys)`);
     }
   };
+}
+
+/* ---------------- a2) TARGETS (C3 + D-protocol) ---------------- */
+function targetProfileFromUI() {
+  const profile = {};
+  const desc = $("#t-desc").value.trim();
+  if (desc) profile.description = desc;
+  // PUT contract (C3 closed allow-list): sections at TOP level, no wrapper
+  const tg = $("#t-tg").value.trim();
+  const tgen = $("#t-tgen").value;
+  const watch = $("#t-watch").value;
+  const digest = $("#t-digest").value.trim();
+  const notif = {};
+  if (tg) notif.telegram_chat = tg;
+  if (tgen !== "") notif.telegram_enabled = tgen === "true";
+  if (watch !== "") notif.watchtower_enabled = watch === "true";
+  if (digest) notif.digest_threshold = parseInt(digest, 10);
+  if (Object.keys(notif).length) profile.notifications = notif;
+  const budgets = {};
+  for (const [id, key] of [["t-b-passive", "passive_branch_budget_sec"], ["t-b-active", "active_branch_budget_sec"],
+    ["t-b-depth", "passive_recursion_depth"], ["t-b-dead", "ffuf3_max_dead_probes"]]) {
+    const v = $("#" + id).value.trim();
+    if (v !== "") budgets[key] = parseInt(v, 10);
+  }
+  if (Object.keys(budgets).length) profile.budgets = budgets;
+  const modules = {};
+  const act = $("#t-m-active").value.trim();
+  const pas = $("#t-m-passive").value.trim();
+  if (act) modules.active_branch_modules = act.split(",").map((s) => s.trim()).filter(Boolean);
+  if (pas) modules.passive_branch_modules = pas.split(",").map((s) => s.trim()).filter(Boolean);
+  if (Object.keys(modules).length) profile.modules = modules;
+  const wl = {};
+  for (const task of ["FFUF-0", "DNSR-1", "FFUF-2"]) {
+    const v = $("#t-wl-" + task).value.trim();
+    if (v) wl[task] = v.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  if (Object.keys(wl).length) profile.wordlist_selection = wl;
+  return profile;
+}
+
+function targetProfileToUI(profile) {
+  const s = (profile && profile.settings) || {};
+  const n = s.notifications || {};
+  $("#t-desc").value = (profile && profile.description) || "";
+  $("#t-tg").value = n.telegram_chat || "";
+  $("#t-tgen").value = n.telegram_enabled === true ? "true" : n.telegram_enabled === false ? "false" : "";
+  $("#t-watch").value = n.watchtower_enabled === true ? "true" : n.watchtower_enabled === false ? "false" : "";
+  $("#t-digest").value = n.digest_threshold || "";
+  const b = s.budgets || {};
+  $("#t-b-passive").value = b.passive_branch_budget_sec ?? "";
+  $("#t-b-active").value = b.active_branch_budget_sec ?? "";
+  $("#t-b-depth").value = b.passive_recursion_depth ?? "";
+  $("#t-b-dead").value = b.ffuf3_max_dead_probes ?? "";
+  const m = s.modules || {};
+  $("#t-m-active").value = (m.active_branch_modules || []).join(", ");
+  $("#t-m-passive").value = (m.passive_branch_modules || []).join(", ");
+  const wl = s.wordlist_selection || {};
+  for (const task of ["FFUF-0", "DNSR-1", "FFUF-2"]) $("#t-wl-" + task).value = (wl[task] || []).join(", ");
+}
+
+async function loadTargetProfile() {
+  const target = $("#t-name").value.trim();
+  if (!target) { toast("enter a target name first", true); return; }
+  try {
+    const doc = await api("GET", "/api/targets/" + encodeURIComponent(target));
+    targetProfileToUI(doc.profile);
+    const sections = (doc.profile && Object.keys(doc.profile.settings || {}).length) ? Object.keys(doc.profile.settings).join(", ") : "no profile (committed defaults)";
+    $("#t-status").textContent = target + ": " + sections;
+    $("#t-status").className = "badge ok";
+    $("#t-plan").textContent = doc.edit_plan && Object.keys(doc.edit_plan.wordlist_selection || {}).length ? "wordlist override active" : "";
+    toast("profile loaded for " + target);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function saveTargetProfile() {
+  const target = $("#t-name").value.trim();
+  if (!target) { toast("enter a target name first", true); return; }
+  try {
+    const profile = targetProfileFromUI();
+    if (!Object.keys(profile).length) { toast("nothing to save (all fields empty)", true); return; }
+    await api("PUT", "/api/targets/" + encodeURIComponent(target), profile);
+    toast("profile saved for " + target + " (closed allow-list enforced)");
+    loadTargetsTable();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function deleteTargetProfile() {
+  const target = $("#t-name").value.trim();
+  if (!target) { toast("enter a target name first", true); return; }
+  try {
+    await api("PUT", "/api/targets/" + encodeURIComponent(target), {});
+    targetProfileToUI({});
+    toast("profile removed for " + target + " (back to committed defaults)");
+    loadTargetsTable();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function loadTargetsTable() {
+  const doc = await api("GET", "/api/targets");
+  const tbody = $("#targets-table tbody");
+  const names = Object.keys(doc.targets || {});
+  if (!names.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="dim">no profiles yet -- every target runs on committed defaults</td></tr>';
+    return;
+  }
+  tbody.innerHTML = names.map((name) => {
+    const p = doc.targets[name];
+    const s = p.settings || {};
+    const tg = (s.notifications || {}).telegram_chat || "--";
+    return `<tr><td>${esc(name)}</td><td class="dim">${esc(p.description || "--")}</td>` +
+      `<td class="mono">${esc(tg)}</td><td class="dim">${esc(Object.keys(s).join(", "))}</td>` +
+      `<td><button data-tload="${esc(name)}">LOAD</button></td></tr>`;
+  }).join("");
+  tbody.onclick = (ev) => {
+    const btn = ev.target.closest("[data-tload]");
+    if (!btn) return;
+    $("#t-name").value = btn.dataset.tload;
+    loadTargetProfile();
+  };
+}
+
+/* ---------------- a3) FLEET (C4) ---------------- */
+async function loadFleet() {
+  const doc = await api("GET", "/api/fleet");
+  $("#fl-members-view").textContent = doc.members.length
+    ? `members (${doc.members.length}, max concurrency ${doc.max_concurrency}): ` + doc.members.join(", ")
+    : `no registered members -- create target profiles first (max concurrency ${doc.max_concurrency})`;
+  const led = await api("GET", "/api/fleet/ledger");
+  const pre = $("#fl-ledger");
+  const badge = $("#fl-status");
+  if (!led.exists) {
+    pre.textContent = "no fleet run yet";
+    badge.textContent = "no fleet run";
+    badge.className = "badge dead";
+    return;
+  }
+  const ok = led.clean === true;
+  badge.textContent = ok ? "LAST FLEET CLEAN" : "LAST FLEET WITH FAILURES";
+  badge.className = "badge " + (ok ? "ok" : "alert");
+  pre.textContent = JSON.stringify(led, null, 2);
+  pre.onclick = () => pre.classList.toggle("collapsed");
 }
 
 /* ---------------- b) RESULTS ---------------- */
@@ -138,6 +297,7 @@ function restoreFiltersFromURL() {
 }
 
 async function loadResults() {
+  CURRENT.target = currentTarget();
   const f = readFilterUI();
   const qs = new URLSearchParams(f).toString();
   const doc = await api("GET", "/api/results/" + encodeURIComponent(CURRENT.target) + (qs ? "?" + qs : ""));
@@ -226,6 +386,7 @@ async function loadReports() {
 
 /* ---------------- c) RUN CONTROL ---------------- */
 async function loadRun() {
+  CURRENT.target = currentTarget();
   const st = await api("GET", "/api/run/status/" + encodeURIComponent(CURRENT.target));
   const badge = $("#run-status");
   badge.textContent = st.exists ? `${CURRENT.target}: ${st.run_status || "?"}` : `${CURRENT.target}: no state`;
@@ -427,6 +588,31 @@ $("#sched-save").addEventListener("click", async () => {
 });
 $("#s-add-rule").addEventListener("click", () => $("#rules-editor").appendChild(ruleRow({ class: "hosts", enabled: true })));
 $("#s-save").addEventListener("click", saveSettings);
+$("#s-test").addEventListener("click", async () => {
+  const badge = $("#s-test-result");
+  try {
+    const r = await api("POST", "/api/notify/test", {});
+    badge.textContent = r.sent ? "TEST SENT" : "SKIPPED: " + r.reason;
+    badge.className = "badge " + (r.sent ? "ok" : "new");
+  } catch (e) {
+    badge.textContent = "ERROR: " + e.message;
+    badge.className = "badge alert";
+  }
+});
+$("#t-load").addEventListener("click", loadTargetProfile);
+$("#t-save").addEventListener("click", saveTargetProfile);
+$("#t-clear").addEventListener("click", deleteTargetProfile);
+$("#fl-run").addEventListener("click", async () => {
+  try {
+    const body = { members: $("#fl-members").value.trim() || "all" };
+    const conc = $("#fl-conc").value.trim();
+    if (conc) body.concurrency = parseInt(conc, 10);
+    const r = await api("POST", "/api/fleet/run", body);
+    toast("fleet started pid=" + r.pid + " members=" + r.members);
+    loadFleet();
+  } catch (e) { toast(e.message, true); }
+});
+$("#fl-refresh").addEventListener("click", loadFleet);
 $("#rep-check").addEventListener("click", async () => {
   try { await loadReports(); toast("bundle checked (tamper-check runs server-side)"); }
   catch (e) { toast(e.message, true); }
@@ -453,6 +639,8 @@ async function health() {
 function loadPanel(name) {
   if (!TOKEN) { toast("set DASHBOARD_TOKEN first (top right)"); return; }
   if (name === "tools") { loadTools(); loadWordlists(); }
+  if (name === "targets") { loadTargetsTable(); }
+  if (name === "fleet") loadFleet();
   if (name === "results") loadResults();
   if (name === "reports") loadReports();
   if (name === "run") { loadRun(); startLogStream(); startJournalStream(); }
@@ -462,6 +650,7 @@ function loadPanel(name) {
 
 (async function init() {
   $("#token").value = TOKEN;
+  $("#global-target").value = CURRENT.target;
   await health();
   const panel = restoreFiltersFromURL();
   const tab = document.querySelector(`.tab[data-panel="${panel}"]`) || document.querySelector(".tab");

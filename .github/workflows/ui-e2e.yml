@@ -1,0 +1,50 @@
+name: ui-e2e
+
+# D-protocol operator mandate: walk the WHOLE UI like a normal user, 0 to 100.
+# Dispatch-only (token-frugal). Real chromium vs real uvicorn boot.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ui-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps + chromium
+        run: |
+          python -m pip install --upgrade pip
+          pip install fastapi uvicorn httpx pytest playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Run UI journey 0-100 (J1..J12)
+        run: |
+          python ci/ui_e2e_journey.py 2>&1 | tee ci/ui-e2e-console.txt
+          exit ${PIPESTATUS[0]}
+
+      - name: Journey verdict gate
+        if: always()
+        run: |
+          if ! grep -q "UI JOURNEY 0-100: ALL PASS" ci/ui-e2e-console.txt; then
+            echo "UI JOURNEY FAILED"
+            exit 1
+          fi
+          echo "UI JOURNEY PASS"
+
+      - name: Upload UI journey evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-e2e-evidence
+          path: |
+            ci/ui-e2e-report.md
+            ci/ui-e2e-console.txt
+            ci/ui-e2e-screens/
+          if-no-files-found: ignore

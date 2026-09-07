@@ -30,8 +30,8 @@ KEYS_REGISTRY: list[dict[str, str]] = [
     {"name": "CENSYS_API_ID", "module": "PSV-8 IP discovery", "fallback": "CIDR source skipped, never silent"},
     {"name": "CENSYS_API_SECRET", "module": "PSV-8 IP discovery", "fallback": "required with CENSYS_API_ID"},
     {"name": "SHODAN_API_KEY", "module": "PSV-8 IP discovery", "fallback": "CIDR source skipped, never silent"},
-    {"name": "TELEGRAM_BOT_TOKEN", "module": "B5 notifications (env fallback)", "fallback": "notifications skip silently"},
-    {"name": "TELEGRAM_CHAT_ID", "module": "B5 notifications (env fallback)", "fallback": "notifications skip silently"},
+    {"name": "TELEGRAM_BOT_TOKEN", "module": "Notifications (platform provisioning)", "fallback": "operator sets ONLY their user id; without the bot token notifications skip honestly"},
+    {"name": "TELEGRAM_CHAT_ID", "module": "Notifications (deployment fallback only)", "fallback": "D-protocol: per-user id lives in Settings or the target profile"},
 ]
 
 
@@ -125,6 +125,15 @@ def load_settings(params: Params) -> dict[str, Any]:
 
 def validate_settings(patch: dict[str, Any]) -> list[str]:
     errors: list[str] = []
+    # D-protocol pentest hardening (P-10): CLOSED allow-list -- unknown
+    # top-level settings keys are refused, never merged into
+    # dashboard/config.json (no attacker-controlled key smuggling).
+    unknown = set(patch) - {
+        "proxy_url", "digest_threshold", "alert_rules", "telegram",
+        "resource_budget", "agent", "retention",
+    }
+    if unknown:
+        errors.append(f"settings keys not allowed: {sorted(unknown)} (closed allow-list)")
     if "proxy_url" in patch:
         proxy = str(patch.get("proxy_url") or "")
         if proxy:
@@ -505,6 +514,43 @@ def coverage_analytics(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
     return {"assets": len(rows), "contribution": contribution, "unique_assets": unique,
             "overlap_by_n_sources": overlap, "uniqueness_pct": uniqueness}
+
+
+# --------------------------------------------------------------- fleet (C4)
+
+def fleet_members_view(params: Params) -> dict[str, Any]:
+    """Fleet panel data: registered per-target profiles (members), the global
+    concurrency cap, and the targets registry inline so the panel can drive
+    RUN FLEET without a second round-trip."""
+    from pipeline.fleet import max_concurrency
+    from pipeline.target_profiles import load_registry
+
+    registry = load_registry(params)
+    return {
+        "members": sorted(registry),
+        "profiles": registry,
+        "max_concurrency": max_concurrency(params),
+    }
+
+
+def latest_fleet_ledger(params: Params) -> dict[str, Any]:
+    """Latest history/fleet/<ts>/fleet-ledger.json (exists=false before the
+    first fleet run) -- the FLEET panel's status view."""
+    base = params.root / "history" / "fleet"
+    if not base.is_dir():
+        return {"exists": False}
+    best: Path | None = None
+    for child in base.iterdir():
+        ledger = child / "fleet-ledger.json"
+        if ledger.is_file() and (best is None or child.name > best.parent.name):
+            best = ledger
+    if best is None:
+        return {"exists": False}
+    try:
+        doc = json.loads(best.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {"exists": False}
+    return {"exists": True, "ledger_path": str(best.relative_to(params.root)), **doc}
 
 
 # ------------------------------------------------------------------ proxy

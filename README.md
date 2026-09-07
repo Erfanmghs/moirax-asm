@@ -229,8 +229,17 @@ pipeline/        engine, modules, breaker, forge, merge, notify, agent, logstore
 dashboard/       FastAPI app + zero-build cyber-theme SPA
 docker/          per-tool images + vhost fixture
 ci/              preflight gates, assertion tables, acceptance harnesses
-docs/            api-keys.md, tool-choices.md
+docs/            api-keys.md, tool-choices.md, HANDOVER.md, security.md
 wordlists/ resolvers/ dorks/ schemas/    registries + forge assets
-.github/workflows/   10 acceptance workflows (b2..b8 + e2e)
+.github/workflows/   acceptance + release + live-validation + pentest + ui-e2e
 PHASE-REPORT.md      full B0..B8 acceptance evidence
 ```
+
+## 13. Documentation
+
+- **[docs/HANDOVER.md](docs/HANDOVER.md)** -- the full engineering handover:
+  architecture, laws, dialects, notifications, fleet, dashboard hardening,
+  CI vehicles, recipes, deferred roadmap. Start here if you are the next
+  maintainer.
+- **[docs/security.md](docs/security.md)** -- token inventory + frugality
+  rules + rotation runbooks + leak response.

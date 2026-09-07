@@ -1,12 +1,22 @@
 """Telegram notifications -- section 4.5 run summary, section 4.6 watchtower instant alerts,
 section 4.7 digest threshold + alert filters + self-monitoring.
 Credentials: dashboard/config.json (section 9.2-e) first, .env fallback; unset -> skip silently.
+
+D-protocol (operator directive): the OPERATOR sets ONLY their Telegram user id.
+The bot token is platform provisioning (.env TELEGRAM_BOT_TOKEN, set once).
+Chat-id resolution precedence (highest wins):
+  1. per-target profile notifications.telegram_chat  (C3 registry targets.yaml)
+  2. dashboard config telegram.chat_id               (global default)
+  3. .env TELEGRAM_CHAT_ID                           (deployment fallback)
+A profile with notifications.telegram_enabled=false silences that target
+outright (explicit per-system opt-out beats every global default).
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -17,6 +27,84 @@ from pipeline.jsonio import read_json
 from pipeline.params import Params
 
 SendFn = Callable[[str], None]
+
+# Telegram chat/user id law: numeric user/chat ids (optionally negative for
+# groups) or @channel names. Injection-safe: no whitespace, no metacharacters.
+TELEGRAM_CHAT_RE = re.compile(r"^-?\d{2,20}$|^@[A-Za-z0-9_]{4,64}$")
+
+# Sentinel source returned by resolve_chat_id when the target profile
+# explicitly disables notifications for that system.
+DISABLED_BY_PROFILE = "disabled_by_profile"
+
+
+def load_target_notifications(params: Params, target: str | None) -> dict[str, Any]:
+    """C3 profile notifications block for one target (empty = inherit globals)."""
+    if not target:
+        return {}
+    try:
+        from pipeline.target_profiles import get_profile
+
+        settings = (get_profile(params, target) or {}).get("settings") or {}
+        notif = settings.get("notifications") or {}
+        return notif if isinstance(notif, dict) else {}
+    except Exception:  # noqa: BLE001 -- a broken profile never breaks notifications
+        return {}
+
+
+def resolve_chat_id(params: Params, target: str | None = None) -> tuple[str, str]:
+    """Telegram user/chat id resolution with per-target override support.
+    Returns (chat_id, source); source in {target_profile, dashboard_config,
+    env, disabled_by_profile, ''} -- never echoes the id into logs."""
+    notif = load_target_notifications(params, target)
+    if notif.get("telegram_enabled") is False:
+        return "", DISABLED_BY_PROFILE
+    chat = str(notif.get("telegram_chat") or "").strip()
+    if chat:
+        return chat, "target_profile"
+    config = load_dashboard_config(params)
+    tg = config.get("telegram") or {}
+    chat = str(tg.get("chat_id") or "").strip()
+    if chat:
+        return chat, "dashboard_config"
+    load_dotenv(params.root, str(params.require("env_filename")))
+    chat = os.environ.get(str(params.require("telegram_chat_id_env")), "").strip()
+    return chat, ("env" if chat else "")
+
+
+def resolve_bot_token(params: Params) -> tuple[str, str]:
+    """Bot token is PLATFORM provisioning, not operator UX: dashboard config
+    first (masked on read), .env TELEGRAM_BOT_TOKEN fallback."""
+    config = load_dashboard_config(params)
+    tg = config.get("telegram") or {}
+    token = str(tg.get("bot_token") or "").strip()
+    if token:
+        return token, "dashboard_config"
+    load_dotenv(params.root, str(params.require("env_filename")))
+    token = os.environ.get(str(params.require("telegram_bot_token_env")), "").strip()
+    return token, ("env" if token else "")
+
+
+def send_test_notification(params: Params, target: str | None = None,
+                           sender: SendFn | None = None) -> dict[str, Any]:
+    """Dashboard 'SEND TEST' button (D-protocol): one harmless message proving
+    the wiring for the resolved receiver. Never raises; the ledger explains
+    every skip reason (never-silent law). The chat id is never echoed back."""
+    chat_id, source = resolve_chat_id(params, target)
+    if source == DISABLED_BY_PROFILE:
+        return {"sent": False, "reason": "notifications disabled for this target profile", "source": source}
+    if not chat_id:
+        return {"sent": False,
+                "reason": "no Telegram user id configured (Settings or the target profile)",
+                "source": ""}
+    token, _token_source = resolve_bot_token(params)
+    if not token:
+        return {"sent": False,
+                "reason": "bot token not provisioned (TELEGRAM_BOT_TOKEN in .env)",
+                "source": source}
+    scope = f"target={target}" if target else "global default"
+    text = f"TEST: notification channel verified ({scope})"
+    ok = _deliver(params, text, sender, chat_id=chat_id)
+    return {"sent": ok, "reason": "" if ok else "delivery failed (network/API)", "source": source}
 
 # section 4.6 instant-alert classes: NEW SUBDOMAIN (hosts) + NEWLY OPENED PORT (ports).
 # Every other diff class (services / tech / removed / closed ports) -> dashboard
@@ -62,7 +150,9 @@ def load_dashboard_config(params: Params) -> dict[str, Any]:
 
 
 def resolve_credentials(params: Params) -> tuple[str, str]:
-    """section 4.5 credentials configured in the dashboard first, .env fallback."""
+    """Legacy global resolution (section 4.5): dashboard config first, .env
+    fallback. D-protocol run paths use resolve_chat_id + resolve_bot_token
+    so per-target overrides are honored."""
     config = load_dashboard_config(params)
     tg = config.get("telegram") or {}
     token = str(tg.get("bot_token") or "").strip()
@@ -77,12 +167,22 @@ def resolve_credentials(params: Params) -> tuple[str, str]:
     return token, chat_id
 
 
-def _deliver(params: Params, text: str, sender: SendFn | None) -> bool:
-    """Send one message; unset credentials -> skip silently (section 4.5)."""
+def _deliver(params: Params, text: str, sender: SendFn | None,
+             chat_id: str | None = None, target: str | None = None) -> bool:
+    """Send one message; unset credentials -> skip silently (section 4.5).
+    D-protocol: when chat_id is None it resolves through the per-target chain
+    (target profile > dashboard config > .env); an explicit target-disabled
+    profile mutes delivery entirely."""
+    if chat_id is None:
+        chat_id, source = resolve_chat_id(params, target)
+        if source == DISABLED_BY_PROFILE:
+            # D-protocol: per-system opt-out beats EVERY delivery path,
+            # including injected senders in tests/fixtures (law, not detail).
+            return False
     if sender is not None:
         sender(text)
         return True
-    token, chat_id = resolve_credentials(params)
+    token, _token_source = resolve_bot_token(params)
     if not token or not chat_id:
         return False
     timeout = int(params.require("telegram_timeout_sec"))
@@ -97,10 +197,11 @@ def _deliver(params: Params, text: str, sender: SendFn | None) -> bool:
         return False
 
 
-def send_status(params: Params, status: str, module: str, reason: str, sender: SendFn | None = None) -> bool:
+def send_status(params: Params, status: str, module: str, reason: str,
+                sender: SendFn | None = None, target: str | None = None) -> bool:
     """section 4.7 self-monitoring explicit status alert: status + reason + module."""
     text = f"{status}: module={module} reason={reason}"
-    return _deliver(params, text, sender)
+    return _deliver(params, text, sender, target=target)
 
 
 def send_run_summary(
@@ -113,7 +214,8 @@ def send_run_summary(
     sender: SendFn | None = None,
 ) -> bool:
     """section 4.5 end-of-run summary: target, final status, per-module asset counts,
-    duration, report path. completed|partial|failed."""
+    duration, report path. completed|partial|failed. D-protocol: delivered to
+    the RECEIVER RESOLVED FOR THIS TARGET (per-target override honored)."""
     per_module = " ".join(f"{key}={val}" for key, val in counts.items()) or "modules=0"
     minutes = int(duration_sec // 60)
     seconds = int(duration_sec % 60)
@@ -124,7 +226,7 @@ def send_run_summary(
         f"duration: {minutes}m{seconds:02d}s\n"
         f"report: {report_path}"
     )
-    return _deliver(params, text, sender)
+    return _deliver(params, text, sender, target=target)
 
 
 def alert_worthy(
@@ -186,6 +288,7 @@ def evaluate_diff_alerts(
     params: Params,
     diff_doc: dict[str, Any],
     sender: SendFn | None = None,
+    target: str | None = None,
 ) -> dict[str, Any]:
     """section 4.6 watchtower + section 4.7 digest threshold, driven by diff.json (section 6.6).
 
@@ -196,9 +299,19 @@ def evaluate_diff_alerts(
     dashboard-editable); at/above -> ONE grouped digest message.
     """
     config = load_dashboard_config(params)
-    rules = config.get("alert_rules") if isinstance(config.get("alert_rules"), list) else DEFAULT_ALERT_RULES
-    threshold = config.get("digest_threshold")
-    if not isinstance(threshold, int) or threshold <= 0:
+    notif = load_target_notifications(params, target)
+    # D-protocol: a per-target digest_threshold / watchtower toggle wins over
+    # the global dashboard config (closed allow-list keys, C3).
+    rules_cfg = notif.get("watchtower_enabled")
+    if rules_cfg is None:
+        rules_cfg = config.get("alert_rules")
+    rules = rules_cfg if isinstance(rules_cfg, list) else DEFAULT_ALERT_RULES
+    if notif.get("watchtower_enabled") is False:
+        rules = []
+    threshold = notif.get("digest_threshold")
+    if not isinstance(threshold, int) or isinstance(threshold, bool) or threshold <= 0:
+        threshold = config.get("digest_threshold")
+    if not isinstance(threshold, int) or isinstance(threshold, bool) or threshold <= 0:
         threshold = int(params.require("digest_threshold"))
 
     prev_index = _prev_index_from_diff(diff_doc)
@@ -229,6 +342,9 @@ def evaluate_diff_alerts(
     if total == 0:
         ledger["skipped_reason"] = "no_alertable_assets" if added else "no_added_assets"
         return ledger
+    if not rules:
+        ledger["skipped_reason"] = "watchtower disabled (target profile)"
+        return ledger
 
     run_ts = str(diff_doc.get("to_run") or "unknown")
     if total >= threshold:
@@ -242,13 +358,13 @@ def evaluate_diff_alerts(
                 lines.append(f"{label}: {_asset_label(cls, asset)}")
                 listed += 1
         ledger["digest_sent"] = True
-        ledger["delivered"] = _deliver(params, "\n".join(lines), sender)
+        ledger["delivered"] = _deliver(params, "\n".join(lines), sender, target=target)
         return ledger
 
     for cls, label in (("hosts", "NEW SUBDOMAIN"), ("ports", "NEW PORT")):
         for asset in alertable[cls]:
             text = f"{label}: {_asset_label(cls, asset)} (run={run_ts})"
-            if _deliver(params, text, sender):
+            if _deliver(params, text, sender, target=target):
                 ledger["instant_sent"] += 1
                 ledger["delivered"] = True
     return ledger
@@ -299,12 +415,12 @@ def run_end_notifications(
             )
         if status in (failed, anomaly, stopped):
             ledger["status_alert_sent"] = send_status(
-                params, status.upper(), failing_module or "-", reason or "-", sender
+                params, status.upper(), failing_module or "-", reason or "-", sender, target=target
             )
         diff_rel = str(params.require("diff_filename"))
         diff_path = target_dir / diff_rel
         if diff_path.is_file():
-            ledger["alerts"] = evaluate_diff_alerts(params, read_json(diff_path), sender)
+            ledger["alerts"] = evaluate_diff_alerts(params, read_json(diff_path), sender, target=target)
     except Exception as exc:  # noqa: BLE001 -- notification must never fail a run
         ledger["error"] = str(exc)
     return ledger

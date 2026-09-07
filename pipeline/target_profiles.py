@@ -47,7 +47,7 @@ OVERRIDABLE = {
     "wordlist_selection": dict,      # task -> list of wordlist keys
     "budgets": dict,                 # named budget params (allow-listed below)
     "modules": dict,                 # active_branch_modules / passive_branch_modules
-    "notifications": dict,           # telegram_chat / digest_threshold / alert toggles
+    "notifications": dict,           # telegram_chat / digest_threshold / toggles
     "proxy": dict,                   # C5 slot
     "rate_caps": dict,               # C5 slot
 }
@@ -59,7 +59,12 @@ BUDGET_KEYS_ALLOW = {
     "ffuf3_max_dead_probes",
 }
 
-NOTIFY_KEYS_ALLOW = {"telegram_chat", "digest_threshold", "watchtower_enabled"}
+NOTIFY_KEYS_ALLOW = {
+    "telegram_chat",        # D-protocol: per-target Telegram USER id override
+    "digest_threshold",
+    "watchtower_enabled",
+    "telegram_enabled",     # D-protocol: per-system notification opt-out
+}
 
 TARGET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{2,253}$")
 
@@ -108,6 +113,22 @@ def validate_profile(target: str, profile: dict[str, Any]) -> dict[str, Any]:
             bad = set(value) - NOTIFY_KEYS_ALLOW
             if bad:
                 raise ProfileError(f"notification keys not overridable: {sorted(bad)}")
+            # D-protocol value laws: injection-safe Telegram id, positive
+            # threshold, boolean toggles (attacker-proofing: every write is
+            # schema-validated before it reaches the registry).
+            for k, v in value.items():
+                if k == "telegram_chat":
+                    from pipeline.notify import TELEGRAM_CHAT_RE
+                    if not isinstance(v, str) or not TELEGRAM_CHAT_RE.match(v.strip()):
+                        raise ProfileError(
+                            'notifications.telegram_chat must be a Telegram user id '
+                            '(digits, optionally negative) or an @channel name')
+                elif k == "digest_threshold":
+                    if not isinstance(v, int) or isinstance(v, bool) or v <= 0:
+                        raise ProfileError("notifications.digest_threshold must be a positive integer")
+                elif k in ("watchtower_enabled", "telegram_enabled"):
+                    if not isinstance(v, bool):
+                        raise ProfileError(f"notifications.{k} must be a boolean")
         if section == "wordlist_selection":
             # key law enforced at APPLY time against the live registry; here
             # only the shape law (task -> list of key strings) is checked

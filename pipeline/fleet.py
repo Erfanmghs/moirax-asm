@@ -50,6 +50,7 @@ CONTROL_FILES = (
     "tools.lock",
     "views.yaml",
     "remediation.yaml",
+    "targets.yaml",  # D-protocol: per-target notifications resolve inside the member root too
 )
 CONTROL_DIRS = (
     "pipeline",

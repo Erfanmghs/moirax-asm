@@ -23,6 +23,8 @@ from dashboard.service import (
     apply_wordlists_edit,
     coverage_analytics,
     delete_key,
+    fleet_members_view,
+    latest_fleet_ledger,
     list_keys,
     load_settings,
     parse_filters_query,
@@ -38,12 +40,44 @@ from dashboard.service import (
 )
 from pipeline.params import Params
 from pipeline.scheduler import load_schedule
+from pipeline.target_profiles import TARGET_NAME_RE
 from pipeline.yaml_util import load_yaml_file
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = Path(__file__).resolve().parent / "static"
 
-app = FastAPI(title="recon-pipeline dashboard", docs_url=None, redoc_url=None)
+# Pentest hardening (D-protocol): OpenAPI/docs are disabled -- the API contract
+# is internal surface, never an attacker map.
+app = FastAPI(title="recon-pipeline dashboard", docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.middleware("http")
+async def _hardening_headers(request: Any, call_next: Any) -> Any:
+    """Attacker-proofing response headers on EVERY response (D-protocol
+    pentest vehicle P-7): no framing, no MIME sniffing, no referrer leak,
+    no caching of API data, strict CSP for the SPA (no inline script)."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Cache-Control", "no-store")
+    if request.url.path.startswith("/static") or request.url.path == "/":
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",
+        )
+    return response
+
+
+def _valid_target(value: str) -> str:
+    """Pentest hardening (P-9): target names reach subprocess argv via
+    run/start|stop|resume -- enforce the same strict name law the fleet uses
+    so flag-injection ('-x'), traversal ('../x') and metacharacters are
+    refused BEFORE any process is spawned."""
+    target = (value or "").strip()
+    if not TARGET_NAME_RE.match(target):
+        raise HTTPException(status_code=422, detail="illegal target name")
+    return target
 
 _params: Params | None = None
 
@@ -256,9 +290,7 @@ async def run_start(body: dict[str, Any], authorization: str | None = Header(def
     ok, reason = proxy_gate(params)
     if not ok:
         raise HTTPException(status_code=502, detail=f"PROXY RULE fail-fast (section 9.3): {reason}")
-    target = str(body.get("target") or "").strip()
-    if not target:
-        raise HTTPException(status_code=422, detail="target is required")
+    target = _valid_target(str(body.get("target") or ""))
     aggressive = bool(body.get("aggressive", False))
     cmd = ["./recon.sh", "run", target] + (["--aggressive"] if aggressive else [])
     proc = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -269,9 +301,7 @@ async def run_start(body: dict[str, Any], authorization: str | None = Header(def
 @app.post("/api/run/stop")
 async def run_stop(body: dict[str, Any], authorization: str | None = Header(default=None)) -> Any:
     _auth(authorization)
-    target = str(body.get("target") or "").strip()
-    if not target:
-        raise HTTPException(status_code=422, detail="target is required")
+    target = _valid_target(str(body.get("target") or ""))
     proc = subprocess.run(["./recon.sh", "stop", target], cwd=ROOT, capture_output=True, text=True)
     return JSONResponse({"exit": proc.returncode, "stdout": proc.stdout[-2000:]})
 
@@ -283,9 +313,7 @@ async def run_resume(body: dict[str, Any], authorization: str | None = Header(de
     ok, reason = proxy_gate(params)
     if not ok:
         raise HTTPException(status_code=502, detail=f"PROXY RULE fail-fast (section 9.3): {reason}")
-    target = str(body.get("target") or "").strip()
-    if not target:
-        raise HTTPException(status_code=422, detail="target is required")
+    target = _valid_target(str(body.get("target") or ""))
     proc = subprocess.Popen(["./recon.sh", "resume", target], cwd=ROOT,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     return JSONResponse({"resumed": True, "pid": proc.pid, "proxy": reason})
@@ -357,6 +385,62 @@ def proxy_check(authorization: str | None = Header(default=None)) -> Any:
     _auth(authorization)
     ok, reason = proxy_gate(_params_obj())
     return JSONResponse({"ok": ok, "reason": reason})
+
+
+# ------------------------------------------------- notifications (D-protocol)
+
+@app.post("/api/notify/test")
+async def notify_test(body: dict[str, Any], authorization: str | None = Header(default=None)) -> Any:
+    """D-protocol 'SEND TEST' button: one harmless message to the RESOLVED
+    receiver (target profile > global default > env). Never raises; the
+    ledger explains every skip reason; the chat id is never echoed."""
+    _auth(authorization)
+    target = body.get("target")
+    if target is not None and str(target).strip():
+        target = _valid_target(str(target))
+    else:
+        target = None
+    from pipeline.notify import send_test_notification
+
+    return JSONResponse(send_test_notification(_params_obj(), target))
+
+
+# ------------------------------------------------------ fleet (C4 surface)
+
+@app.get("/api/fleet")
+def fleet_view_route(authorization: str | None = Header(default=None)) -> Any:
+    """Fleet panel: registered members + concurrency cap + latest ledger."""
+    _auth(authorization)
+    return JSONResponse(fleet_members_view(_params_obj()))
+
+
+@app.get("/api/fleet/ledger")
+def fleet_ledger_route(authorization: str | None = Header(default=None)) -> Any:
+    _auth(authorization)
+    return JSONResponse(latest_fleet_ledger(_params_obj()))
+
+
+@app.post("/api/fleet/run")
+async def fleet_run_route(body: dict[str, Any], authorization: str | None = Header(default=None)) -> Any:
+    """Start a fleet run as a detached subprocess of ./recon.sh fleet run.
+    Members law: 'all' or a comma list of STRICTLY valid target names
+    (P-9 hardening: every token is validated before argv)."""
+    _auth(authorization)
+    members = str(body.get("members") or "all").strip()
+    if members.lower() != "all":
+        for token_raw in members.split(","):
+            _valid_target(token_raw)
+    concurrency = body.get("concurrency")
+    cmd = ["./recon.sh", "fleet", "run", "--targets", members]
+    if concurrency is not None:
+        try:
+            conc = max(1, min(8, int(concurrency)))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="concurrency must be an integer")
+        cmd += ["--concurrency", str(conc)]
+    proc = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, start_new_session=True)
+    return JSONResponse({"started": True, "pid": proc.pid, "members": members})
 
 
 # --------------------------------------------------------------- reporting (B7)

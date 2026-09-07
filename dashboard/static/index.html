@@ -11,12 +11,15 @@
   <div class="brand"><span class="glyph">##</span> ATTACK VECTOR <span class="accent">DETECTION</span> PLATFORM <span class="sub">recon-pipeline | control center</span></div>
   <nav class="tabs" id="tabs">
     <button data-panel="tools" class="tab">TOOLS</button>
+    <button data-panel="targets" class="tab">TARGETS</button>
+    <button data-panel="fleet" class="tab">FLEET</button>
     <button data-panel="results" class="tab">RESULTS</button>
     <button data-panel="reports" class="tab">REPORTS</button>
     <button data-panel="run" class="tab">RUN CONTROL</button>
     <button data-panel="keys" class="tab">API KEYS</button>
     <button data-panel="settings" class="tab">SETTINGS</button>
   </nav>
+  <div class="tgt-zone"><label class="tgt-label">TARGET</label><input id="global-target" class="mono" placeholder="example.com" autocomplete="off"></div>
   <div class="token-zone"><input id="token" type="password" placeholder="DASHBOARD_TOKEN" autocomplete="off"><button id="token-save">SET</button><span id="conn" class="badge">|</span></div>
 </header>
 
@@ -29,6 +32,65 @@
     </thead><tbody></tbody></table></div>
     <h2 class="mt">WORDLIST REGISTRY <span class="hint">per-task checkbox selection + SELECT-ALL per group (section 8)</span></h2>
     <div id="wordlists"></div>
+  </section>
+
+  <!-- a2) TARGETS (D-protocol: per-system settings incl. Telegram user id) -->
+  <section id="panel-targets" class="panel hidden">
+    <h2>TARGETS <span class="hint">per-target settings profiles (C3) | closed allow-list | Telegram user id per system (D-protocol)</span></h2>
+    <div class="row">
+      <input id="t-name" placeholder="target (bugdasht.ir)">
+      <button id="t-load">LOAD</button>
+      <span id="t-status" class="badge">|</span>
+    </div>
+    <div class="grid">
+      <label>DESCRIPTION (short ASCII)<input id="t-desc" maxlength="200"></label>
+      <label>TELEGRAM USER ID (per-target override -- ONLY your numeric id)<input id="t-tg" class="mono" placeholder="e.g. 123456789"></label>
+      <label>DIGEST THRESHOLD (per-target, empty = inherit)<input id="t-digest" type="number" min="1" class="mono"></label>
+      <label>TELEGRAM NOTIFICATIONS (per-system)<select id="t-tgen"><option value="">inherit global</option><option value="true">enabled</option><option value="false">MUTED for this target</option></select></label>
+      <label>WATCHTOWER INSTANT ALERTS<select id="t-watch"><option value="">inherit global</option><option value="true">enabled</option><option value="false">disabled</option></select></label>
+    </div>
+    <h3 class="mt">BUDGETS (empty = committed defaults)</h3>
+    <div class="grid">
+      <label>PASSIVE BRANCH BUDGET (sec)<input id="t-b-passive" type="number" min="1" class="mono"></label>
+      <label>ACTIVE BRANCH BUDGET (sec)<input id="t-b-active" type="number" min="1" class="mono"></label>
+      <label>PASSIVE RECURSION DEPTH<input id="t-b-depth" type="number" min="0" class="mono"></label>
+      <label>FFUF-3 MAX DEAD PROBES<input id="t-b-dead" type="number" min="1" class="mono"></label>
+    </div>
+    <h3 class="mt">MODULES (comma-separated, empty = committed defaults)</h3>
+    <div class="grid">
+      <label>ACTIVE BRANCH MODULES<input id="t-m-active" class="mono" placeholder="ffuf, dns-resolve, ffuf-3, port-check"></label>
+      <label>PASSIVE BRANCH MODULES<input id="t-m-passive" class="mono" placeholder="passive-recon"></label>
+    </div>
+    <h3 class="mt">WORDLIST SELECTION OVERRIDE (task = comma-separated keys, empty = global selection)</h3>
+    <div class="grid">
+      <label>FFUF-0<input id="t-wl-FFUF-0" class="mono"></label>
+      <label>DNSR-1<input id="t-wl-DNSR-1" class="mono"></label>
+      <label>FFUF-2<input id="t-wl-FFUF-2" class="mono"></label>
+    </div>
+    <div class="row">
+      <button id="t-save">SAVE PROFILE</button>
+      <button id="t-clear" class="danger">DELETE PROFILE</button>
+      <span class="mono dim" id="t-plan"></span>
+    </div>
+    <h3 class="mt">REGISTERED TARGET PROFILES</h3>
+    <div class="table-wrap"><table id="targets-table"><thead>
+      <tr><th>TARGET</th><th>DESCRIPTION</th><th>TELEGRAM USER ID</th><th>SECTIONS</th><th></th></tr>
+    </thead><tbody></tbody></table></div>
+  </section>
+
+  <!-- a3) FLEET (C4: multi-target concurrent execution surface) -->
+  <section id="panel-fleet" class="panel hidden">
+    <h2>FLEET <span class="hint">multi-target concurrent execution (C4) | isolated member roots, profiles baked in | automatic resource management</span></h2>
+    <div class="row">
+      <input id="fl-members" placeholder="members: all or a.com,b.net" class="mono">
+      <input id="fl-conc" type="number" min="1" max="8" placeholder="concurrency" class="mono w110">
+      <button id="fl-run">RUN FLEET</button>
+      <button id="fl-refresh">REFRESH</button>
+      <span id="fl-status" class="badge">|</span>
+    </div>
+    <div class="mono dim" id="fl-members-view"></div>
+    <h3 class="mt">LATEST FLEET LEDGER</h3>
+    <pre id="fl-ledger" class="json-inspector collapsed">no fleet run yet</pre>
   </section>
 
   <!-- b) RESULTS -->
@@ -110,9 +172,13 @@
     <h2>SETTINGS <span class="hint">proxy | Telegram | digest threshold | alert filters | resource budget -> dashboard/config.json (section 9.2-e)</span></h2>
     <div class="grid">
       <label>PROXY URL (http/socks5 -- set-but-unreachable FAILS FAST section 9.3)<input id="s-proxy" class="mono" placeholder=""></label>
-      <label>TELEGRAM BOT TOKEN <input id="s-tg-token" type="password" placeholder="masked after save"></label>
-      <label>TELEGRAM CHAT / USER ID <input id="s-tg-chat" class="mono" placeholder="chat id that receives alerts"></label>
+      <label>TELEGRAM USER ID (D-protocol: set ONLY your numeric id -- this is the alerts receiver)<input id="s-tg-chat" class="mono" placeholder="e.g. 123456789"></label>
+      <label>TELEGRAM BOT TOKEN (platform provisioning -- normally leave empty, lives in .env)<input id="s-tg-token" type="password" placeholder="advanced: override .env"></label>
       <label>DIGEST THRESHOLD (section 4.7)<input id="s-digest" type="number" min="1" class="mono"></label>
+    </div>
+    <div class="row">
+      <button id="s-test">SEND TEST NOTIFICATION</button>
+      <span id="s-test-result" class="badge">|</span>
     </div>
     <h3 class="mt">ALERT FILTER RULES (section 4.7 -- which new assets are alert-worthy)</h3>
     <div id="rules-editor"></div>

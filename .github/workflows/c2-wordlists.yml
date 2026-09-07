@@ -46,6 +46,9 @@ jobs:
           git clone --depth 1 https://github.com/danielmiessler/SecLists "$HOME/seclists"
           find "$HOME/seclists" -name '*.txt' | wc -l
 
+      - name: "Install suite deps (REM22/REM23 parity: fastapi + uvicorn + httpx + reportlab)"
+        run: pip install --quiet fastapi uvicorn httpx reportlab
+
       - name: "Unit suite (shared regression + C2 atomic units)"
         run: |
           PYTHONPATH=. python3 -u -m unittest discover -s tests -t . -v 2>&1 | tee ci/c2_units_console.log

@@ -37,7 +37,7 @@ from ci.ui_e2e_seed import seed  # noqa: E402
 
 PORT = 8790
 BASE = f"http://127.0.0.1:{PORT}"
-TOKEN = "ui-e2e-token-000000"
+TOKEN = "example-ui-e2e-token"
 SCREENS = ROOT / "ci" / "ui-e2e-screens"
 
 RESULTS: list[dict[str, Any]] = []

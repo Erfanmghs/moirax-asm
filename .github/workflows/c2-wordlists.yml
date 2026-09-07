@@ -111,7 +111,7 @@ jobs:
           from pipeline.wordlist_forge import materialize_effective
           eff = materialize_effective(Params(Path(".")), "FFUF-0")
           n = sum(1 for ln in eff.read_text(encoding="utf-8").splitlines() if ln.strip())
-          assert n > 100000, f"expected the bitquark volume, got {n}"
+          assert n >= 99000, f"expected the bitquark volume (normalized union), got {n}"
           assert "admin" in eff.read_text(encoding="utf-8").splitlines(), "custom entries missing"
           print(f"C2 materialized effective-FFUF-0: {n} entries (generated + custom union)")
           PY

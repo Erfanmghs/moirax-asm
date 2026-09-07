@@ -1,8 +1,8 @@
-# C4 FLEET vehicle (release phase) — multi-target concurrent execution with
+# C4 FLEET vehicle (release phase) -- multi-target concurrent execution with
 # automatic request/resource management and per-target settings baked in.
 #
 # Members run PASSIVE-ONLY (per-target C3 profiles trim the active branch)
-# against two public passive vehicles (example.com, example.net) — no active
+# against two public passive vehicles (example.com, example.net) -- no active
 # traffic against third parties. The vehicle proves:
 #   C4-1 member list resolution + isolation (per-member roots, baked profiles)
 #   C4-2 concurrency observed (member start overlap <= concurrency)

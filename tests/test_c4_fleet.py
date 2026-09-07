@@ -1,13 +1,13 @@
 """Atomic tests for C4 fleet (release directive): multi-target concurrency
 with automatic request/resource management and per-target settings.
 
-Laws under test (no docker, no network — pure orchestration):
+Laws under test (no docker, no network -- pure orchestration):
   - member list resolution ('all' from the C3 registry, explicit list,
     dedup, sanitization)
   - concurrency clamp to the committed fleet_max_concurrency
   - member preparation: isolated root carries ALL control files, an empty
     recon tree, and the C3 profile BAKED in (loader-parseable, correct
-    values) — including BLOCK-list keys (modules) and wordlist selections
+    values) -- including BLOCK-list keys (modules) and wordlist selections
   - global slot lockfile counting (acquire/release/exhaust)
   - failure isolation semantics in the ledger
 """

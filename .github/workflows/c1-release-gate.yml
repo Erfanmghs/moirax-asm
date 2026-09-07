@@ -1,6 +1,6 @@
-# C1 RELEASE SECURITY GATE — secrets + SAST + English-only/ASCII + personal
+# C1 RELEASE SECURITY GATE -- secrets + SAST + English-only/ASCII + personal
 # data + script defense. Part of the release phase (operator directive):
-# the platform publishes in ENGLISH ONLY with an attacker-proofed tree —
+# the platform publishes in ENGLISH ONLY with an attacker-proofed tree --
 # an outsider scanning the repository must find nothing usable.
 #
 # Gates (ci/c1_release_gate.py):

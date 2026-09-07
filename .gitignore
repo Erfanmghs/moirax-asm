@@ -23,3 +23,8 @@ ci/rem4r_verdict.txt
 ci/rem4r_run_console.log
 ci/rem4r_assertions_console.log
 ci/rem4r_run_exit.txt
+
+# C1 gate runtime artifacts (CI regenerates them)
+ci/c1_verdict.txt
+ci/c1_gate_console.log
+ci/c1_verifyb1_diff.txt

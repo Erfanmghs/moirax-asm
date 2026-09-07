@@ -77,11 +77,16 @@ class R3Ascii(unittest.TestCase):
         self.assertTrue(gate.scan_non_ascii(text))
 
     def test_waiver_prefix_logic(self):
-        waived = ("pipeline/verify_b1.py", ".cursor/rules/", "recon/")
-        for rel in ("pipeline/verify_b1.py", ".cursor/rules/x.md", "recon/example.com/logs/run.log"):
+        waived = ("pipeline/verify_b1.py", ".cursor/rules/", "recon/", "README.fa.md")
+        for rel in ("pipeline/verify_b1.py", ".cursor/rules/x.md", "recon/example.com/logs/run.log", "README.fa.md"):
             self.assertTrue(rel.startswith(waived), rel)
-        for rel in ("dashboard/app.py", "README.md", "pipeline/engine.py"):
+        for rel in ("dashboard/app.py", "README.md", "pipeline/engine.py", "docs/README.fa.md"):
             self.assertFalse(rel.startswith(waived), rel)
+
+    def test_gate_waiver_constant_discloses_readme_fa(self):
+        # the gate's own constant must carry the disclosed README.fa.md waiver
+        self.assertIn("README.fa.md", gate.WAIVE_PREFIXES)
+        self.assertNotIn("README.md", gate.WAIVE_PREFIXES)
 
 
 class R4PersonalData(unittest.TestCase):

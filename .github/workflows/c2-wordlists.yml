@@ -48,7 +48,7 @@ jobs:
 
       - name: "Unit suite (shared regression + C2 atomic units)"
         run: |
-          PYTHONPATH=. python3 -m unittest discover -s tests -t . -v 2>&1 | tee ci/c2_units_console.log | tail -3
+          PYTHONPATH=. python3 -u -m unittest discover -s tests -t . -v 2>&1 | tee ci/c2_units_console.log
           exit "${PIPESTATUS[0]}"
 
       - name: "Sync the full SecLists index (recon.sh wordlist-sync)"
@@ -156,6 +156,7 @@ jobs:
           name: c2-wordlists-evidence
           path: |
             ci/c2_verdict.txt
+            ci/c2_units_console.log
             ci/c2_sync_console.log
             ci/c2_add_console.log
             ci/c2_assertions_console.log

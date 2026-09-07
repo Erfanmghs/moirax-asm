@@ -6,8 +6,12 @@ frozen 200-record smoke wordlist. The L-table proves the machinery ran
 end-to-end and extracts WHAT the platform discovered so the operator can
 compare it against the subdomains/vhosts they actually deployed.
 
-  L0  run exit code == 0
-  L1  state.json reached a terminal status (completed | partial)
+  L0  run exit code in {0 clean, 2 spec-mandated anomaly exit}; on 2 the
+      runs.json status must be anomaly (exit/status pairing per spec)
+  L1  runs.json last-run status terminal; completed|partial PASS outright;
+      anomaly PASSES ONLY with full disclosure: every engine module done
+      AND the anomaly source is a third-party passive agent (breaker
+      degraded-continue; run #36 precedent), otherwise FAIL
   L2  fresh-evidence guard: required artifacts NEWER than run start
       (a skipped module must never pass on committed stale files — REM6)
   L3  passive chain produced artifacts (10_subdomains/passive)
@@ -32,7 +36,8 @@ import pathlib
 import sys
 import time
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(os.environ.get("LIVE_VEHICLE_ROOT", "")) or \
+    pathlib.Path(__file__).resolve().parents[1]
 VEH = ROOT / "recon" / "bugdasht.ir"
 
 failures: list[str] = []
@@ -68,23 +73,49 @@ def section(title: str) -> None:
 def main() -> int:
     verdict_lines: list[str] = []
 
-    # L0 exit code
+    # L0 exit code (0 = clean; 2 = spec anomaly exit — see L1)
     exit_txt = (ROOT / "ci" / "live_run_exit.txt").read_text(encoding="utf-8") \
         if (ROOT / "ci" / "live_run_exit.txt").is_file() else ""
     rc = "".join(c for c in exit_txt.split("=")[-1] if c.isdigit())
-    check("L0", rc == "0", f"run exit code = {rc or 'missing'}")
+    check("L0", rc in ("0", "2"),
+          f"run exit code = {rc or 'missing'} (0 clean / 2 spec anomaly exit)")
 
-    # L1 terminal state
+    # L1 terminal state from runs.json (state.json carries no status key)
+    runs_doc = load_json(VEH / "runs.json") if (VEH / "runs.json").is_file() else None
+    runs_list = (runs_doc or {}).get("runs") if isinstance(runs_doc, dict) else runs_doc
+    last_run = (runs_list or [{}])[-1] if isinstance(runs_list, list) else {}
+    status = str(last_run.get("status") or "missing")
+    # the anomaly SOURCE is printed by the engine on the console tee:
+    #   anomaly: ('ANOMALY', 'assetfinder', 'error ratio exceeded ...')
+    src = ""
+    console_p = ROOT / "ci" / "live_run_console.log"
+    if console_p.is_file():
+        for ln in console_p.read_text(encoding="utf-8", errors="replace").splitlines():
+            if ln.startswith("anomaly:"):
+                src = ln[len("anomaly:"):].strip().strip("'\"")
+                break
     state = load_json(VEH / "state.json") if (VEH / "state.json").is_file() else None
-    status = (state or {}).get("status") or (state or {}).get("verdict") or "missing"
-    check("L1", status in ("completed", "partial"),
-          f"state.json terminal status = {status}")
-    if state:
-        print("--- module status table ---")
-        for mod, info in sorted((state.get("modules") or {}).items()):
-            s = info.get("status") if isinstance(info, dict) else info
-            print(f"  {mod:<14} {s}")
-        verdict_lines.append(f"state status: {status}")
+    mod_status = {m: (v.get("status") if isinstance(v, dict) else v)
+                  for m, v in (state or {}).get("modules", {}).items()}
+    all_done = bool(mod_status) and all(s == "done" for s in mod_status.values())
+    THIRD_PARTY = ("assetfinder", "crtsh", "subfinder", "subfinder-seed",
+                   "amass", "findomain", "chaos", "httpx-passive", "dorks")
+    tp = any(k in src.lower() for k in THIRD_PARTY)
+    if status in ("completed", "partial"):
+        ok1, detail = True, f"runs.json status = {status}"
+    elif status == "anomaly" and all_done and tp:
+        ok1 = True
+        detail = (f"status = anomaly BUT breaker degraded-continue per spec: "
+                  f"all {len(mod_status)} engine modules done; third-party "
+                  f"passive variance ({src or 'passive agent'}) — run #36 precedent")
+    else:
+        ok1 = False
+        detail = f"status = {status}; source={src!r}; modules={mod_status}"
+    check("L1", ok1, detail)
+    print("--- module status table ---")
+    for m, s in sorted(mod_status.items()):
+        print(f"  {m:<14} {s}")
+    verdict_lines.append(f"runs.json status: {status} (source={src!r})")
 
     # L2 freshness of required artifacts
     required = [

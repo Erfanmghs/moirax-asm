@@ -16,7 +16,7 @@ from pipeline.jsonio import read_json
 from pipeline.merge import load_tool_doc, merge_branches
 from pipeline.modules import RUNNERS
 from pipeline.notify import run_end_notifications, send_status
-from dashboard.service import proxy_gate
+from pipeline.ip_rotation import gate_pool_or_legacy
 from pipeline.params import Params
 from pipeline.reporting import generate_all
 from pipeline.scope import ScopeGate
@@ -48,9 +48,11 @@ def run_pipeline(
     )
     clock = clock or Clock()
     run_started = clock.time()
-    # section 9.3 PROXY RULE: set-but-unreachable -> FAIL FAST (never silent direct).
-    proxy_ok, proxy_reason = proxy_gate(params)
-    if not proxy_ok:
+    # section 9.3 PROXY RULE + C5 IP ROTATION: a configured pool is gated
+    # entry-by-entry (fail-fast, credentials masked) and rotated per module;
+    # no pool -> the legacy single-proxy law, byte for byte.
+    pool_ok, proxy_reason, assigner = gate_pool_or_legacy(params)
+    if not pool_ok:
         print(f"PROXY RULE fail-fast (section 9.3): {proxy_reason}")
         return _exit_code(params, str(params.require("run_status_failed")))
     if proxy_reason != "proxy unset -- direct connection (section 9.3)":
@@ -85,7 +87,8 @@ def run_pipeline(
         target=target,
     )
     ceiling = ResourceCeiling(params)
-    adapter = Adapter(params, target_dir, breaker, ceiling, clock=clock, runner=runner, aggressive=aggressive)
+    adapter = Adapter(params, target_dir, breaker, ceiling, clock=clock, runner=runner,
+                      aggressive=aggressive, proxy_pool=assigner)
     extra = {"target_domain": target}
     partial: list[str] = []
     failed = False
@@ -220,6 +223,13 @@ def run_pipeline(
                 _append_log(params, target_dir, sweep_name, sweep_name, 1, str(exc))
                 _engage_agent(sweep_name, "active", str(exc))
                 traceback.print_exc()
+
+    # C5 IP rotation ledger: every module's pool assignment is always visible
+    # (never-fail, credentials masked) -- honesty law for the rotation feature.
+    if assigner is not None:
+        assigner.write_ledger(target_dir)
+        for line in assigner.pool.summary_lines():
+            print(line)
 
     stamp = utc_stamp()
     counts = _counts(params, target_dir, passive_docs, active_docs)

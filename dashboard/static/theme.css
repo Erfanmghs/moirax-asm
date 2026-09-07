@@ -174,3 +174,40 @@ tbody tr:hover { background: #122230; box-shadow: inset 2px 0 0 var(--accent); }
   font: 600 9px var(--mono); color: var(--dim); letter-spacing: 2px;
 }
 #t-plan, #s-test-result { font-size: 11px; }
+
+/* ---------------- per-feature help chips + friendly hint lines ------------ */
+.help {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; margin-left: 6px; border-radius: 50%;
+  border: 1px solid var(--line); color: var(--dim); background: var(--bg2);
+  font: 700 10px/1 var(--sans); cursor: help; position: relative;
+  vertical-align: 1px; user-select: none;
+}
+.help:hover, .help:focus, .help.open { color: var(--accent); border-color: var(--accent); }
+.help::after {
+  content: attr(data-help);
+  display: none; position: absolute; left: 50%; top: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: min(340px, 72vw); padding: 9px 11px; z-index: 50;
+  background: var(--bg2); border: 1px solid var(--accent); color: var(--text);
+  font: 12px/1.5 var(--sans); letter-spacing: 0; text-transform: none;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55); white-space: normal;
+  border-radius: 4px; text-align: left;
+}
+.help:hover::after, .help:focus::after, .help.open::after { display: block; }
+.help::before {
+  content: ""; display: none; position: absolute; left: 50%; top: calc(100% + 2px);
+  transform: translateX(-50%); border: 6px solid transparent; border-bottom-color: var(--accent);
+  z-index: 51;
+}
+.help:hover::before, .help:focus::before, .help.open::before { display: block; }
+
+.hint-line { min-height: 16px; margin-top: 6px; font: 12px/1.5 var(--sans); color: var(--dim); max-width: 860px; }
+.hint-line.ok { color: var(--alive); }
+.hint-line.warn { color: var(--new); }
+
+/* HELP panel document styling */
+.help-doc { max-width: 860px; }
+.help-doc h3 { color: var(--accent); font: 600 13px var(--sans); letter-spacing: 1px; margin: 22px 0 6px; }
+.help-doc p { margin: 6px 0; line-height: 1.65; }
+.help-doc b { color: var(--text); }

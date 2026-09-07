@@ -7,9 +7,10 @@ changes.
 
 > This file is written for everyday users. No programming knowledge is needed
 > to read or use it. Developers: the deep technical guide is in
-> [docs/HANDOVER.md](docs/HANDOVER.md), and there is a wish list for you in
-> section 10. A Persian copy of this file is here:
-> **[README.fa.md](README.fa.md)**.
+> [docs/HANDOVER.md](docs/HANDOVER.md), there is a wish list for you in
+> section 10, and the step-by-step user guide is
+> [docs/HELP.md](docs/HELP.md) (also available as the HELP panel inside the
+> dashboard).
 
 ---
 
@@ -84,13 +85,14 @@ same password in the top-right box, and you are in.
 
 ### Step 1 -- Tell it where to send alerts (one time)
 
-Open the **SETTINGS** page. There is one box that asks for your **Telegram
-user ID** -- a number like `123456789`. Type your number and save. That is the
-only thing you ever have to enter: no bot creation, no chat setup, just your
-number.
+Open the **SETTINGS** page. There is one box that asks for **your Telegram
+username or numeric id**. Type `jackjohns` (or `@jackjohns`, or a number like
+`123456789`) and save. That is the only thing you ever have to enter: no bot
+creation, no chat setup, just your own handle.
 
-Don't know your number? Open Telegram, search for `@userinfobot`, press
-**START**, and it replies with your number. Copy that number into the box.
+Personal usernames deliver after you open your bot in Telegram and press
+START once -- the platform learns your chat automatically. Public channel
+handles (`@teamname`) work immediately.
 
 ### Step 2 -- Add the website you want to watch
 
@@ -129,25 +131,28 @@ changed, a Telegram message is waiting for you in the morning.
 
 ## 6. Telegram alerts -- the short version
 
-- **You** set **only your Telegram user ID** (a number). Nothing else.
+- **You** set **only your Telegram username or numeric id**. Nothing else.
 - The **bot token** -- the one-time key that lets the platform talk to
   Telegram -- is pasted into the `.env` file once by the person who installed
   the platform (section 7). Everyday users never see or touch it.
-- **Each website can override the default**: its own Telegram ID, or "no
-  alerts for this one". The website's own setting always wins over the global
-  one.
+- **Backup tokens**: list extra tokens in `.env`, separated by commas. If a
+  token stops working, the platform **rotates to the next one automatically**
+  during the very same send -- no human needed.
+- **Each website can override the default**: its own username, or "no alerts
+  for this one". The website's own setting always wins over the global one.
 - Press **SEND TEST** on the SETTINGS page and a test message should arrive
-  within seconds. If it does not, the platform tells you honestly what went
-  wrong instead of failing silently.
+  within seconds. If it does not, the platform shows a human next-step hint
+  instead of failing silently.
 
 ## 7. For the person who installs the platform (one-time, 5 minutes)
 
-Two things go into the `.env` file:
+These lines go into the `.env` file:
 
 | Line | What it is | Where to get it |
 |---|---|---|
 | `DASHBOARD_TOKEN` | The dashboard login password. | You choose it yourself. Make it long. |
-| `TELEGRAM_BOT_TOKEN` | Lets the platform send Telegram messages. | In Telegram, talk to `@BotFather`, send `/newbot`, follow the two questions, and copy the long token it gives you. |
+| `TELEGRAM_BOT_TOKEN` | Lets the platform send Telegram messages. | In Telegram, talk to `@BotFather`, send `/newbot`, follow the two questions, and copy the long token it gives you. Extra tokens separated by commas act as automatic backups. |
+| `PROXY_POOL` (optional) | Comma-separated proxies for IP rotation. | Your proxy provider. See the HELP panel / docs/HELP.md section 10. |
 
 That is the whole installation surface. Everything else -- settings, keys,
 targets, schedules -- is managed later from the dashboard pages by normal
@@ -224,7 +229,7 @@ command-line interface:
 
 | File | For whom | What is inside |
 |---|---|---|
-| [README.fa.md](README.fa.md) | Everyone | This whole file in Persian. |
+| [docs/HELP.md](docs/HELP.md) | Everyone | The complete step-by-step user guide, with examples -- also built into the dashboard's HELP panel. |
 | [docs/HANDOVER.md](docs/HANDOVER.md) | Developers | The full engineering guide: architecture, every part explained, how to extend safely. |
 | [docs/api-keys.md](docs/api-keys.md) | Users | Every optional key, where to get it, and what it unlocks. |
 | [docs/security.md](docs/security.md) | Operators | How tokens and secrets are handled, and what to do if one leaks. |

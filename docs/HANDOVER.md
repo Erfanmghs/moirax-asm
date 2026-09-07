@@ -128,15 +128,30 @@ same discipline appears in C3 profile application and fleet member baking.
 - `.env` -- provider keys + DASHBOARD_TOKEN + optional telegram fallbacks.
   Picked up on the next run WITHOUT restart.
 
-## 5. Notifications (D-protocol -- read this before touching notify.py)
+## 5. Notifications (D-protocol v2 -- read this before touching notify.py)
 
-Operator UX law: **the operator sets ONLY their Telegram user id.** The bot
-token is platform provisioning (`.env` TELEGRAM_BOT_TOKEN, set once).
+Operator UX law: **the operator sets ONLY their Telegram username or user
+id.** Bare handles (`jackjohns`) normalize to `@jackjohns`; numeric ids pass
+through unchanged. The bot token is platform provisioning
+(`.env` TELEGRAM_BOT_TOKEN) and accepts a comma-separated POOL: when a token
+is rejected (HTTP 401) the send path marks it invalid in-process and rotates
+to the next pool entry inside the same send (operator directive: the tool
+must replace a broken token with its replacement without human help).
+Rejected tokens are never echoed; the ledger names token indexes only.
 
 Receiver resolution precedence (highest wins):
 1. target profile `notifications.telegram_chat`   (targets.yaml)
 2. dashboard config `telegram.chat_id`            (global default)
 3. `.env` TELEGRAM_CHAT_ID                        (deployment fallback)
+
+Username-shaped receivers consult a LEARNED MAP (`telegram.receiver_map` in
+dashboard config): `learn_receiver_map()` calls getUpdates once and maps
+username -> numeric chat id for every account that pressed START on the bot
+(personal-account handles cannot be messaged by @name directly -- Bot API
+limitation -- so the learned numeric id is used; public channel/group
+handles deliver directly). Learning is network-free at resolve time and
+happens only in the send path; it retries once after a chat-not-found
+failure, so "press START, then SEND TEST again" works in one click.
 
 `notifications.telegram_enabled: false` in a profile mutes that target
 outright -- it beats every global default and every delivery path
@@ -147,7 +162,9 @@ Instant alert classes: NEW SUBDOMAIN (hosts) + NEWLY OPENED PORT (ports).
 At/above the digest threshold one grouped DIGEST is sent instead of a
 flood. `POST /api/notify/test` ("SEND TEST NOTIFICATION" button) sends one
 harmless message to the RESOLVED receiver and returns a ledger whose
-`reason` explains every skip (never silent). The chat id is never echoed.
+`reason` explains every skip (never silent) plus a human `hint` with the
+next step for the four failure shapes (401-pool-exhausted / chat-not-found /
+network / 429). Receivers and tokens are never echoed.
 
 Fleet members: `targets.yaml` is part of fleet CONTROL_FILES, so each
 member root resolves ITS OWN per-target receiver.
@@ -176,6 +193,27 @@ fleet invocations cannot oversubscribe a runner. One member failing never
 stops the others; the fleet ledger (history/fleet/<ts>/fleet-ledger.json)
 records every member exit; fleet exit is 0 iff every member completed
 clean (partial counts as success-with-disclosure).
+
+## 7b. IP rotation / proxy pool (C5)
+
+`pipeline/ip_rotation.py`. Pool resolution chain (most specific wins):
+1. tools.yaml settings `proxy_pool` -- per-target profiles reach this through
+   the SAME transient top-level-key edit mechanics as budgets (value written
+   as a json.dumps-quoted YAML scalar),
+2. dashboard config `proxy_pool` (SETTINGS panel field),
+3. no pool -> the legacy single `proxy_url` gate path, byte for byte.
+
+Laws: scheme allow-list http/https/socks5 (parse_pool, ValueError names the
+bad entry); fail-fast gate health-checks EVERY entry before the first module
+(engine + /api/run/start|resume through `gate_pool_or_legacy`) and sanitizes
+the checker's own reason (raw entry with credentials must never surface);
+round-robin assignment PER MODULE INVOCATION happens inside Adapter.invoke
+before any retry, so one module = one pool entry; tools WITHOUT the
+`when: proxy_url` hook (naabu, dnsx, ...) run DIRECT and the ledger says so
+-- honesty law. Ledger: logs/proxy-rotation.json (never-fail write, masked
+`user:***@host:port` via mask_proxy). Proxy-hooked tools today: ffuf,
+ffuf-vhost, httpx, httpx-passive (-x / -http-proxy). Per-target profile key:
+`proxy.proxy_pool` (closed allow-list PROXY_KEYS_ALLOW, scheme-validated).
 
 ## 8. Dashboard
 
@@ -277,8 +315,9 @@ secret manager of your choice, never in the repo (R-1 enforces).
 
 ## 13. Deferred roadmap (agreed, not built)
 
-- C5: IP rotation on block + proxy pool (profile slots `proxy` /
-  `rate_caps` already reserved and validated as empty mappings).
+- C5: IP rotation / proxy pool -- DELIVERED (see section 7b); remaining
+  refinement: per-request (not per-module) rotation and outbound-IP
+  health telemetry over time.
 - C6: OWASP Top 10 + OWASP API Top 10 passive check modules.
 - C7: self-improvement loop beyond the platform-learned wordlist
   (auto-tuning budgets from breaker telemetry).

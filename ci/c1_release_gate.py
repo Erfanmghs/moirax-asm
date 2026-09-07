@@ -13,9 +13,9 @@ scanning the public repository must find nothing usable.
   R-3  ENGLISH-ONLY / ASCII: every tracked text file is ASCII-clean except
        DISCLOSED waivers: pipeline/verify_b1.py (frozen discipline: diff vs
        handoff stays EMPTY), .cursor/rules/** (frozen spec v1.9),
-       recon/** (historical vehicle evidence artifacts), README.fa.md
-       (operator-directed Persian translation of the README for ordinary
-       readers; the English README.md itself stays ASCII-scanned).
+       recon/** (historical vehicle evidence artifacts).
+       Operator law (post-FA-removal): Persian is forbidden project-wide --
+       the README.fa.md waiver was withdrawn and must never return.
   R-4  PERSONAL DATA: no author email fragments, no personal mail domains,
        no operator estate IPs, no phone-number shapes in tracked files.
   R-5  SCRIPT DEFENSE (belt-and-braces under R-3): no Arabic/Persian script
@@ -37,7 +37,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-WAIVE_PREFIXES = ("pipeline/verify_b1.py", ".cursor/rules/", "recon/", "README.fa.md")
+WAIVE_PREFIXES = ("pipeline/verify_b1.py", ".cursor/rules/", "recon/")
 
 SECRET_PATTERNS = [
     ("github-pat", r"github_pat_[A-Za-z0-9_]{20,}"),

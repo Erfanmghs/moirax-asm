@@ -38,6 +38,7 @@ from dashboard.service import (
     target_profile_view,
     targets_view,
 )
+from pipeline.ip_rotation import gate_pool_or_legacy
 from pipeline.params import Params
 from pipeline.scheduler import load_schedule
 from pipeline.target_profiles import TARGET_NAME_RE
@@ -287,7 +288,7 @@ def agent_journal(target: str, offset: int = Query(default=0, ge=0), authorizati
 async def run_start(body: dict[str, Any], authorization: str | None = Header(default=None)) -> Any:
     _auth(authorization)
     params = _params_obj()
-    ok, reason = proxy_gate(params)
+    ok, reason, _assigner = gate_pool_or_legacy(params)
     if not ok:
         raise HTTPException(status_code=502, detail=f"PROXY RULE fail-fast (section 9.3): {reason}")
     target = _valid_target(str(body.get("target") or ""))
@@ -310,7 +311,7 @@ async def run_stop(body: dict[str, Any], authorization: str | None = Header(defa
 async def run_resume(body: dict[str, Any], authorization: str | None = Header(default=None)) -> Any:
     _auth(authorization)
     params = _params_obj()
-    ok, reason = proxy_gate(params)
+    ok, reason, _assigner = gate_pool_or_legacy(params)
     if not ok:
         raise HTTPException(status_code=502, detail=f"PROXY RULE fail-fast (section 9.3): {reason}")
     target = _valid_target(str(body.get("target") or ""))

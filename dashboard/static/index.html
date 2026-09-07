@@ -8,8 +8,9 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="glyph">##</span> ATTACK VECTOR <span class="accent">DETECTION</span> PLATFORM <span class="sub">recon-pipeline | control center</span></div>
+  <div class="brand"><span class="glyph">##</span> ATTACK VECTOR <span class="accent">DETECTION</span> PLATFORM <span class="sub">security watcher for your websites</span></div>
   <nav class="tabs" id="tabs">
+    <button data-panel="help" class="tab">HELP</button>
     <button data-panel="tools" class="tab">TOOLS</button>
     <button data-panel="targets" class="tab">TARGETS</button>
     <button data-panel="fleet" class="tab">FLEET</button>
@@ -19,24 +20,82 @@
     <button data-panel="keys" class="tab">API KEYS</button>
     <button data-panel="settings" class="tab">SETTINGS</button>
   </nav>
-  <div class="tgt-zone"><label class="tgt-label">TARGET</label><input id="global-target" class="mono" placeholder="example.com" autocomplete="off"></div>
+  <div class="tgt-zone"><label class="tgt-label">TARGET <span class="help" tabindex="0" data-help="The website you are working with right now. RESULTS and RUN CONTROL both follow this box. Type a name like example.com.">?</span></label><input id="global-target" class="mono" placeholder="example.com" autocomplete="off"></div>
   <div class="token-zone"><input id="token" type="password" placeholder="DASHBOARD_TOKEN" autocomplete="off"><button id="token-save">SET</button><span id="conn" class="badge">|</span></div>
 </header>
 
 <main>
+  <!-- HELP: the built-in step-by-step guide -->
+  <section id="panel-help" class="panel hidden">
+    <h2>HELP <span class="hint">how to use this platform, step by step</span></h2>
+    <div class="help-doc">
+      <h3>What does this platform do?</h3>
+      <p>You give it a website you own. It quietly looks at the outside of that
+      website and reports: which website names belong to it, which ones are
+      online, which technical doors (ports) are open -- and it tells you what
+      changed since the last time. It only ever looks at targets you have
+      explicitly allowed.</p>
+
+      <h3>First time here? Three steps.</h3>
+      <p><b>1.</b> SETTINGS -- type your Telegram username or numeric id where it
+      says TELEGRAM, then press SEND TEST NOTIFICATION. A test message should
+      arrive within seconds.<br>
+      <b>2.</b> TARGETS -- add your website (for example example.com). This is
+      also where each website gets its own Telegram setting.<br>
+      <b>3.</b> RUN CONTROL -- type the website name and press START. Watch the
+      progress live, then open RESULTS and REPORTS.</p>
+
+      <h3>Reading the results</h3>
+      <p>RESULTS lists every discovered address with filters and
+      "new since last time" badges. REPORTS builds a clean, tamper-checked
+      report (web page, PDF, CSV, JSON) with one press of GENERATE NOW.</p>
+
+      <h3>Telegram alerts</h3>
+      <p>You only ever set <b>your own</b> username (like jackjohns) or numeric
+      id. The bot key itself is provisioned once by the installer in the .env
+      file. Each website can have its own receiver or be muted entirely --
+      see TARGETS. Personal usernames deliver after you open your bot in
+      Telegram and press START once; the platform learns your chat
+      automatically. Public channel handles (@teamname) work immediately.</p>
+
+      <h3>Checking several websites at once</h3>
+      <p>FLEET runs a group of your registered targets in parallel, each in its
+      own isolated workspace with its own settings.</p>
+
+      <h3>Spreading the load (IP rotation)</h3>
+      <p>SETTINGS accepts a comma-separated PROXY POOL. Every discovery step
+      goes out through the next entry in turn, so one address never carries
+      the whole scan. Each entry is health-checked before the run starts, and
+      the run's log records which proxy each step used.</p>
+
+      <h3>Letting it watch for you</h3>
+      <p>RUN CONTROL has a scheduler: set an interval (10 minutes minimum) and
+      the platform checks the website by itself and sends a Telegram message
+      when something changes.</p>
+
+      <h3>Safety rules</h3>
+      <p>Only scan websites you own or have written permission to test. The
+      platform refuses anything that is not on its allow-list -- that is there
+      to protect you.</p>
+
+      <p class="dim">The full manual with pictures-level detail lives in
+      docs/HELP.md in the project folder.</p>
+    </div>
+  </section>
+
   <!-- a) TOOLS -->
   <section id="panel-tools" class="panel hidden">
-    <h2>TOOLS <span class="hint">tools.yaml -- enable/disable + flag overrides (schema-validated writes, section 9.2-a)</span></h2>
+    <h2>TOOLS <span class="hint">switch individual search tools on or off, and fine-tune their speed</span> <span class="help" tabindex="0" data-help="Each row is one tool the platform uses during a check. Disable what you do not need. Speed overrides apply to the NEXT check -- no restart needed.">?</span></h2>
     <div class="table-wrap"><table id="tools-table"><thead>
       <tr><th data-sort="name">TOOL</th><th>BRANCH</th><th>IMAGE</th><th>ENABLED</th><th>PARAM OVERRIDES (named section 5.6)</th></tr>
     </thead><tbody></tbody></table></div>
-    <h2 class="mt">WORDLIST REGISTRY <span class="hint">per-task checkbox selection + SELECT-ALL per group (section 8)</span></h2>
+    <h2 class="mt">WORDLIST REGISTRY <span class="hint">choose which candidate-name lists each step uses</span> <span class="help" tabindex="0" data-help="Bigger lists find more names but take longer. Tick the lists you want per step, then press SAVE SELECTION. Your choice applies from the next check on.">?</span></h2>
     <div id="wordlists"></div>
   </section>
 
-  <!-- a2) TARGETS (D-protocol: per-system settings incl. Telegram user id) -->
+  <!-- a2) TARGETS (per-site settings) -->
   <section id="panel-targets" class="panel hidden">
-    <h2>TARGETS <span class="hint">per-target settings profiles (C3) | closed allow-list | Telegram user id per system (D-protocol)</span></h2>
+    <h2>TARGETS <span class="hint">every website you watch gets its own settings -- alerts, budgets, limits</span> <span class="help" tabindex="0" data-help="Type the website name, press LOAD, adjust what you need, press SAVE PROFILE. Empty fields simply inherit the global values from SETTINGS.">?</span></h2>
     <div class="row">
       <input id="t-name" placeholder="target (bugdasht.ir)">
       <button id="t-load">LOAD</button>
@@ -44,12 +103,13 @@
     </div>
     <div class="grid">
       <label>DESCRIPTION (short ASCII)<input id="t-desc" maxlength="200"></label>
-      <label>TELEGRAM USER ID (per-target override -- ONLY your numeric id)<input id="t-tg" class="mono" placeholder="e.g. 123456789"></label>
+      <label>TELEGRAM USERNAME OR ID (alerts for THIS website only) <span class="help" tabindex="0" data-help="Overrides the global Telegram receiver for this website: jackjohns, @jackjohns or 123456789. Leave empty to use the global one.">?</span><input id="t-tg" class="mono" placeholder="jackjohns, @jackjohns or 123456789"></label>
       <label>DIGEST THRESHOLD (per-target, empty = inherit)<input id="t-digest" type="number" min="1" class="mono"></label>
       <label>TELEGRAM NOTIFICATIONS (per-system)<select id="t-tgen"><option value="">inherit global</option><option value="true">enabled</option><option value="false">MUTED for this target</option></select></label>
       <label>WATCHTOWER INSTANT ALERTS<select id="t-watch"><option value="">inherit global</option><option value="true">enabled</option><option value="false">disabled</option></select></label>
+      <label>PROXY POOL FOR THIS TARGET (IP rotation, empty = global) <span class="help" tabindex="0" data-help="Comma-separated proxies (http://... or socks5://...). This website's checks go out through them in turn. Every entry is health-checked before the run.">?</span><input id="t-proxy" class="mono" placeholder="http://user:pass@host:port, socks5://host2:port"></label>
     </div>
-    <h3 class="mt">BUDGETS (empty = committed defaults)</h3>
+    <h3 class="mt">BUDGETS (empty = committed defaults) <span class="help" tabindex="0" data-help="Time and size limits for this website's checks. Leave everything empty unless a website needs special treatment.">?</span></h3>
     <div class="grid">
       <label>PASSIVE BRANCH BUDGET (sec)<input id="t-b-passive" type="number" min="1" class="mono"></label>
       <label>ACTIVE BRANCH BUDGET (sec)<input id="t-b-active" type="number" min="1" class="mono"></label>
@@ -61,7 +121,7 @@
       <label>ACTIVE BRANCH MODULES<input id="t-m-active" class="mono" placeholder="ffuf, dns-resolve, ffuf-3, port-check"></label>
       <label>PASSIVE BRANCH MODULES<input id="t-m-passive" class="mono" placeholder="passive-recon"></label>
     </div>
-    <h3 class="mt">WORDLIST SELECTION OVERRIDE (task = comma-separated keys, empty = global selection)</h3>
+    <h3 class="mt">WORDLIST SELECTION OVERRIDE (task = comma-separated keys, empty = global selection) <span class="help" tabindex="0" data-help="Advanced: pin a specific candidate list per discovery step. FFUF-0 = active name guessing, DNSR-1 = DNS resolution, FFUF-2 = virtual-host probing.">?</span></h3>
     <div class="grid">
       <label>FFUF-0<input id="t-wl-FFUF-0" class="mono"></label>
       <label>DNSR-1<input id="t-wl-DNSR-1" class="mono"></label>
@@ -74,13 +134,13 @@
     </div>
     <h3 class="mt">REGISTERED TARGET PROFILES</h3>
     <div class="table-wrap"><table id="targets-table"><thead>
-      <tr><th>TARGET</th><th>DESCRIPTION</th><th>TELEGRAM USER ID</th><th>SECTIONS</th><th></th></tr>
+      <tr><th>TARGET</th><th>DESCRIPTION</th><th>TELEGRAM</th><th>SECTIONS</th><th></th></tr>
     </thead><tbody></tbody></table></div>
   </section>
 
-  <!-- a3) FLEET (C4: multi-target concurrent execution surface) -->
+  <!-- a3) FLEET (multi-target execution) -->
   <section id="panel-fleet" class="panel hidden">
-    <h2>FLEET <span class="hint">multi-target concurrent execution (C4) | isolated member roots, profiles baked in | automatic resource management</span></h2>
+    <h2>FLEET <span class="hint">check several websites at the same time, each in its own isolated workspace</span> <span class="help" tabindex="0" data-help="Type 'all' or a comma-separated list of registered targets, choose how many run in parallel (1-8), and press RUN FLEET. A website that fails never blocks the others.">?</span></h2>
     <div class="row">
       <input id="fl-members" placeholder="members: all or a.com,b.net" class="mono">
       <input id="fl-conc" type="number" min="1" max="8" placeholder="concurrency" class="mono w110">
@@ -95,7 +155,7 @@
 
   <!-- b) RESULTS -->
   <section id="panel-results" class="panel hidden">
-    <h2>RESULTS <span class="hint">read-only from recon/ | views.yaml-driven | diff badges (section 9.2-b)</span></h2>
+    <h2>RESULTS <span class="hint">everything discovered for the selected target -- with what-is-new badges</span> <span class="help" tabindex="0" data-help="Follows the TARGET box in the top bar. Filter, sort, and compare: badges show what appeared or disappeared since the previous check.">?</span></h2>
     <div class="filters" id="filters">
       <input id="f-q" placeholder="free-text search">
       <input id="f-source" placeholder="source (subfinder, crtsh...)">
@@ -111,18 +171,18 @@
     <div class="table-wrap"><table id="assets-table"><thead>
       <tr><th data-sort="host">HOST</th><th data-sort="ips">IPS</th><th data-sort="alive">ALIVE</th><th data-sort="sources">SOURCES</th><th data-sort="tags">TAGS</th><th>JSON</th></tr>
     </thead><tbody></tbody></table></div>
-    <h2 class="mt">SOURCE COVERAGE ANALYTICS <span class="hint">per-source contribution | overlap | uniqueness %</span></h2>
+    <h2 class="mt">SOURCE COVERAGE ANALYTICS <span class="hint">which source found what -- and how much they overlap</span></h2>
     <div class="table-wrap"><table id="coverage-table"><thead>
       <tr><th data-sort="source">SOURCE</th><th data-sort="contribution">CONTRIBUTION</th><th data-sort="unique">UNIQUE ASSETS</th><th data-sort="uniqueness">UNIQUENESS %</th></tr>
     </thead><tbody></tbody></table></div>
     <div id="overlap" class="mono dim"></div>
-    <h2 class="mt">DIFF VIEW <span class="hint">added / removed / changed since previous run (section 6.6)</span></h2>
+    <h2 class="mt">DIFF VIEW <span class="hint">added / removed / changed since the previous check</span></h2>
     <pre id="diff-view" class="json-inspector collapsed"></pre>
   </section>
 
   <!-- b2) REPORTS -->
   <section id="panel-reports" class="panel hidden">
-    <h2>REPORTS <span class="hint">B7 bundle generated from canonical data.json only (section 10.2) | md / html / csv / json / pdf | tamper-checked</span></h2>
+    <h2>REPORTS <span class="hint">one-click, tamper-checked reports: web page, PDF, CSV, JSON</span> <span class="help" tabindex="0" data-help="CHECK BUNDLE shows what already exists; GENERATE NOW builds a fresh report from the latest data. Every file carries a checksum so you can prove it was not modified.">?</span></h2>
     <div class="row">
       <input id="rep-target" placeholder="target (example.com)">
       <button id="rep-check">CHECK BUNDLE</button>
@@ -137,7 +197,7 @@
 
   <!-- c) RUN CONTROL -->
   <section id="panel-run" class="panel hidden">
-    <h2>RUN CONTROL <span class="hint">start / stop / resume | live status from state.json | live log (section 9.2-c)</span></h2>
+    <h2>RUN CONTROL <span class="hint">start, resume or stop a check -- and watch it live</span> <span class="help" tabindex="0" data-help="Type the website name and press START. The first check takes minutes to about an hour depending on the site. RESUME continues an interrupted check.">?</span></h2>
     <div class="row">
       <input id="run-target" placeholder="target (example.com)">
       <button id="run-start">START</button>
@@ -146,22 +206,22 @@
       <span id="run-status" class="badge">|</span>
     </div>
     <div class="row mono dim" id="run-modules"></div>
-    <h2 class="mt">SCHEDULER <span class="hint">section 4.6 -- interval >= 10 min, state in scheduler.json, editable</span></h2>
+    <h2 class="mt">SCHEDULER <span class="hint">automatic checks on a schedule -- minimum every 10 minutes</span> <span class="help" tabindex="0" data-help="Set an interval and tick enabled: the platform checks the website by itself and sends a Telegram message when something changed.">?</span></h2>
     <div class="row">
       <label>interval (min) <input id="sched-interval" type="number" min="10" class="mono"></label>
       <label>enabled <input id="sched-enabled" type="checkbox"></label>
       <button id="sched-save">SAVE</button>
       <span class="mono dim" id="sched-last"></span>
     </div>
-    <h2 class="mt">LIVE LOG <span class="hint">streaming tail of logs/run.log</span></h2>
+    <h2 class="mt">LIVE LOG <span class="hint">the check's diary, streaming live</span></h2>
     <pre id="live-log" class="json-inspector"></pre>
-    <h2 class="mt">AGENT JOURNAL <span class="hint">logs/agent-journal.jsonl -- every decision + action (section 12.7, append-only)</span></h2>
+    <h2 class="mt">AGENT JOURNAL <span class="hint">record of the optional assistant's automatic fixes</span></h2>
     <pre id="agent-journal" class="json-inspector"></pre>
   </section>
 
   <!-- d) API KEYS -->
   <section id="panel-keys" class="panel hidden">
-    <h2>API KEYS <span class="hint">.env-backed | masked after save | picked up next run without restart (section 9.2-d)</span></h2>
+    <h2>API KEYS <span class="hint">optional keys for extra information sources -- the platform works without them</span> <span class="help" tabindex="0" data-help="Each row explains what the platform does WITHOUT the key: it degrades honestly and says so in the results. Paste a key, press SET -- it takes effect on the next check and is masked after saving.">?</span></h2>
     <div class="table-wrap"><table id="keys-table"><thead>
       <tr><th>KEY</th><th>MODULE</th><th>WITHOUT KEY</th><th>STATE</th><th>SET VALUE</th><th></th></tr>
     </thead><tbody></tbody></table></div>
@@ -169,27 +229,29 @@
 
   <!-- e) SETTINGS -->
   <section id="panel-settings" class="panel hidden">
-    <h2>SETTINGS <span class="hint">proxy | Telegram | digest threshold | alert filters | resource budget -> dashboard/config.json (section 9.2-e)</span></h2>
+    <h2>SETTINGS <span class="hint">where alerts go, how checks go out, and how much resource the platform may use</span></h2>
     <div class="grid">
-      <label>PROXY URL (http/socks5 -- set-but-unreachable FAILS FAST section 9.3)<input id="s-proxy" class="mono" placeholder=""></label>
-      <label>TELEGRAM USER ID (D-protocol: set ONLY your numeric id -- this is the alerts receiver)<input id="s-tg-chat" class="mono" placeholder="e.g. 123456789"></label>
-      <label>TELEGRAM BOT TOKEN (platform provisioning -- normally leave empty, lives in .env)<input id="s-tg-token" type="password" placeholder="advanced: override .env"></label>
-      <label>DIGEST THRESHOLD (section 4.7)<input id="s-digest" type="number" min="1" class="mono"></label>
+      <label>PROXY URL (single, http/socks5) <span class="help" tabindex="0" data-help="Route every check through one proxy. If it is unreachable, a check refuses to start instead of silently going direct. Leave empty for a direct connection.">?</span><input id="s-proxy" class="mono" placeholder="http://user:pass@host:port"></label>
+      <label>PROXY POOL (IP rotation, comma-separated) <span class="help" tabindex="0" data-help="The smarter option: list several proxies and every discovery step goes out through the NEXT one in turn, so no single address carries the whole scan. Entries are health-checked before the run; a per-step report lands in the run's logs/proxy-rotation.json.">?</span><input id="s-proxy-pool" class="mono" placeholder="http://user:pass@host:port, socks5://host2:1080"></label>
+      <label>TELEGRAM USERNAME OR ID (where alerts arrive) <span class="help" tabindex="0" data-help="Just your own handle: jackjohns, @jackjohns or 123456789. Personal usernames deliver after you press START on your bot once; public channel handles (@teamname) work immediately.">?</span><input id="s-tg-chat" class="mono" placeholder="jackjohns, @jackjohns or 123456789"></label>
+      <label>TELEGRAM BOT TOKEN (installer provisioning -- normally leave empty) <span class="help" tabindex="0" data-help="The key that lets the platform talk to Telegram. The installer pastes it once into the .env file. Backup tokens go into .env separated by commas: if one stops working, the platform switches to the next one AUTOMATICALLY.">?</span><input id="s-tg-token" type="password" placeholder="advanced: override .env"></label>
+      <label>DIGEST THRESHOLD <span class="help" tabindex="0" data-help="When a single check finds more new things than this number, they are grouped into one summary message instead of one message each.">?</span><input id="s-digest" type="number" min="1" class="mono"></label>
     </div>
     <div class="row">
       <button id="s-test">SEND TEST NOTIFICATION</button>
       <span id="s-test-result" class="badge">|</span>
     </div>
-    <h3 class="mt">ALERT FILTER RULES (section 4.7 -- which new assets are alert-worthy)</h3>
+    <div id="s-test-hint" class="hint-line"></div>
+    <h3 class="mt">ALERT FILTER RULES <span class="help" tabindex="0" data-help="Decide which discoveries are worth a Telegram message: hosts (new website names) and/or ports (newly opened doors). require_new_ip = only alert when the address also resolves to a NEW server.">?</span></h3>
     <div id="rules-editor"></div>
-    <h3 class="mt">SUPERVISOR AGENT (section 12 -- opt-in overseer)</h3>
+    <h3 class="mt">SUPERVISOR AGENT (optional automatic assistant)</h3>
     <div class="grid">
-      <label>AGENT ENABLED (opt-in; pipeline runs standalone without it section 12.1)<select id="s-agent-enabled"><option value="false">off</option><option value="true">on</option></select></label>
-      <label>PASSIVE BRANCH AUTONOMY (section 12.6 default auto-fix)<select id="s-agent-passive" class="mono"><option>observe</option><option>suggest</option><option selected>auto-fix</option></select></label>
-      <label>ACTIVE BRANCH AUTONOMY (section 12.6 default suggest)<select id="s-agent-active" class="mono"><option>observe</option><option selected>suggest</option><option>auto-fix</option></select></label>
-      <label>MAX LLM CALLS / RUN (section 12.4 budget)<input id="s-agent-budget" type="number" min="0" class="mono"></label>
+      <label>AGENT ENABLED <span class="help" tabindex="0" data-help="An optional assistant that watches checks and can automatically retry or fix common failures. The platform runs perfectly well without it (default: off).">?</span><select id="s-agent-enabled"><option value="false">off</option><option value="true">on</option></select></label>
+      <label>PASSIVE BRANCH AUTONOMY<select id="s-agent-passive" class="mono"><option>observe</option><option>suggest</option><option selected>auto-fix</option></select></label>
+      <label>ACTIVE BRANCH AUTONOMY<select id="s-agent-active" class="mono"><option>observe</option><option selected>suggest</option><option>auto-fix</option></select></label>
+      <label>MAX LLM CALLS / RUN<input id="s-agent-budget" type="number" min="0" class="mono"></label>
     </div>
-    <h3 class="mt">STORAGE / LOG RETENTION (run-end housekeeping -- gzip rotation + history retention + total cap)</h3>
+    <h3 class="mt">STORAGE / LOG RETENTION <span class="help" tabindex="0" data-help="Old logs are compressed and the oldest snapshots pruned automatically -- the platform never fills your disk. Your result data and reports are never touched.">?</span></h3>
     <div class="grid">
       <label>KEEP LAST N RUN SNAPSHOTS<input id="s-ret-runs" type="number" min="1" class="mono"></label>
       <label>RUN LOG ROTATION CAP (MB)<input id="s-ret-log" type="number" min="1" class="mono"></label>
@@ -202,7 +264,7 @@
       <button id="s-save">SAVE SETTINGS</button>
       <span id="s-msg" class="mono dim"></span>
     </div>
-    <h3 class="mt">RESOURCE BUDGET (section 11.5)</h3>
+    <h3 class="mt">RESOURCE BUDGET <span class="help" tabindex="0" data-help="The maximum CPU cores and RAM the platform may use, so it never starves everything else on this machine.">?</span></h3>
     <div class="grid">
       <label>CPU CORES<input id="s-cpu" type="number" min="1" class="mono"></label>
       <label>RAM MB<input id="s-ram" type="number" min="256" class="mono"></label>

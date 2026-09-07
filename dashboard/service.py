@@ -129,7 +129,7 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
     # top-level settings keys are refused, never merged into
     # dashboard/config.json (no attacker-controlled key smuggling).
     unknown = set(patch) - {
-        "proxy_url", "digest_threshold", "alert_rules", "telegram",
+        "proxy_url", "proxy_pool", "digest_threshold", "alert_rules", "telegram",
         "resource_budget", "agent", "retention",
     }
     if unknown:
@@ -140,6 +140,20 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
             scheme = urllib.parse.urlparse(proxy).scheme.lower()
             if scheme not in ("http", "https", "socks5"):
                 errors.append("proxy_url scheme must be http/socks5 (section 9.3)")
+    if "proxy_pool" in patch:
+        # C5 IP rotation: comma-separated pool; same scheme law as proxy_url,
+        # every entry validated, deduped, never silently dropped.
+        pool_raw = patch.get("proxy_pool")
+        if pool_raw is None or pool_raw == "":
+            pass
+        elif not isinstance(pool_raw, str):
+            errors.append("proxy_pool must be a comma-separated string of proxy URLs")
+        else:
+            from pipeline.ip_rotation import parse_pool
+            try:
+                parse_pool(pool_raw)
+            except ValueError as exc:
+                errors.append(f"proxy_pool invalid: {exc}")
     if "digest_threshold" in patch:
         th = patch.get("digest_threshold")
         if not isinstance(th, int) or isinstance(th, bool) or th <= 0:

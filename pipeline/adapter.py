@@ -62,6 +62,7 @@ class Adapter:
         clock: Clock | None = None,
         runner: Any | None = None,
         aggressive: bool = False,
+        proxy_pool: Any | None = None,
     ) -> None:
         self.params = params
         self.target_dir = target_dir
@@ -70,6 +71,9 @@ class Adapter:
         self.clock = clock or Clock()
         self.runner = runner or _DockerRunner(params)
         self.aggressive = aggressive
+        # C5 IP rotation: optional ProxyAssigner; one pool entry per module
+        # invocation (round-robin), ledgered, credentials never echoed.
+        self.proxy_pool = proxy_pool
         self._live: dict[str, str] = {}
         self._live_lock = threading.Lock()
 
@@ -127,6 +131,10 @@ class Adapter:
                 attempts=0,
             )
         spec = self.spec(name)
+        if self.proxy_pool is not None:
+            # C5: assign BEFORE any attempt/retry so one module invocation uses
+            # exactly one pool entry; tools without the proxy hook run DIRECT.
+            extra = {**extra, **self.proxy_pool.hook_values(name, module, spec.raw)}
         retries = int(self.params.require("tool_retry_count"))
         backoff = float(self.params.require("retry_backoff_base_sec"))
         result = self._attempt_loop(spec, module, extra, planned_concurrency, timeout_sec, retries, backoff)

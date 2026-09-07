@@ -35,6 +35,7 @@ registry STRUCTURE are refused by law.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -64,6 +65,10 @@ NOTIFY_KEYS_ALLOW = {
     "digest_threshold",
     "watchtower_enabled",
     "telegram_enabled",     # D-protocol: per-system notification opt-out
+}
+
+PROXY_KEYS_ALLOW = {
+    "proxy_pool",           # C5: per-target comma-separated proxy pool (IP rotation)
 }
 
 TARGET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{2,253}$")
@@ -121,14 +126,30 @@ def validate_profile(target: str, profile: dict[str, Any]) -> dict[str, Any]:
                     from pipeline.notify import TELEGRAM_CHAT_RE
                     if not isinstance(v, str) or not TELEGRAM_CHAT_RE.match(v.strip()):
                         raise ProfileError(
-                            'notifications.telegram_chat must be a Telegram user id '
-                            '(digits, optionally negative) or an @channel name')
+                            'notifications.telegram_chat must be a Telegram username '
+                            '(jackjohns or @jackjohns) or a numeric chat id')
                 elif k == "digest_threshold":
                     if not isinstance(v, int) or isinstance(v, bool) or v <= 0:
                         raise ProfileError("notifications.digest_threshold must be a positive integer")
                 elif k in ("watchtower_enabled", "telegram_enabled"):
                     if not isinstance(v, bool):
                         raise ProfileError(f"notifications.{k} must be a boolean")
+        if section == "proxy":
+            # C5 IP rotation: the reserved slot is now live. Closed key
+            # allow-list + scheme law; a bad pool is refused BEFORE it can
+            # reach the registry or the run.
+            bad = set(value) - PROXY_KEYS_ALLOW
+            if bad:
+                raise ProfileError(f"proxy keys not overridable: {sorted(bad)}")
+            for k, v in value.items():
+                if k == "proxy_pool":
+                    if not isinstance(v, str):
+                        raise ProfileError("proxy.proxy_pool must be a comma-separated string of proxy URLs")
+                    try:
+                        from pipeline.ip_rotation import validate_pool_value
+                        validate_pool_value(v)
+                    except ValueError as exc:
+                        raise ProfileError(f"proxy.proxy_pool invalid: {exc}") from exc
         if section == "wordlist_selection":
             # key law enforced at APPLY time against the live registry; here
             # only the shape law (task -> list of key strings) is checked
@@ -187,6 +208,11 @@ def build_edit_plan(params: Params, target: str) -> dict[str, Any]:
     plan["wordlist_selection"] = settings.get("wordlist_selection") or {}
     plan["notifications"] = settings.get("notifications") or {}
     plan["proxy"] = settings.get("proxy") or {}
+    # C5: the per-target pool rides the SAME top-level tools.yaml edit
+    # mechanics as budgets; json.dumps renders a safely quoted YAML scalar.
+    pool = str((settings.get("proxy") or {}).get("proxy_pool") or "").strip()
+    if pool:
+        plan["tools_edits"].append({"key": "proxy_pool", "value": json.dumps(pool)})
     plan["rate_caps"] = settings.get("rate_caps") or {}
     return plan
 

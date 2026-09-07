@@ -305,7 +305,9 @@ class TestProxyRule(unittest.TestCase):
     def test_engine_fail_fast_wiring(self):
         engine_text = (_ROOT / "pipeline" / "engine.py").read_text(encoding="utf-8")
         self.assertIn("PROXY RULE fail-fast", engine_text)
-        self.assertIn("proxy_gate(params)", engine_text)
+        # C5: the engine gates through the pool-aware facade; the legacy
+        # single-proxy law stays reachable behind it (gate_pool_or_legacy).
+        self.assertIn("gate_pool_or_legacy(params)", engine_text)
 
 
 class TestDashboardApi(unittest.TestCase):

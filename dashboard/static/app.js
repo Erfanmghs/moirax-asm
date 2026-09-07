@@ -146,6 +146,8 @@ function targetProfileFromUI() {
   if (watch !== "") notif.watchtower_enabled = watch === "true";
   if (digest) notif.digest_threshold = parseInt(digest, 10);
   if (Object.keys(notif).length) profile.notifications = notif;
+  const tpool = $("#t-proxy").value.trim();
+  if (tpool) profile.proxy = { proxy_pool: tpool };
   const budgets = {};
   for (const [id, key] of [["t-b-passive", "passive_branch_budget_sec"], ["t-b-active", "active_branch_budget_sec"],
     ["t-b-depth", "passive_recursion_depth"], ["t-b-dead", "ffuf3_max_dead_probes"]]) {
@@ -174,6 +176,7 @@ function targetProfileToUI(profile) {
   $("#t-desc").value = (profile && profile.description) || "";
   $("#t-tg").value = n.telegram_chat || "";
   $("#t-tgen").value = n.telegram_enabled === true ? "true" : n.telegram_enabled === false ? "false" : "";
+  $("#t-proxy").value = (s.proxy || {}).proxy_pool || "";
   $("#t-watch").value = n.watchtower_enabled === true ? "true" : n.watchtower_enabled === false ? "false" : "";
   $("#t-digest").value = n.digest_threshold || "";
   const b = s.budgets || {};
@@ -479,6 +482,7 @@ function ruleRow(rule) {
 async function loadSettings() {
   const s = await api("GET", "/api/settings");
   $("#s-proxy").value = s.proxy_url || "";
+  $("#s-proxy-pool").value = s.proxy_pool || "";
   $("#s-tg-chat").value = (s.telegram || {}).chat_id || "";
   $("#s-digest").value = s.digest_threshold || 10;
   $("#s-cpu").value = (s.resource_budget || {}).cpu_cores || "";
@@ -504,6 +508,7 @@ async function loadSettings() {
 async function saveSettings() {
   const patch = {
     proxy_url: $("#s-proxy").value.trim(),
+    proxy_pool: $("#s-proxy-pool").value.trim(),
     digest_threshold: parseInt($("#s-digest").value || "10", 10),
     alert_rules: [...document.querySelectorAll("#rules-editor .rule-row")].map((row) => ({
       class: row.querySelector('[data-rk="class"]').value,
@@ -538,6 +543,20 @@ async function saveSettings() {
     toast("settings saved to dashboard/config.json (secrets masked)");
     loadSettings();
   } catch (e) { toast(e.message, true); }
+}
+
+/* ---------------- per-feature help chips (user-friendly UI law) ----------
+   Every '?' chip explains, in one sentence, what the feature next to it does.
+   Hover shows the tooltip; click/tap pins it (touch screens). */
+document.addEventListener("click", (ev) => {
+  const chip = ev.target.closest(".help");
+  document.querySelectorAll(".help.open").forEach((el) => { if (el !== chip) el.classList.remove("open"); });
+  if (chip) chip.classList.toggle("open");
+});
+
+closeHelpOnEscape();
+function closeHelpOnEscape() {
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") document.querySelectorAll(".help.open").forEach((el) => el.classList.remove("open")); });
 }
 
 /* ---------------- wiring ---------------- */
@@ -590,13 +609,19 @@ $("#s-add-rule").addEventListener("click", () => $("#rules-editor").appendChild(
 $("#s-save").addEventListener("click", saveSettings);
 $("#s-test").addEventListener("click", async () => {
   const badge = $("#s-test-result");
+  const hintLine = $("#s-test-hint");
   try {
     const r = await api("POST", "/api/notify/test", {});
     badge.textContent = r.sent ? "TEST SENT" : "SKIPPED: " + r.reason;
     badge.className = "badge " + (r.sent ? "ok" : "new");
+    hintLine.textContent = r.sent
+      ? (r.reason ? "Delivered: " + r.reason : "Message delivered -- check your Telegram.")
+      : (r.hint || "");
+    hintLine.className = "hint-line" + (r.sent ? " ok" : " warn");
   } catch (e) {
     badge.textContent = "ERROR: " + e.message;
     badge.className = "badge alert";
+    hintLine.textContent = "";
   }
 });
 $("#t-load").addEventListener("click", loadTargetProfile);
@@ -646,6 +671,7 @@ function loadPanel(name) {
   if (name === "run") { loadRun(); startLogStream(); startJournalStream(); }
   if (name === "keys") loadKeys();
   if (name === "settings") loadSettings();
+  if (name === "help") { /* static guide -- nothing to fetch */ }
 }
 
 (async function init() {

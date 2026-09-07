@@ -291,6 +291,11 @@ settings:
   echo_active_hosts: "www.example.com api.example.com"
   echo_fail_script: "exit 1"
   proxy_url: ""
+  # C5 IP ROTATION: comma-separated proxy pool (http/https/socks5); every
+  # entry is health-gated fail-fast, then rotated round-robin per module
+  # (per-target profiles override this key transiently; ledger lands in
+  # logs/proxy-rotation.json)
+  proxy_pool: ""
   # section 9.3 PROXY RULE reachability probe (set-but-unreachable -> FAIL FAST)
   proxy_check_timeout_sec: 3
   ffuf_host_header: ""
@@ -583,6 +588,10 @@ tools:
       - when: httpx_disable_update_check
         argv:
           - "{httpx_disable_update_check}"
+      - when: proxy_url
+        argv:
+          - -http-proxy
+          - "{proxy_url}"
     docker_env:
       - "HF_HUB_OFFLINE={httpx_hf_hub_offline}"
     output_mode: json
@@ -1182,6 +1191,10 @@ tools:
       - when: httpx_disable_update_check
         argv:
           - "{httpx_disable_update_check}"
+      - when: proxy_url
+        argv:
+          - -http-proxy
+          - "{proxy_url}"
     docker_env:
       - "HF_HUB_OFFLINE={httpx_hf_hub_offline}"
     output_mode: json

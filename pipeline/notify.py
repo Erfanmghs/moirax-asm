@@ -28,13 +28,34 @@ from pipeline.params import Params
 
 SendFn = Callable[[str], None]
 
-# Telegram chat/user id law: numeric user/chat ids (optionally negative for
-# groups) or @channel names. Injection-safe: no whitespace, no metacharacters.
-TELEGRAM_CHAT_RE = re.compile(r"^-?\d{2,20}$|^@[A-Za-z0-9_]{4,64}$")
+# Telegram receiver law: numeric user/chat ids (optionally negative for
+# groups) OR usernames with or without the leading @ (operator directive:
+# "if the user's handle is jackjohns, messages go to jackjohns").
+# Injection-safe: no whitespace, no metacharacters.
+TELEGRAM_CHAT_RE = re.compile(r"^-?\d{2,20}$|^@?[A-Za-z0-9_]{4,64}$")
+_NUMERIC_RECEIVER_RE = re.compile(r"^-?\d+$")
 
 # Sentinel source returned by resolve_chat_id when the target profile
 # explicitly disables notifications for that system.
 DISABLED_BY_PROFILE = "disabled_by_profile"
+
+# Process-lifetime knowledge of which bot tokens Telegram REJECTED (401).
+# A rejected token is skipped on every later attempt; the next pool entry
+# (the replacement token) takes over automatically. Never persisted, never
+# echoed.
+_REJECTED_TOKENS: set[str] = set()
+
+
+def normalize_receiver(raw: str) -> str:
+    """Operator UX law: a bare handle like jackjohns becomes @jackjohns;
+    @handle stays @handle; numeric chat ids stay numeric. Returns '' for
+    anything the receiver law refuses."""
+    s = str(raw or "").strip()
+    if not TELEGRAM_CHAT_RE.match(s):
+        return ""
+    if _NUMERIC_RECEIVER_RE.match(s):
+        return s
+    return s if s.startswith("@") else "@" + s
 
 
 def load_target_notifications(params: Params, target: str | None) -> dict[str, Any]:
@@ -52,59 +73,280 @@ def load_target_notifications(params: Params, target: str | None) -> dict[str, A
 
 
 def resolve_chat_id(params: Params, target: str | None = None) -> tuple[str, str]:
-    """Telegram user/chat id resolution with per-target override support.
+    """Telegram receiver resolution with per-target override support.
+    Accepts a username (jackjohns / @jackjohns) or a numeric chat id at every
+    layer. A learned username -> numeric chat id map (telegram.receiver_map in
+    dashboard config, filled automatically from getUpdates) is consulted so
+    personal-account usernames deliver without any manual id lookup.
     Returns (chat_id, source); source in {target_profile, dashboard_config,
-    env, disabled_by_profile, ''} -- never echoes the id into logs."""
+    env, disabled_by_profile, ''} -- never echoes the receiver into logs.
+    Network-free by law: learning happens only in the send path."""
     notif = load_target_notifications(params, target)
     if notif.get("telegram_enabled") is False:
         return "", DISABLED_BY_PROFILE
     chat = str(notif.get("telegram_chat") or "").strip()
-    if chat:
-        return chat, "target_profile"
-    config = load_dashboard_config(params)
-    tg = config.get("telegram") or {}
-    chat = str(tg.get("chat_id") or "").strip()
-    if chat:
-        return chat, "dashboard_config"
-    load_dotenv(params.root, str(params.require("env_filename")))
-    chat = os.environ.get(str(params.require("telegram_chat_id_env")), "").strip()
-    return chat, ("env" if chat else "")
+    source = "target_profile"
+    if not chat:
+        config = load_dashboard_config(params)
+        tg = config.get("telegram") or {}
+        chat = str(tg.get("chat_id") or "").strip()
+        source = "dashboard_config"
+    if not chat:
+        load_dotenv(params.root, str(params.require("env_filename")))
+        chat = os.environ.get(str(params.require("telegram_chat_id_env")), "").strip()
+        source = "env"
+    chat = normalize_receiver(chat)
+    if not chat:
+        return "", ""
+    if chat.startswith("@"):
+        mapped = current_receiver_map(params).get(chat[1:].lower())
+        if mapped:
+            return mapped, source
+    return chat, source
 
 
 def resolve_bot_token(params: Params) -> tuple[str, str]:
-    """Bot token is PLATFORM provisioning, not operator UX: dashboard config
-    first (masked on read), .env TELEGRAM_BOT_TOKEN fallback."""
+    """Compat wrapper: first token of the pool. See resolve_bot_token_pool."""
+    pool = resolve_bot_token_pool(params)
+    if not pool:
+        return "", ""
+    return pool[0], ("dashboard_config" if load_dashboard_config(params).get("telegram", {}).get("bot_token") else "env")
+
+
+def resolve_bot_token_pool(params: Params) -> list[str]:
+    """Bot token POOL (platform provisioning, not operator UX): dashboard
+    config token first, then every comma-separated TELEGRAM_BOT_TOKEN entry
+    in .env as automatic backups. When a token goes invalid, the send path
+    rotates to the next entry by itself (operator directive: the tool must
+    replace a broken token with its replacement without human help)."""
+    pool: list[str] = []
     config = load_dashboard_config(params)
     tg = config.get("telegram") or {}
     token = str(tg.get("bot_token") or "").strip()
-    if token:
-        return token, "dashboard_config"
+    if token and not token.startswith("****"):
+        pool.append(token)
     load_dotenv(params.root, str(params.require("env_filename")))
-    token = os.environ.get(str(params.require("telegram_bot_token_env")), "").strip()
-    return token, ("env" if token else "")
+    raw = os.environ.get(str(params.require("telegram_bot_token_env")), "")
+    for part in raw.split(","):
+        part = part.strip()
+        if part and part not in pool:
+            pool.append(part)
+    return pool
+
+
+# --------------------------------------------------------- username learning
+
+def current_receiver_map(params: Params) -> dict[str, str]:
+    """Persisted username -> numeric chat id map (dashboard config
+    telegram.receiver_map). Learned automatically from getUpdates."""
+    tg = (load_dashboard_config(params).get("telegram") or {})
+    raw = tg.get("receiver_map") or {}
+    return {str(k).strip().lstrip("@").lower(): str(v).strip()
+            for k, v in raw.items() if isinstance(k, str) and isinstance(v, (str, int))}
+
+
+def _persist_receiver_map(params: Params, merged: dict[str, str]) -> None:
+    """Atomic write of the receiver map; best-effort, never raises."""
+    path = params.root / str(params.require("dashboard_config_relpath"))
+    doc: dict[str, Any] = {}
+    if path.is_file():
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, ValueError):
+            doc = {}
+    if not isinstance(doc, dict):
+        doc = {}
+    tg = doc.get("telegram") if isinstance(doc.get("telegram"), dict) else {}
+    tg = {**tg, "receiver_map": merged}
+    doc["telegram"] = tg
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        pass
+
+
+def learn_receiver_map(params: Params) -> dict[str, str]:
+    """One getUpdates round-trip: for every account that has pressed START on
+    the bot, learn username -> numeric chat id and persist it. This is how a
+    bare handle (jackjohns) delivers to the right person without any manual
+    id lookup. Best-effort: on any failure the current persisted map is
+    returned unchanged. Tokens are never echoed."""
+    learned: dict[str, str] = {}
+    last_update = 0
+    for token in resolve_bot_token_pool(params):
+        if token in _REJECTED_TOKENS:
+            continue
+        timeout = int(params.require("telegram_timeout_sec"))
+        url = f"https://api.telegram.org/bot{token}/getUpdates"
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url), timeout=timeout) as resp:
+                doc = json.loads(resp.read().decode("utf-8"))
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError, ValueError):
+            continue
+        for upd in doc.get("result") or []:
+            if not isinstance(upd, dict):
+                continue
+            if isinstance(upd.get("update_id"), int):
+                last_update = max(last_update, upd["update_id"])
+            msg = upd.get("message") or upd.get("channel_post") or {}
+            chat = msg.get("chat") if isinstance(msg, dict) else None
+            if not isinstance(chat, dict):
+                continue
+            uname = str(chat.get("username") or "").strip().lstrip("@").lower()
+            cid = str(chat.get("id") or "").strip()
+            if uname and cid:
+                learned[uname] = cid
+        if doc.get("result") is not None:
+            break
+    if learned:
+        merged = {**current_receiver_map(params), **learned}
+        _persist_receiver_map(params, merged)
+        if last_update:
+            # confirm consumption so the pending queue does not grow unbounded
+            for token in resolve_bot_token_pool(params):
+                if token in _REJECTED_TOKENS:
+                    continue
+                confirm_url = (f"https://api.telegram.org/bot{token}/getUpdates"
+                               f"?offset={last_update + 1}")
+                try:
+                    with urllib.request.urlopen(urllib.request.Request(confirm_url), timeout=5) as resp:
+                        resp.read()
+                except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError):
+                    pass
+                break
+    return {**current_receiver_map(params), **learned}
+
+
+# ------------------------------------------------------------- send machinery
+
+def _telegram_post(params: Params, token: str, method: str,
+                   payload: dict[str, str]) -> tuple[int, str]:
+    """One Bot API call. Returns (http_code, description); code 0 means a
+    network-level failure. The description comes from Telegram itself and
+    never contains the token."""
+    timeout = int(params.require("telegram_timeout_sec"))
+    url = f"https://api.telegram.org/bot{token}/{method}"
+    data = urllib.parse.urlencode(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", "replace")
+        try:
+            desc = str(json.loads(body).get("description") or "")
+        except ValueError:
+            desc = ""
+        return 200, desc
+    except urllib.error.HTTPError as exc:
+        try:
+            body = exc.read().decode("utf-8", "replace")
+            desc = str(json.loads(body).get("description") or "")
+        except (ValueError, OSError):
+            desc = ""
+        return exc.code, desc[:120]
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return 0, "telegram unreachable (network)"
+
+
+def _send_with_pool(params: Params, chat_id: str, text: str) -> tuple[bool, str]:
+    """Deliver one message through the token pool. Invalid (401-rejected)
+    tokens are skipped and the NEXT pool entry -- the replacement token --
+    takes over automatically in the same send. Returns (ok, human detail);
+    the detail names token indexes, never token values."""
+    pool = resolve_bot_token_pool(params)
+    if not pool:
+        return False, "no bot token configured"
+    notes: list[str] = []
+    detail = ""
+    for idx, token in enumerate(pool, start=1):
+        if token in _REJECTED_TOKENS:
+            notes.append(f"token #{idx} skipped (known invalid)")
+            continue
+        code, desc = _telegram_post(params, token, "sendMessage",
+                                    {"chat_id": chat_id, "text": text})
+        if code == 200:
+            if notes:
+                notes.append(f"delivered with token #{idx}")
+            return True, "; ".join(notes)
+        if code == 401:
+            _REJECTED_TOKENS.add(token)
+            notes.append(f"token #{idx} rejected as invalid -- rotated to the replacement")
+            continue
+        if code == 0:
+            detail = "telegram unreachable (network)"
+            break
+        detail = f"telegram refused (HTTP {code})" + (f": {desc}" if desc else "")
+        break
+    if notes or detail:
+        return False, "; ".join(notes) + (f" | {detail}" if detail else "")
+    return False, "all bot tokens rejected as invalid"
+
+
+def _deliver_username_aware(params: Params, chat_id: str, text: str) -> tuple[bool, str]:
+    """Username-shaped receivers get one learning round-trip before and one
+    after a failed direct attempt: personal accounts that pressed START on
+    the bot are delivered via their learned numeric id; public channel and
+    group handles deliver directly."""
+    if chat_id.startswith("@"):
+        name = chat_id[1:].lower()
+        mapped = current_receiver_map(params).get(name)
+        if not mapped:
+            mapped = learn_receiver_map(params).get(name)
+        if mapped:
+            ok, _detail = _send_with_pool(params, mapped, text)
+            if ok:
+                return True, ""
+    return _send_with_pool(params, chat_id, text)
 
 
 def send_test_notification(params: Params, target: str | None = None,
                            sender: SendFn | None = None) -> dict[str, Any]:
-    """Dashboard 'SEND TEST' button (D-protocol): one harmless message proving
-    the wiring for the resolved receiver. Never raises; the ledger explains
-    every skip reason (never-silent law). The chat id is never echoed back."""
+    """Dashboard 'SEND TEST' button: one harmless message proving the wiring
+    for the resolved receiver. Never raises; the result explains every skip
+    with a human next-step HINT (user-friendly UI law). Receivers and tokens
+    are never echoed."""
     chat_id, source = resolve_chat_id(params, target)
     if source == DISABLED_BY_PROFILE:
-        return {"sent": False, "reason": "notifications disabled for this target profile", "source": source}
+        return {"sent": False,
+                "reason": "notifications are disabled for this target",
+                "hint": "Re-enable Telegram notifications for this target on the TARGETS page.",
+                "source": source}
     if not chat_id:
         return {"sent": False,
-                "reason": "no Telegram user id configured (Settings or the target profile)",
+                "reason": "no Telegram username or id configured yet",
+                "hint": "Type your Telegram username (e.g. @jackjohns) or your numeric id in Settings -- or per target on the TARGETS page -- and press SEND TEST again.",
                 "source": ""}
-    token, _token_source = resolve_bot_token(params)
-    if not token:
-        return {"sent": False,
-                "reason": "bot token not provisioned (TELEGRAM_BOT_TOKEN in .env)",
-                "source": source}
     scope = f"target={target}" if target else "global default"
     text = f"TEST: notification channel verified ({scope})"
-    ok = _deliver(params, text, sender, chat_id=chat_id)
-    return {"sent": ok, "reason": "" if ok else "delivery failed (network/API)", "source": source}
+    if not resolve_bot_token_pool(params):
+        return {"sent": False,
+                "reason": "no bot token is provisioned on the platform",
+                "hint": "In Telegram, open @BotFather, send /newbot, and paste the token it gives you into .env as TELEGRAM_BOT_TOKEN. Extra tokens separated by commas act as automatic backups.",
+                "source": source}
+    if sender is not None:
+        sender(text)
+        return {"sent": True, "reason": "", "hint": "", "source": source}
+    ok, detail = _deliver_username_aware(params, chat_id, text)
+    hint = ""
+    if not ok:
+        low = detail.lower()
+        if "401" in low or "invalid" in low:
+            hint = ("Every configured bot token was rejected. The platform already "
+                    "rotated through all backups -- paste a fresh token from @BotFather "
+                    "(replacing the broken one) and press SEND TEST again.")
+        elif "chat not found" in low:
+            hint = ("Open your bot inside Telegram and press START once; the platform "
+                    "learns your chat automatically and the next SEND TEST arrives. "
+                    "Public channel or group handles (@teamname) work directly once "
+                    "the bot is a member.")
+        elif "network" in low:
+            hint = ("The platform could not reach Telegram. Check this machine's "
+                    "internet connection or proxy settings, then try again.")
+        elif "429" in low:
+            hint = "Telegram is rate-limiting this bot. Wait a moment and press SEND TEST again."
+    return {"sent": ok, "reason": detail, "hint": hint, "source": source}
 
 # section 4.6 instant-alert classes: NEW SUBDOMAIN (hosts) + NEWLY OPENED PORT (ports).
 # Every other diff class (services / tech / removed / closed ports) -> dashboard
@@ -182,19 +424,10 @@ def _deliver(params: Params, text: str, sender: SendFn | None,
     if sender is not None:
         sender(text)
         return True
-    token, _token_source = resolve_bot_token(params)
-    if not token or not chat_id:
+    if not chat_id or not resolve_bot_token_pool(params):
         return False
-    timeout = int(params.require("telegram_timeout_sec"))
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode("utf-8")
-    req = urllib.request.Request(url, data=payload, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            resp.read()
-        return True
-    except (urllib.error.URLError, TimeoutError, OSError):
-        return False
+    ok, _detail = _deliver_username_aware(params, chat_id, text)
+    return ok
 
 
 def send_status(params: Params, status: str, module: str, reason: str,

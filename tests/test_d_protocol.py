@@ -189,7 +189,8 @@ class TestBotTokenAndSendTest(unittest.TestCase):
         params = _params()
         ledger = send_test_notification(params, "nothing.example", sender=lambda _t: None)
         self.assertFalse(ledger["sent"])
-        self.assertIn("user id", ledger["reason"])
+        self.assertIn("username or id", ledger["reason"])
+        self.assertIn("hint", ledger, "user-friendly next step always present")
         params2 = _params()
         set_profile(params2, "muted.example", {"notifications": {"telegram_enabled": False}})
         ledger2 = send_test_notification(params2, "muted.example", sender=lambda _t: None)
@@ -351,6 +352,193 @@ class TestDashboardApiHardening(unittest.TestCase):
             r = self.client.get("/api/fleet/ledger", headers=self.headers)
             self.assertEqual(r.status_code, 200)
             self.assertFalse(r.json()["exists"])
+
+
+class TestUsernameReceivers(unittest.TestCase):
+    """Operator directive v2: a Telegram HANDLE (jackjohns / @jackjohns) is a
+    first-class receiver next to numeric ids; bare handles normalize to @form;
+    a learned username -> numeric id map resolves personal accounts."""
+
+    def setUp(self):
+        _scrub_telegram_env()
+        from pipeline import notify
+        notify._REJECTED_TOKENS.clear()
+
+    def test_normalize_receiver(self):
+        from pipeline.notify import normalize_receiver
+        self.assertEqual(normalize_receiver("jackjohns"), "@jackjohns")
+        self.assertEqual(normalize_receiver("@jackjohns"), "@jackjohns")
+        self.assertEqual(normalize_receiver("  @JackJohns  "), "@JackJohns")
+        self.assertEqual(normalize_receiver("123456789"), "123456789")
+        self.assertEqual(normalize_receiver("-100200300"), "-100200300")
+        for bad in ("", "ab", "bad name", "5\n6", "id; rm -rf /"):
+            self.assertEqual(normalize_receiver(bad), "", bad)
+
+    def test_receiver_regex_accepts_bare_handles(self):
+        for ok in ("jackjohns", "@jackjohns", "123456789", "@channel_name"):
+            self.assertTrue(TELEGRAM_CHAT_RE.match(ok), ok)
+        for bad in ("jack johns", "ab", "${jndi:ldap://x}"):
+            self.assertFalse(TELEGRAM_CHAT_RE.match(bad), bad)
+
+    def test_profile_accepts_bare_username(self):
+        clean = validate_profile("bugdasht.ir", {"notifications": {"telegram_chat": "jackjohns"}})
+        self.assertEqual(clean["notifications"]["telegram_chat"], "jackjohns")
+
+    def test_username_resolved_through_learned_map(self):
+        params = _params()
+        _write_config(params, {"telegram": {"chat_id": "JackJohns",
+                                            "receiver_map": {"jackjohns": "424242"}}})
+        chat, source = resolve_chat_id(params)
+        self.assertEqual(chat, "424242")
+        self.assertEqual(source, "dashboard_config")
+
+    def test_unmapped_username_stays_at_form(self):
+        params = _params()
+        _write_config(params, {"telegram": {"chat_id": "@newuser"}})
+        chat, source = resolve_chat_id(params)
+        self.assertEqual((chat, source), ("@newuser", "dashboard_config"))
+
+    def test_bare_env_username_normalized(self):
+        params = _params()
+        _write_env(params, {"TELEGRAM_CHAT_ID": "jackjohns"})
+        chat, source = resolve_chat_id(params)
+        self.assertEqual((chat, source), ("@jackjohns", "env"))
+
+
+class TestBotTokenPoolAndRotation(unittest.TestCase):
+    """Operator directive v2: comma-separated TELEGRAM_BOT_TOKEN pool; a token
+    rejected by Telegram (401) is replaced AUTOMATICALLY by the next pool
+    entry inside the same send; token values are never echoed anywhere."""
+
+    def setUp(self):
+        _scrub_telegram_env()
+        from pipeline import notify
+        notify._REJECTED_TOKENS.clear()
+
+    def test_pool_parsed_from_comma_separated_env(self):
+        from pipeline.notify import resolve_bot_token_pool
+        params = _params()
+        _write_env(params, {"TELEGRAM_BOT_TOKEN": "tokA, tokB ,tokA,tokC"})
+        self.assertEqual(resolve_bot_token_pool(params), ["tokA", "tokB", "tokC"])
+
+    def test_dashboard_token_leads_then_env_backups(self):
+        from pipeline.notify import resolve_bot_token_pool
+        params = _params()
+        _write_config(params, {"telegram": {"bot_token": "tok-dash"}})
+        _write_env(params, {"TELEGRAM_BOT_TOKEN": "tok-env1,tok-env2"})
+        self.assertEqual(resolve_bot_token_pool(params), ["tok-dash", "tok-env1", "tok-env2"])
+
+    def test_invalid_token_rotates_to_replacement_mid_send(self):
+        from pipeline import notify
+        params = _params()
+        _write_env(params, {"TELEGRAM_BOT_TOKEN": "tok-dead,tok-live"})
+        calls: list[str] = []
+
+        def fake_post(_params, token, method, payload):
+            calls.append((method, payload["chat_id"]))
+            return (401, "Unauthorized") if token == "tok-dead" else (200, "ok")
+
+        with mock.patch("pipeline.notify._telegram_post", side_effect=fake_post):
+            ok, detail = notify._send_with_pool(params, "4242", "hello")
+        self.assertTrue(ok)
+        self.assertIn("rotated", detail)
+        self.assertEqual(calls, [("sendMessage", "4242"), ("sendMessage", "4242")])
+
+    def test_rejected_token_skipped_on_next_send(self):
+        from pipeline import notify
+        params = _params()
+        _write_env(params, {"TELEGRAM_BOT_TOKEN": "tok-dead,tok-live"})
+        calls: list[str] = []
+
+        def fake_post(_params, token, method, payload):
+            calls.append(token)
+            return (401, "Unauthorized") if token == "tok-dead" else (200, "ok")
+
+        with mock.patch("pipeline.notify._telegram_post", side_effect=fake_post):
+            notify._send_with_pool(params, "4242", "one")
+        calls.clear()
+        with mock.patch("pipeline.notify._telegram_post", side_effect=fake_post):
+            ok, _detail = notify._send_with_pool(params, "4242", "two")
+        self.assertTrue(ok)
+        self.assertNotIn("tok-dead", calls, "known-invalid token must be skipped")
+        self.assertEqual(calls, ["tok-live"])
+
+    def test_all_tokens_invalid_is_honest_and_never_echoes(self):
+        from pipeline import notify
+        params = _params()
+        _write_env(params, {"TELEGRAM_BOT_TOKEN": "tok-dead-one,tok-dead-two"})
+
+        def fake_post(_params, token, method, payload):
+            return (401, "Unauthorized")
+
+        with mock.patch("pipeline.notify._telegram_post", side_effect=fake_post):
+            ok, detail = notify._send_with_pool(params, "4242", "hello")
+        self.assertFalse(ok)
+        self.assertTrue(detail)
+        self.assertNotIn("tok-dead-one", detail)
+        self.assertNotIn("tok-dead-two", detail)
+
+    def test_send_test_hint_on_chat_not_found(self):
+        from pipeline import notify
+        params = _params()
+        _write_config(params, {"telegram": {"chat_id": "@newuser"}})
+        _write_env(params, {"TELEGRAM_BOT_TOKEN": "tok-live"})
+
+        def fake_post(_params, token, method, payload):
+            return (400, "chat not found")
+
+        with mock.patch("pipeline.notify._telegram_post", side_effect=fake_post), \
+             mock.patch("pipeline.notify.learn_receiver_map", return_value={}):
+            ledger = send_test_notification(params, None)
+        self.assertFalse(ledger["sent"])
+        self.assertIn("START", ledger["hint"])
+        self.assertNotIn("tok-live", json.dumps(ledger))
+
+    def test_send_test_hint_on_token_pool_exhausted(self):
+        from pipeline import notify
+        params = _params()
+        _write_config(params, {"telegram": {"chat_id": "4242"}})
+        _write_env(params, {"TELEGRAM_BOT_TOKEN": "tok-dead"})
+
+        def fake_post(_params, token, method, payload):
+            return (401, "Unauthorized")
+
+        with mock.patch("pipeline.notify._telegram_post", side_effect=fake_post):
+            ledger = send_test_notification(params, None)
+        self.assertFalse(ledger["sent"])
+        self.assertIn("BotFather", ledger["hint"])
+        self.assertNotIn("tok-dead", json.dumps(ledger))
+
+    def test_learn_receiver_map_persists_getupdates_pair(self):
+        from pipeline import notify
+        params = _params()
+        _write_env(params, {"TELEGRAM_BOT_TOKEN": "tok-live"})
+
+        class FakeResp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def read(self):
+                return json.dumps({"ok": True, "result": [
+                    {"update_id": 7, "message": {"chat": {"id": 424242,
+                                                          "username": "JackJohns"}}},
+                    {"update_id": 8, "message": {"chat": {"id": 555555}}},
+                ]}).encode()
+
+        def fake_urlopen(req, timeout=0):
+            return FakeResp()
+
+        with mock.patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            merged = notify.learn_receiver_map(params)
+        self.assertEqual(merged.get("jackjohns"), "424242")
+        self.assertNotIn("555555", merged.values(),
+                         "chat without a username must not map by id")
+        stored = json.loads((params.root / str(params.require("dashboard_config_relpath")))
+                            .read_text(encoding="utf-8"))
+        self.assertEqual(stored["telegram"]["receiver_map"]["jackjohns"], "424242")
 
 
 if __name__ == "__main__":

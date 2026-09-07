@@ -1,0 +1,112 @@
+# C4 FLEET vehicle (release phase) — multi-target concurrent execution with
+# automatic request/resource management and per-target settings baked in.
+#
+# Members run PASSIVE-ONLY (per-target C3 profiles trim the active branch)
+# against two public passive vehicles (example.com, example.net) — no active
+# traffic against third parties. The vehicle proves:
+#   C4-1 member list resolution + isolation (per-member roots, baked profiles)
+#   C4-2 concurrency observed (member start overlap <= concurrency)
+#   C4-3 failure isolation (ledger records every member independently)
+#   C4-4 fleet ledger persisted + clean-law semantics
+#   C4-5 committed defaults untouched in the SOURCE root (baking is
+#        member-local)
+#   C4-6 integrity: verify_b1 diff empty; source dirty set only the transient
+#        scope additions (before-copies)
+
+name: c4-fleet
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: "Comma list or 'all' (default example.com,example.net)"
+        required: false
+        default: "example.com,example.net"
+      concurrency:
+        description: "Parallel members (default 2)"
+        required: false
+        default: "2"
+
+concurrency:
+  group: c4-fleet
+  cancel-in-progress: false
+
+jobs:
+  fleet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: "Checkout (branch: private)"
+        uses: actions/checkout@v4
+        with:
+          ref: private
+
+      - name: Toolchain
+        run: python3 --version && docker version --format 'client={{.Client.Version}}'
+
+      - name: "Install suite deps (REM22/REM23 parity)"
+        run: pip install --quiet fastapi uvicorn httpx reportlab
+
+      - name: "Unit suite (shared regression + C4 atomic units)"
+        run: |
+          PYTHONPATH=. python3 -u -m unittest discover -s tests -t . 2>&1 | tee ci/c4_units_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: "Transient scope entries for the two public passive vehicles"
+        run: |
+          cp scope.yaml ci/c4_scope_before.yaml
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("scope.yaml")
+          lines = p.read_text(encoding="utf-8").splitlines()
+          out, inserted = [], False
+          for line in lines:
+              out.append(line)
+              if line.strip() == "includes:" and not inserted:
+                  out += ["  - example.net", "  - *.example.net"]
+                  inserted = True
+          assert inserted
+          p.write_text("\n".join(out) + "\n", encoding="utf-8")
+          print("C4 vehicle: example.net added transiently (example.com already in the committed baseline).")
+          PY
+
+      - name: "Per-target passive-only profiles (C3 registry, transient)"
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from pipeline.params import Params
+          from pipeline.target_profiles import set_profile
+          params = Params(Path("."))
+          for t in ("example.com", "example.net"):
+              set_profile(params, t, {
+                  "description": "C4 fleet passive-only public vehicle",
+                  "modules": {"active_branch_modules": [], "passive_branch_modules": ["passive-recon"]},
+                  "budgets": {"passive_branch_budget_sec": 1200, "passive_recursion_depth": 1},
+              })
+          print("C4 profiles baked into targets.yaml (transient working copy; before-copy kept).")
+          PY
+
+      - name: "Fleet run (concurrent members, isolated roots)"
+        run: |
+          ./recon.sh fleet run --targets "${{ inputs.targets || 'example.com,example.net' }}" \
+            --concurrency "${{ inputs.concurrency || '2' }}" 2>&1 | tee ci/c4_fleet_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: "Assertions (C4-1..C4-6)"
+        run: |
+          PYTHONPATH=. python3 ci/c4_assertions.py 2>&1 | tee ci/c4_assertions_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload evidence (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c4-fleet-evidence
+          path: |
+            ci/c4_verdict.txt
+            ci/c4_units_console.log
+            ci/c4_fleet_console.log
+            ci/c4_assertions_console.log
+            ci/c4_scope_before.yaml
+            history/fleet/**/fleet-ledger.json
+          if-no-files-found: warn

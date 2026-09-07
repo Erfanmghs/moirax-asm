@@ -26,6 +26,8 @@ USAGE = """Usage:
   ./recon.sh wordlist-rm <name>                # C2: remove an operator custom list
   ./recon.sh target-profile set <target> <json-file>   # C3: upsert per-target settings
   ./recon.sh target-profile get <target>               # C3: show per-target profile
+  ./recon.sh fleet run [--targets a,b,c|all] [--concurrency N]  # C4: concurrent multi-target run
+  ./recon.sh fleet status                              # C4: latest fleet ledger
 """
 
 
@@ -67,6 +69,12 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_wordlist_add(params, _need(args, 1), _need(args, 2))
     if command == "wordlist-rm":
         return cmd_wordlist_rm(params, _need(args, 1))
+    if command == "fleet" and len(args) >= 2:
+        sub = args[1]
+        if sub == "run":
+            return cmd_fleet_run(params, args[2:])
+        if sub == "status":
+            return cmd_fleet_status(params)
     if command == "target-profile" and len(args) >= 3:
         sub = args[1]
         if sub == "set":
@@ -307,6 +315,56 @@ def cmd_target_profile_get(params: Params, target: str) -> int:
     from pipeline.target_profiles import get_profile
 
     print(_json.dumps(get_profile(params, target.strip()), indent=2, sort_keys=True))
+    return 0
+
+
+# ------------------------------------------------------------- C4 fleet
+
+def cmd_fleet_run(params: Params, rest: list[str]) -> int:
+    """C4: concurrent multi-target run with automatic resource management."""
+    from pipeline.fleet import FleetError, run_fleet
+
+    targets = "all"
+    concurrency = None
+    i = 0
+    while i < len(rest):
+        if rest[i] == "--targets" and i + 1 < len(rest):
+            targets = rest[i + 1]
+            i += 2
+        elif rest[i] == "--concurrency" and i + 1 < len(rest):
+            try:
+                concurrency = int(rest[i + 1])
+            except ValueError:
+                print("fleet: --concurrency must be an integer")
+                return 1
+            i += 2
+        else:
+            i += 1
+    try:
+        ledger = run_fleet(params, targets, concurrency=concurrency)
+    except FleetError as exc:
+        print(f"fleet: REFUSED {exc}")
+        return 1
+    print(f"fleet: requested={ledger['requested']} concurrency={ledger['concurrency']} clean={ledger['clean']}")
+    for r in ledger["results"]:
+        print(f"  member {r['target']}: exit={r.get('exit_code')} {'err=' + r['error'] if r.get('error') else ''}")
+    print(f"fleet ledger: history/fleet/ (latest run)")
+    return 0 if ledger["clean"] else 1
+
+
+def cmd_fleet_status(params: Params) -> int:
+    """C4: show the latest fleet ledger."""
+    import json as _json
+
+    root = Path(params.root) / "history" / "fleet"
+    if not root.is_dir():
+        print("fleet: no fleet runs recorded")
+        return 1
+    latest = sorted(d.name for d in root.iterdir() if d.is_dir())[-1]
+    doc = _json.loads((root / latest / "fleet-ledger.json").read_text(encoding="utf-8"))
+    print(_json.dumps({"run": latest, "clean": doc["clean"], "concurrency": doc["concurrency"],
+                        "results": [{"target": r["target"], "exit": r.get("exit_code")} for r in doc["results"]]},
+                       indent=1))
     return 0
 
 

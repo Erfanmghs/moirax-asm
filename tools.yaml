@@ -178,6 +178,8 @@ settings:
   # C2 (release directive): generated full-SecLists index + operator custom
   # lists index; the WordlistRegistry merges both IN (curated keys win).
   wordlists_generated_index: wordlists/seclists-index.yaml
+  # C4 (release directive): global parallel-target cap for fleet runs.
+  fleet_max_concurrency: 3
   wordlists_custom_index: wordlists/custom/index.yaml
   seclists_root: /usr/share/seclists
   wordlist_forge_output: wordlists/forge/custom-subdomains.txt

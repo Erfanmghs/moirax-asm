@@ -303,6 +303,32 @@ def _upsert_subkey(block: list[str], header: str, key: str, value: Any) -> list[
     return block
 
 
+# --------------------------------------------------------------- targets (C3)
+
+def targets_view(params: Params) -> dict[str, Any]:
+    """C3: every per-target profile in the registry."""
+    from pipeline.target_profiles import load_registry
+
+    return {"targets": load_registry(params)}
+
+
+def target_profile_view(params: Params, target: str) -> dict[str, Any]:
+    """C3: one target's effective profile (empty = committed defaults)."""
+    from pipeline.target_profiles import build_edit_plan, get_profile
+
+    return {"target": target, "profile": get_profile(params, target), "edit_plan": build_edit_plan(params, target)}
+
+
+def target_profile_upsert(params: Params, target: str, profile: dict[str, Any]) -> dict[str, Any]:
+    """C3: validate + upsert via the closed allow-list law."""
+    from pipeline.target_profiles import ProfileError, set_profile
+
+    try:
+        return set_profile(params, target, profile)
+    except ProfileError as exc:
+        raise DashboardError(str(exc)) from exc
+
+
 # ------------------------------------------------------------- wordlists (a)
 
 def validate_wordlists_edit(doc: dict[str, Any], patch: dict[str, Any], params: Params | None = None) -> dict[str, Any]:

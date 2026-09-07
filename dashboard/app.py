@@ -32,6 +32,9 @@ from dashboard.service import (
     scheduler_view,
     set_key,
     apply_filters,
+    target_profile_upsert,
+    target_profile_view,
+    targets_view,
 )
 from pipeline.params import Params
 from pipeline.scheduler import load_schedule
@@ -103,6 +106,27 @@ async def tools_edit(name: str, patch: dict[str, Any], authorization: str | None
 def wordlists_view(authorization: str | None = Header(default=None)) -> Any:
     _auth(authorization)
     return JSONResponse(load_yaml_file(str(ROOT / "wordlists.yaml")))
+
+
+@app.get("/api/targets")
+def targets_view_route(authorization: str | None = Header(default=None)) -> Any:
+    _auth(authorization)
+    return JSONResponse(targets_view(_params_obj()))
+
+
+@app.get("/api/targets/{target}")
+def target_profile_view_route(target: str, authorization: str | None = Header(default=None)) -> Any:
+    _auth(authorization)
+    return JSONResponse(target_profile_view(_params_obj(), target))
+
+
+@app.put("/api/targets/{target}")
+async def target_profile_upsert_route(target: str, profile: dict[str, Any], authorization: str | None = Header(default=None)) -> Any:
+    _auth(authorization)
+    try:
+        return JSONResponse(target_profile_upsert(_params_obj(), target, profile))
+    except DashboardError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 @app.put("/api/wordlists")

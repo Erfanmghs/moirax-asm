@@ -24,6 +24,8 @@ USAGE = """Usage:
   ./recon.sh wordlist-sync                     # C2: index the full SecLists clone (all lists selectable)
   ./recon.sh wordlist-add <name> <file>        # C2: register an operator custom list
   ./recon.sh wordlist-rm <name>                # C2: remove an operator custom list
+  ./recon.sh target-profile set <target> <json-file>   # C3: upsert per-target settings
+  ./recon.sh target-profile get <target>               # C3: show per-target profile
 """
 
 
@@ -65,6 +67,12 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_wordlist_add(params, _need(args, 1), _need(args, 2))
     if command == "wordlist-rm":
         return cmd_wordlist_rm(params, _need(args, 1))
+    if command == "target-profile" and len(args) >= 3:
+        sub = args[1]
+        if sub == "set":
+            return cmd_target_profile_set(params, args[2], args[3] if len(args) > 3 else None)
+        if sub == "get":
+            return cmd_target_profile_get(params, args[2])
     sys.stderr.write(USAGE)
     return 2
 
@@ -269,6 +277,36 @@ def cmd_wordlist_rm(params: Params, name: str) -> int:
         print(f"wordlist-rm: REFUSED {name!r}: {exc}")
         return 1
     print(f"wordlist-rm: removed {ledger['removed']}")
+    return 0
+
+
+# --------------------------------------------------------- C3 profiles
+
+def cmd_target_profile_set(params: Params, target: str, json_file: str | None) -> int:
+    """C3: upsert a per-target settings profile from a JSON file (or stdin)."""
+    import json as _json
+    import sys as _sys
+
+    from pipeline.target_profiles import ProfileError, set_profile
+
+    raw = _sys.stdin.read() if json_file in (None, "-") else Path(json_file).read_text(encoding="utf-8")
+    try:
+        profile = _json.loads(raw or "{}")
+        ledger = set_profile(params, target.strip(), profile)
+    except (ProfileError, _json.JSONDecodeError, OSError) as exc:
+        print(f"target-profile: REFUSED {target!r}: {exc}")
+        return 1
+    print(f"target-profile: saved {ledger['target']} sections={ledger['sections']}")
+    return 0
+
+
+def cmd_target_profile_get(params: Params, target: str) -> int:
+    """C3: show the effective per-target profile (empty = committed defaults)."""
+    import json as _json
+
+    from pipeline.target_profiles import get_profile
+
+    print(_json.dumps(get_profile(params, target.strip()), indent=2, sort_keys=True))
     return 0
 
 

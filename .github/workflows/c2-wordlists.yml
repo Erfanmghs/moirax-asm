@@ -47,7 +47,9 @@ jobs:
           find "$HOME/seclists" -name '*.txt' | wc -l
 
       - name: "Unit suite (shared regression + C2 atomic units)"
-        run: PYTHONPATH=. python3 -m unittest discover -s tests -t . 2>&1 | tail -3
+        run: |
+          PYTHONPATH=. python3 -m unittest discover -s tests -t . -v 2>&1 | tee ci/c2_units_console.log | tail -3
+          exit "${PIPESTATUS[0]}"
 
       - name: "Sync the full SecLists index (recon.sh wordlist-sync)"
         run: |

@@ -89,7 +89,7 @@ def main() -> int:
     # C2-8 integrity: pipeline frozen at HEAD tree + verify_b1 untouched
     diff_b1 = git("diff", "HEAD", "--", "pipeline/verify_b1.py")
     check("C2-8 verify_b1-empty", diff_b1.strip() == "", "verify_b1 diff EMPTY")
-    ALLOW = (".github/", "wordlists/", "recon/", "ci/")
+    ALLOW = (".github/", "wordlists/", "wordlists.yaml", "recon/", "ci/")
     dirty = [ln for ln in git("status", "--porcelain").splitlines() if ln.strip()]
     bad = [ln[3:].strip().strip('"') for ln in dirty if not ln[3:].strip().strip('"').startswith(ALLOW)]
     check("C2-8 dirty-allowlist", not bad, f"unexpected={bad[:6]} dirty={len(dirty)}")

@@ -1,39 +1,39 @@
-"""PORT-SWEEP — post-MERGE full-range scan (ACTIVE order 4, master spec §8).
+"""PORT-SWEEP -- post-MERGE full-range scan (ACTIVE order 4, master spec section 8).
 
 Order-4 stage consuming assets.json AFTER MERGE (the light top-N PORT-CHECK
-stays as order-3 early signal — both coexist). Hard guarantees implemented
+stays as order-3 early signal -- both coexist). Hard guarantees implemented
 here, exactly as frozen in the master spec:
 
 - INPUT FILTER: hosts with alive=true (PSV-6 / FFUF-2 probes); when the probe
   toggle is off, portsweep_scope alive_only|all_resolved decides the set.
-- RULE 1 — POST-MERGE RESOLUTION GUARANTEE: hosts lacking a resolved IP are
+- RULE 1 -- POST-MERGE RESOLUTION GUARANTEE: hosts lacking a resolved IP are
   batch-resolved in ONE dnsx pass (same forged-resolver registry; breaker +
   ceiling apply) BEFORE the IP map is built; still-unresolvable hosts carry
   explicit resolution_status=unresolved + reason and are EXCLUDED with an
-  explicit log line — an IP is never silently missing.
-- RULE 2 — IP DEDUP: each UNIQUE IP is scanned EXACTLY ONCE per run; results
+  explicit log line -- an IP is never silently missing.
+- RULE 2 -- IP DEDUP: each UNIQUE IP is scanned EXACTLY ONCE per run; results
   are attributed back to EVERY hostname sharing it; duplicates logged+skipped.
-- RULE 3 — EXPLICIT TARGET SET: the exact server list is materialized and
+- RULE 3 -- EXPLICIT TARGET SET: the exact server list is materialized and
   logged (per unique IP: attributed hostnames + discovery sources) BEFORE any
-  scan command — the target set is never implicit.
+  scan command -- the target set is never implicit.
 - PACING: portsweep_duration_hours (default 24, min 1) budget -> effective
   pps = unique_ips x ports_total / (duration x 3600), capped by the profile
   rate cap. Window breach -> PARTIAL + remaining-IP list, never silent.
   Scheduled runs never overlap: a previous sweep still inside its window ->
   skipped: previous_in_progress (diffs use the last completed sweep).
 - PROFILES: light (top-N = PORT-CHECK behavior) | full (all ports, default
-  cap 1000 pps) | custom (dashboard port-range + rate) — a thin config layer
+  cap 1000 pps) | custom (dashboard port-range + rate) -- a thin config layer
   over the adapter, never a new tool.
 - FILTERING INTELLIGENCE: known-ALIVE host with ZERO open ports after a full
   sweep -> filtered_suspect + ONE slower re-probe (rate / divisor); > 1000
   open ports -> anomalous_open_suspect (tarpit/honeypot class, never alert-
   spammed).
 - SECOND STAGE: optional nmap -sV over PORT-SWEEP's open ports ONLY (toggle
-  portsweep_nmap_sv, default OFF) — the designated VA hook (toggle only; the
+  portsweep_nmap_sv, default OFF) -- the designated VA hook (toggle only; the
   VA module itself is on the DO-NOT-BUILD list).
 
 Per-IP atomicity: a crashed IP scan is marked unreachable, never failed, and
-never corrupts the other scans (§4.3).
+never corrupts the other scans (section 4.3).
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ from pipeline.textio import atomic_write_text, read_lines
 
 # REM8 alignment (same ruling as port-check/merge): as-frozen IP acceptance
 # for exactly these two gate reasons; excluded CIDRs and private ranges stay
-# REJECTED — the safety rails are untouched.
+# REJECTED -- the safety rails are untouched.
 _FULL_RANGE_PORTS = 65535
 _MIN_PPS = 1
 
@@ -115,7 +115,7 @@ def run_port_sweep(
             _write_outputs(params, target_dir, payload, skips)
             return payload
     if previous is not None:
-        _log(params, target_dir, f"no-overlap clear: previous sweep {previous[0]} outside its window — proceeding")
+        _log(params, target_dir, f"no-overlap clear: previous sweep {previous[0]} outside its window -- proceeding")
 
     # ---- input filter -------------------------------------------------------
     assets_path = target_dir / str(params.require("assets_relpath"))
@@ -163,14 +163,14 @@ def run_port_sweep(
             gate.log_rejection(target_dir / oos_rel, ip, reject_reason or "out of scope")
             continue
         ip_hosts[ip] = {"hosts": [], "sources": {"psv8-cidr"}}
-        _log(params, target_dir, f"psv8-ip\t{ip} (no hostname attribution — scan-only entry)")
+        _log(params, target_dir, f"psv8-ip\t{ip} (no hostname attribution -- scan-only entry)")
 
     # ---- RULE 1: post-MERGE resolution guarantee (ONE batched dnsx pass) ---
     # Three exclusive classes per candidate host:
-    #   mapped       — at least one resolved IP passed the scope gate (scanned)
-    #   ip_rejected  — carries asset IPs but every one was rejected by the gate
+    #   mapped       -- at least one resolved IP passed the scope gate (scanned)
+    #   ip_rejected  -- carries asset IPs but every one was rejected by the gate
     #                  (resolved-but-unscannable; explicit log + ledger entry)
-    #   no_ip        — carries NO ips at all (merge-time unresolved) -> the ONE
+    #   no_ip        -- carries NO ips at all (merge-time unresolved) -> the ONE
     #                  batched dnsx guarantee pass; still-unresolvable hosts get
     #                  explicit resolution_status=unresolved + reason
     mapped_hosts = {h for meta in ip_hosts.values() for h in meta["hosts"]}
@@ -293,7 +293,7 @@ def run_port_sweep(
         # then the sweep runs at cap until the window deadline and the tail is
         # disclosed as the remaining-IP list (PARTIAL, never silent). When the
         # pace is feasible, the formula already fits the whole set inside the
-        # window — deferring there would contradict the pacing contract.
+        # window -- deferring there would contradict the pacing contract.
         if window_breached and adapter.clock.time() + est_sec > deadline:
             remaining.append(ip)
             _log(params, target_dir, f"window-defer\t{ip}\test_sec={est_sec:.0f}")
@@ -340,7 +340,7 @@ def run_port_sweep(
                 _nmap_services(params, adapter, target_dir, target, extra, ip, record["ports"], timeout_sec)
             )
     if remaining:
-        # window breach / canary pause: the remaining-IP list is disclosed —
+        # window breach / canary pause: the remaining-IP list is disclosed --
         # the sweep is PARTIAL, never silently abandoned.
         partial.append("portsweep_window_breached" if window_breached else "portsweep_budget_stop")
     if paused_by_canary:
@@ -471,7 +471,7 @@ def _rows_from_guarantee(out_path: Path, result: Any) -> list[tuple[str, list[st
 
 
 def _profile(params: Params, profile: str) -> tuple[str, int, float, str | None]:
-    """Thin config layer over the adapter — never a new tool.
+    """Thin config layer over the adapter -- never a new tool.
 
     Returns (naabu -p expression, ports_total, rate cap, tool spec name);
     a non-executable configuration returns tool_name=None with the reason
@@ -580,7 +580,7 @@ def _nmap_services(
     ports: list[dict[str, Any]],
     timeout_sec: float | None,
 ) -> list[dict[str, Any]]:
-    """SECOND STAGE — designated VA hook: runs ONLY behind portsweep_nmap_sv."""
+    """SECOND STAGE -- designated VA hook: runs ONLY behind portsweep_nmap_sv."""
     ports_arg = ",".join(str(p["port"]) for p in ports)
     extra_m = {
         **extra,
@@ -691,7 +691,7 @@ def _payload(
     sentinels_used: int,
     skips: list[str],
 ) -> dict[str, Any]:
-    # Exact §8 schema keys first; the remaining keys are the never-silent
+    # Exact section 8 schema keys first; the remaining keys are the never-silent
     # disclosure surface (B3 precedent: additive disclosure keys).
     return {
         "schema_version": int(params.require("schema_version")),

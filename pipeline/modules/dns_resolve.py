@@ -119,7 +119,7 @@ def run_dns_resolve(
     # DNSR-2 AGGREGATE CAP + SUSPECT-NAME EXCLUSION (spec v1.9, approved
     # Option-1 item 3): the wildcard probe is hoisted BEFORE the perm pass so
     # wildcard-suspect and misconfig_suspect-flagged names can be EXCLUDED
-    # from the alterx seed input — suspect-name mutations must never amplify
+    # from the alterx seed input -- suspect-name mutations must never amplify
     # a wildcard/misconfig artifact. The same wildcard_ip classifies the
     # DNSR-3 phase below (one probe per run, as before).
     wildcard_ip = None
@@ -499,7 +499,7 @@ def _cap_perms(
 
 def _misconfig_flagged(params: Params, target_dir: Path) -> set[str]:
     """DNSR-2 (v1.9 item 3): misconfig_suspect-flagged names are excluded from
-    the alterx seed input — suspect-name mutations must never amplify a
+    the alterx seed input -- suspect-name mutations must never amplify a
     wildcard/misconfig artifact."""
     doc = _read_doc(target_dir / str(params.require("ffuf_data_json")))
     if not doc:

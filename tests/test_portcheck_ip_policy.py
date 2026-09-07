@@ -1,7 +1,7 @@
 """REM8 (TEST 3) bidirectional regression proof: port-check IP scan eligibility.
 
 Defect (OLD): port-check rejected EVERY IP via gate.enforce() when the scope
-carries host includes but no CIDR includes — run 20260905T100243Z (run #8):
+carries host includes but no CIDR includes -- run 20260905T100243Z (run #8):
 dnsr data.json held 2 resolved hosts sharing 2 public IPs (example.com,
 www.example.com -> 104.20.23.154, 172.66.147.243) yet port-check produced
 unique_ips_checked=0: every IP was rejected with reason "no IP includes".
@@ -20,7 +20,7 @@ Safety rails stay shut (bidirectional contract):
   ACCEPTED (NEW class):
     93.184.216.34  public IP, host-includes-only scope ("no IP includes")
     198.51.100.7   public IP outside listed CIDRs ("IP not in included
-                   CIDRs" — scope with a CIDR include that misses it)
+                   CIDRs" -- scope with a CIDR include that misses it)
 """
 
 from __future__ import annotations

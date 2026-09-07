@@ -1,4 +1,4 @@
-"""B5 NOTIFICATIONS & SCHEDULER unit proof (spec §4.5/§4.6/§4.7) — deterministic, no network."""
+"""B5 NOTIFICATIONS & SCHEDULER unit proof (spec section 4.5/section 4.6/section 4.7) -- deterministic, no network."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def _classes() -> dict:
 
 
 class TestRunSummary(unittest.TestCase):
-    """§4.5 end-of-run summary: target, status, per-module counts, duration, report path."""
+    """section 4.5 end-of-run summary: target, status, per-module counts, duration, report path."""
 
     def test_summary_content(self):
         sink: list[str] = []
@@ -69,11 +69,11 @@ class TestRunSummary(unittest.TestCase):
         with mock.patch.dict("os.environ", {}, clear=True):
             with mock.patch("pathlib.Path.is_file", return_value=False):
                 ok = send_run_summary(params, "example.com", "completed", {}, 10, "r")
-        self.assertFalse(ok)  # skip silently — never raises, never sends
+        self.assertFalse(ok)  # skip silently -- never raises, never sends
 
 
 class TestInstantAlerts(unittest.TestCase):
-    """§4.6 watchtower: NEW SUBDOMAIN + NEWLY OPENED PORT instant alerts."""
+    """section 4.6 watchtower: NEW SUBDOMAIN + NEWLY OPENED PORT instant alerts."""
 
     def test_new_subdomain_instant(self):
         sink: list[str] = []
@@ -92,7 +92,7 @@ class TestInstantAlerts(unittest.TestCase):
         self.assertEqual(ledger["instant_sent"], 1)
 
     def test_closed_port_only_diff_is_silent(self):
-        """Acceptance: a closed-port-only diff → NO Telegram alert (dashboard view only)."""
+        """Acceptance: a closed-port-only diff -> NO Telegram alert (dashboard view only)."""
         sink: list[str] = []
         doc = _diff_doc({}, removed={"ports": [{"host": "a", "ip": "1.1.1.1", "port": 80, "proto": "tcp"}]})
         ledger = evaluate_diff_alerts(_params(), doc, sender=sink.append)
@@ -110,7 +110,7 @@ class TestInstantAlerts(unittest.TestCase):
 
 
 class TestDigest(unittest.TestCase):
-    """§4.7 digest threshold: below → per-asset instant; at/above → ONE digest."""
+    """section 4.7 digest threshold: below -> per-asset instant; at/above -> ONE digest."""
 
     def _flood(self, n: int) -> dict:
         return {"hosts": [{"host": f"h{i}.example.com"} for i in range(n)]}
@@ -148,7 +148,7 @@ class TestDigest(unittest.TestCase):
         self.assertEqual(ledger["digest_threshold"], 2)
 
     def test_digest_counts_only_alertworthy_assets(self):
-        """Suppressed assets don't push the count over the threshold (§4.7 filters first)."""
+        """Suppressed assets don't push the count over the threshold (section 4.7 filters first)."""
         sink: list[str] = []
         cfg = Path(tempfile.mkdtemp()) / "config.json"
         rules = [{"class": "hosts", "enabled": False}, {"class": "ports", "enabled": True}]
@@ -162,7 +162,7 @@ class TestDigest(unittest.TestCase):
 
 
 class TestAlertFilters(unittest.TestCase):
-    """§4.7 dashboard-editable alert-filter rules."""
+    """section 4.7 dashboard-editable alert-filter rules."""
 
     def test_disabled_class_suppresses(self):
         rules = [{"class": "ports", "enabled": False}]
@@ -173,7 +173,7 @@ class TestAlertFilters(unittest.TestCase):
         self.assertTrue(alert_worthy(DEFAULT_ALERT_RULES, "ports", {"port": 1}, {"ips": set()}))
 
     def test_require_new_ip_known_ip_not_alerted(self):
-        """§4.7 example: new subdomain resolving to a NEW IP only."""
+        """section 4.7 example: new subdomain resolving to a NEW IP only."""
         rules = [{"class": "hosts", "enabled": True, "require_new_ip": True}]
         prev = {"ips": {"1.2.3.4"}}
         self.assertFalse(alert_worthy(rules, "hosts", {"host": "x", "ip": "1.2.3.4"}, prev))
@@ -196,7 +196,7 @@ class TestAlertFilters(unittest.TestCase):
 
 
 class TestCredentials(unittest.TestCase):
-    """§4.5 dashboard-configured credentials first; .env fallback; unset → skip."""
+    """section 4.5 dashboard-configured credentials first; .env fallback; unset -> skip."""
 
     def test_dashboard_config_wins(self):
         cfg = Path(tempfile.mkdtemp()) / "config.json"
@@ -214,7 +214,7 @@ class TestCredentials(unittest.TestCase):
 
 
 class TestSelfMonitoring(unittest.TestCase):
-    """§4.7 self-monitoring + §4.5 fan-out via run_end_notifications."""
+    """section 4.7 self-monitoring + section 4.5 fan-out via run_end_notifications."""
 
     def test_failed_status_alert_names_module_and_reason(self):
         sink: list[str] = []
@@ -225,10 +225,10 @@ class TestSelfMonitoring(unittest.TestCase):
                 "boom", "ffuf", {}, 5, sender=sink.append,
             )
         alerts = [t for t in sink if t.startswith("FAILED")]
-        self.assertEqual(len(alerts), 1, "forced module failure → exactly one FAILED alert")
+        self.assertEqual(len(alerts), 1, "forced module failure -> exactly one FAILED alert")
         self.assertIn("module=ffuf", alerts[0])
         self.assertIn("reason=boom", alerts[0])
-        self.assertTrue(ledger["summary_sent"], "failed is a §4.5 summary status too")
+        self.assertTrue(ledger["summary_sent"], "failed is a section 4.5 summary status too")
 
     def test_completed_sends_summary_no_status_alert(self):
         sink: list[str] = []
@@ -251,7 +251,7 @@ class TestSelfMonitoring(unittest.TestCase):
                     params, Path(tempfile.mkdtemp()), "example.com", params.settings[status_key],
                     "r", "m", {}, 5, sender=sink.append,
                 )
-            self.assertEqual(len(sink), 1, f"{status_key} → status alert only (no §4.5 summary)")
+            self.assertEqual(len(sink), 1, f"{status_key} -> status alert only (no section 4.5 summary)")
             self.assertIn("module=m", sink[0])
 
     def test_never_raises_on_broken_diff(self):
@@ -267,7 +267,7 @@ class TestSelfMonitoring(unittest.TestCase):
 
 
 class TestScheduler(unittest.TestCase):
-    """§4.6 scheduler state machine (scheduler.json, min interval 10 min)."""
+    """section 4.6 scheduler state machine (scheduler.json, min interval 10 min)."""
 
     def test_validate_enforces_10_min_floor(self):
         errors = validate({"interval_minutes": 9, "enabled": True, "last_run": None}, 10)

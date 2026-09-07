@@ -1,4 +1,4 @@
-"""Tool adapter: named-parameter command assembly + container invoke (§5, §4.3)."""
+"""Tool adapter: named-parameter command assembly + container invoke (section 5, section 4.3)."""
 
 from __future__ import annotations
 
@@ -134,7 +134,7 @@ class Adapter:
             fallback = spec.get("fallback")
             if fallback:
                 fb = self.spec(str(fallback))
-                # §4.3: pause blocks the primary tool only. Fallback runs under its own
+                # section 4.3: pause blocks the primary tool only. Fallback runs under its own
                 # breaker key so a mid-retry pause on `module` cannot skip the chain.
                 fb_module = str(fb.name)
                 fb_result = self._attempt_loop(

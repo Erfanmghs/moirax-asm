@@ -1,4 +1,4 @@
-"""state.json engine — modules + run-level status + breaker pauses (§6.4, §11.4)."""
+"""state.json engine -- modules + run-level status + breaker pauses (section 6.4, section 11.4)."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def save_state(params: Params, target_dir: Path, state: dict[str, Any]) -> Path:
     state["updated_at"] = _now()
     path = state_path(params, target_dir)
     # REM26 (run #40 evidence): the passive and active branches run CONCURRENTLY
-    # and both persist state — a SHARED tmp filename races (thread A replaces
+    # and both persist state -- a SHARED tmp filename races (thread A replaces
     # tmp -> state.json while thread B still holds the same tmp path, B's
     # replace then raises FileNotFoundError and the whole branch dies). Unique
     # tmp per (pid, thread) keeps every writer's replace atomic.
@@ -87,7 +87,7 @@ def init_state(params: Params, target_dir: Path, target: str) -> dict[str, Any]:
 
 
 def new_run_state(params: Params, target_dir: Path, target: str) -> dict[str, Any]:
-    """Reset module rows for a fresh run but KEEP persisted breaker pauses (§11.4)."""
+    """Reset module rows for a fresh run but KEEP persisted breaker pauses (section 11.4)."""
     previous = load_state(params, target_dir, target) if state_path(params, target_dir).exists() else {}
     state = empty_state(params, target)
     paused = ((previous.get("breaker") or {}).get("paused")) or {}

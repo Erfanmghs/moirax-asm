@@ -1,4 +1,4 @@
-"""B3 PASSIVE-CHAIN acceptance table — runs AFTER the example.com vehicle.
+"""B3 PASSIVE-CHAIN acceptance table -- runs AFTER the example.com vehicle.
 
   F1  MANDATORY  run exit 0 + runs.json last status completed
   F2  MANDATORY  core sources populated: crtsh, subfinder, amass, assetfinder,
@@ -11,7 +11,7 @@
                  CIDR include exists, cidr-ips.txt written)
   F6  MANDATORY  PSV-7 skip disclosed when no GITHUB_TOKEN (or github.txt
                  present when a token exists)
-  F7  MANDATORY  data.json exact §8 schema (module, candidates rows shaped,
+  F7  MANDATORY  data.json exact section 8 schema (module, candidates rows shaped,
                  passive_ips, search_forge, recursion, counts consistent)
   F8  MANDATORY  scope: every candidate passes the committed ScopeGate;
                  out_of_scope.log exists (assetfinder-related rejections)
@@ -70,10 +70,10 @@ def main() -> int:
             runs_doc = {}
     runs = (runs_doc or {}).get("runs") or []
     last_status = runs[-1].get("status") if runs else "missing"
-    # F1 semantics (run #22 evidence + §8 PSV-5): a cap-stop IS the accepted
+    # F1 semantics (run #22 evidence + section 8 PSV-5): a cap-stop IS the accepted
     # "recursion stops at its cap" outcome -> exit 3/partial with a
     # spec-sanctioned stop reason is a PASS; a breaker ANOMALY (exit 2) is a
-    # FAIL. runs.json is JSON — the frozen YAML loader cannot read it.
+    # FAIL. runs.json is JSON -- the frozen YAML loader cannot read it.
     sanctioned_stop = (
         "passive_recursion_seeds_cap" in log_text
         or "passive_budget" in log_text
@@ -95,12 +95,12 @@ def main() -> int:
     # ---- F2 core sources populated ----------------------------------------
     sources_dir = TARGET_DIR / "10_subdomains" / "passive" / "sources"
     # CT contract: crt.sh primary OR its registered fallback (certspotter)
-    # serve the SAME output contract (§8 PSV-2) — either file proves the
+    # serve the SAME output contract (section 8 PSV-2) -- either file proves the
     # cert-transparency sub-step populated sources.
     ct_name = "crtsh.txt" if (sources_dir / "crtsh.txt").is_file() else "certspotter.txt"
     # MANDATORY core: deterministic-ish providers on the keyless vehicle.
     # amass is DISCLOSED separately (G2): its passive data sources are largely
-    # §9.2-d key-gated and rate-limit runner IPs — run #27 saw amass finish
+    # section 9.2-d key-gated and rate-limit runner IPs -- run #27 saw amass finish
     # ok with 0 rows (third-party variance), which must not mask the chain.
     core = [ct_name, "subfinder.txt", "assetfinder.txt",
             "assetfinder-related.txt", "archives.txt"]
@@ -213,9 +213,9 @@ def main() -> int:
     crtsh_rows = [ln.strip() for ln in ct_file.read_text(
         encoding="utf-8", errors="replace").splitlines() if ln.strip()] if ct_file.is_file() else []
     candidate_hosts = {str(row.get("host")) for row in (data.get("candidates") or [])}
-    # harvest-everything vs scope-gate (§3.3): a crt.sh cert can carry SANs
+    # harvest-everything vs scope-gate (section 3.3): a crt.sh cert can carry SANs
     # outside the engagement (run #24: m.testexample.com); such rows must be
-    # REJECTED BY THE GATE (out_of_scope.log) — never silently dropped.
+    # REJECTED BY THE GATE (out_of_scope.log) -- never silently dropped.
     oos_text = ""
     oos_log = TARGET_DIR / "logs" / "out_of_scope.log"
     if oos_log.is_file():

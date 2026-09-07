@@ -13,9 +13,9 @@ run's output.
 
 Simulated dnsx append semantics: the fake adapter appends a FRESH NDJSON row
 to whatever file exists at `dnsx_output` (file kept if present, created if
-absent) — exactly how dnsx `-o` behaves on a pre-existing file.
+absent) -- exactly how dnsx `-o` behaves on a pre-existing file.
 
-No docker, no network — pure function test (mirrors tests/test_ffuf_label.py
+No docker, no network -- pure function test (mirrors tests/test_ffuf_label.py
 REM4-R STEP 1 style).
 """
 

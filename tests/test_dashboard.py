@@ -1,4 +1,4 @@
-"""B6 DASHBOARD unit proof (spec §9.1/§9.2/§9.3) — deterministic, no network."""
+"""B6 DASHBOARD unit proof (spec section 9.1/section 9.2/section 9.3) -- deterministic, no network."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ def _isolated_root() -> Path:
 
 
 def _isolated_params() -> Params:
-    """Params rooted at a temp copy — dashboard writes never touch the repo."""
+    """Params rooted at a temp copy -- dashboard writes never touch the repo."""
     return Params(_isolated_root())
 
 
@@ -68,7 +68,7 @@ class TestMasking(unittest.TestCase):
 
 
 class TestApiKeysPanelD(unittest.TestCase):
-    """§9.2-d: .env-backed, masked after save, never committed, next-run pickup."""
+    """section 9.2-d: .env-backed, masked after save, never committed, next-run pickup."""
 
     def _params(self) -> Params:
         return _isolated_params()
@@ -98,7 +98,7 @@ class TestApiKeysPanelD(unittest.TestCase):
 
 
 class TestSettingsPanelE(unittest.TestCase):
-    """§9.2-e: proxy + Telegram + digest threshold + alert filters persisted to
+    """section 9.2-e: proxy + Telegram + digest threshold + alert filters persisted to
     dashboard/config.json (gitignored), secrets masked on read."""
 
     def _params(self) -> Params:
@@ -111,7 +111,7 @@ class TestSettingsPanelE(unittest.TestCase):
             "digest_threshold": 7,
             "alert_rules": [{"class": "ports", "enabled": True, "require_new_ip": False}],
         })
-        self.assertEqual(saved["telegram"]["bot_token"], "123****et", "token masked after save (§9.2-e)")
+        self.assertEqual(saved["telegram"]["bot_token"], "123****et", "token masked after save (section 9.2-e)")
         self.assertEqual(saved["telegram"]["chat_id"], "424242")
         raw = (params.root / "dashboard" / "config.json").read_text(encoding="utf-8")
         self.assertIn("424242", raw)  # non-secret chat id stored
@@ -138,7 +138,7 @@ class TestSettingsPanelE(unittest.TestCase):
 
 
 class TestToolsEditorPanelA(unittest.TestCase):
-    """§5.4/§9.2-a: enable/disable + per-tool flag overrides, schema-validated."""
+    """section 5.4/section 9.2-a: enable/disable + per-tool flag overrides, schema-validated."""
 
     def test_validate_rejects_forbidden_keys(self):
         params = _params()
@@ -154,7 +154,7 @@ class TestToolsEditorPanelA(unittest.TestCase):
 
     def test_surgical_edit_visible_in_next_run_command(self):
         """Companion B6 acceptance: parameter edit visible in next run command.
-        The edit lands in the tool's flag_overrides — exactly what
+        The edit lands in the tool's flag_overrides -- exactly what
         adapter._values merges before assembling the next run's argv."""
         params = _isolated_params()
         tmp = params.root
@@ -200,7 +200,7 @@ class TestToolsEditorPanelA(unittest.TestCase):
 
 
 class TestWordlistsEditorPanelA(unittest.TestCase):
-    """§9.2-a: per-task checkbox selection + SELECT-ALL per task group."""
+    """section 9.2-a: per-task checkbox selection + SELECT-ALL per task group."""
 
     def test_validate_against_registered_groups(self):
         params = _params()
@@ -225,7 +225,7 @@ class TestWordlistsEditorPanelA(unittest.TestCase):
 
 
 class TestGlobalFilters(unittest.TestCase):
-    """§9.2-b GLOBAL RESULT FILTERS: combinable + URL-shareable."""
+    """section 9.2-b GLOBAL RESULT FILTERS: combinable + URL-shareable."""
 
     ROWS = [
         {"host": "dev.example.com", "ips": ["1.1.1.1"], "alive": True, "sources": ["subfinder", "crtsh"], "tags": ["dev"]},
@@ -258,7 +258,7 @@ class TestGlobalFilters(unittest.TestCase):
 
 
 class TestCoverageAnalytics(unittest.TestCase):
-    """§9.2-b SOURCE COVERAGE ANALYTICS."""
+    """section 9.2-b SOURCE COVERAGE ANALYTICS."""
 
     def test_contribution_overlap_uniqueness(self):
         rows = [
@@ -277,7 +277,7 @@ class TestCoverageAnalytics(unittest.TestCase):
 
 
 class TestProxyRule(unittest.TestCase):
-    """§9.3: set-but-unreachable → FAIL FAST; unset → direct silently."""
+    """section 9.3: set-but-unreachable -> FAIL FAST; unset -> direct silently."""
 
     def test_unset_direct_silently(self):
         ok, reason = proxy_gate(_params({"proxy_url": ""}))
@@ -309,7 +309,7 @@ class TestProxyRule(unittest.TestCase):
 
 
 class TestDashboardApi(unittest.TestCase):
-    """FastAPI smoke (§9.1 auth fail-closed + §9.2 endpoints)."""
+    """FastAPI smoke (section 9.1 auth fail-closed + section 9.2 endpoints)."""
 
     def setUp(self):
         from fastapi.testclient import TestClient
@@ -354,7 +354,7 @@ class TestDashboardApi(unittest.TestCase):
                 r = self.client.get("/api/wordlists", headers=self.token_headers)
                 self.assertEqual(r.status_code, 200)
                 r = self.client.put("/api/scheduler", json={"interval_minutes": 4, "enabled": True, "last_run": None}, headers=self.token_headers)
-                self.assertEqual(r.status_code, 422, "§4.6 floor enforced via API")
+                self.assertEqual(r.status_code, 422, "section 4.6 floor enforced via API")
                 r = self.client.put("/api/settings", json={"telegram": {"bot_token": "tok123456789", "chat_id": "5"}}, headers=self.token_headers)
                 self.assertEqual(r.status_code, 200)
                 masked = r.json()["telegram"]["bot_token"]

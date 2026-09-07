@@ -1,4 +1,4 @@
-"""TEST 3 (T3-0) — offline residual dissection of committed stale dnsx outputs.
+"""TEST 3 (T3-0) -- offline residual dissection of committed stale dnsx outputs.
 
 Runs in the b2-test3 workflow BEFORE `recon.sh run`, against the checkout
 tree (pre-run state). The committed live trees carry dnsx chunk outputs from
@@ -8,12 +8,12 @@ whole file, so stale-era rows leak into the resolved map and MERGE.
 
 DEFECT PROOF LINE (example.com): current working-tree selection is the B2
 test mode [test_smoke_200] -> candidates.brute == 200, yet the committed
-20_dns/dnsx/brute_chunk_0.json carries 4860 unique hosts — the dns_fast_top5000
-era effective wordlist was 4860 entries (PHASE-REPORT §wordlists). Rows from a
+20_dns/dnsx/brute_chunk_0.json carries 4860 unique hosts -- the dns_fast_top5000
+era effective wordlist was 4860 entries (PHASE-REPORT section wordlists). Rows from a
 defunct wordlist era therefore survived in the live tree across runs.
 
 Writes ci/test3_dissection.json (evidence for assertion B9) and prints the
-dissection table. Exit 0 always — this is evidence collection, not a gate.
+dissection table. Exit 0 always -- this is evidence collection, not a gate.
 """
 
 from __future__ import annotations

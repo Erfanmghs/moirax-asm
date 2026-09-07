@@ -1,4 +1,4 @@
-"""FFUF-3 (spec v1.9 §8, Option-1 item 1) unit proof — B3 first sub-step.
+"""FFUF-3 (spec v1.9 section 8, Option-1 item 1) unit proof -- B3 first sub-step.
 
 No docker, no network. Mirrors the pure-function harness style of
 tests/test_ffuf_label.py and tests/test_dns_freshness.py:
@@ -6,13 +6,13 @@ tests/test_ffuf_label.py and tests/test_dns_freshness.py:
   1. flag rule      : a NON-FILTERED answer on a DNS-dead name lands flagged
                       (misconfig_suspect=true, dns_status="dead", alive=null);
                       a filtered/autocalib artifact (label NOT in the job
-                      wordlist — REM4-R1 calibration-drop discipline) is
+                      wordlist -- REM4-R1 calibration-drop discipline) is
                       counted as suppressed and NEVER flagged.
   2. probe binding  : -u is bound to the alive SAME-ZONE base with
                       "Host: FUZZ.<dead-name>"; the dead name is never
                       resolved directly (no dnsx invoke happens); foreign-
                       zone hosts are never binding bases (REM11, run #15).
-  3. dead set       : FFUF-1 records with DNSR-3 unresolved status ONLY —
+  3. dead set       : FFUF-1 records with DNSR-3 unresolved status ONLY --
                       perm-NXDOMAIN store rows are NOT DNSR-3 hosts (REM11,
                       run #15: 1237-name explosion); both counts disclosed.
   4. skip path      : no same-zone alive base -> explicit log line, zero

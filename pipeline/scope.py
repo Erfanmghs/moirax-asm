@@ -1,4 +1,4 @@
-"""Authorization gate — master prompt §3. Zero network."""
+"""Authorization gate -- master prompt section 3. Zero network."""
 
 from __future__ import annotations
 

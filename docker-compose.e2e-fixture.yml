@@ -1,4 +1,4 @@
-# TEST FIXTURE (E2E) — full-pipeline vehicle: nested subdomains + multi-port.
+# TEST FIXTURE (E2E) -- full-pipeline vehicle: nested subdomains + multi-port.
 # Activation:
 #   docker compose -f docker-compose.yml -f docker-compose.e2e-fixture.yml --profile e2e-fixture up -d --build
 #   sudo -n python3 docker/e2e-fixture/hosts.py install
@@ -8,7 +8,7 @@
 #
 # BRIDGE + published ports (run #41 evidence): host-network mode made the DNS
 # unreachable from the dnsx BRIDGE container (runner host firewall drops
-# bridge->host traffic on unpublished ports) — every lane starved: dnsx 0
+# bridge->host traffic on unpublished ports) -- every lane starved: dnsx 0
 # answers, merge 0 ips, port-sweep empty target-set. Published ports make
 # docker-proxy serve every lane:
 #   - dnsx (bridge)        -> DNS at 172.17.0.1:53/udp (docker0 gateway)

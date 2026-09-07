@@ -1,9 +1,9 @@
-"""B3 first sub-step preflight gates — run BEFORE `recon.sh run fixture-target.test`.
+"""B3 first sub-step preflight gates -- run BEFORE `recon.sh run fixture-target.test`.
 
   G-B1  production DNSR-1 materialization from the COMMITTED config
         reproduces the TEST-1-proven anchor byte-exact (4860 lines,
-        sha256 a94ea1d5...1695) — post-T4 restore discipline
-  G-B2  FFUF-3 wiring (spec v1.9 §8): RUNNERS registry + active_branch_modules
+        sha256 a94ea1d5...1695) -- post-T4 restore discipline
+  G-B2  FFUF-3 wiring (spec v1.9 section 8): RUNNERS registry + active_branch_modules
         order [ffuf, dns-resolve, ffuf-3, port-check] + params + layout dir
   G-B3  DNSR-2 refinement (v1.9 item 3): max_permutations_aggregate param
         present; _cap_perms aggregate enforcement; seed-exclusion helpers

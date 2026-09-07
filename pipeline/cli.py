@@ -1,4 +1,4 @@
-"""CLI: run | resume | stop | status | report | module | reset-breaker | info-gather — no network before a valid scope."""
+"""CLI: run | resume | stop | status | report | module | reset-breaker | info-gather -- no network before a valid scope."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ USAGE = """Usage:
   ./recon.sh report <target>
   ./recon.sh module <name> <target> [--aggressive]
   ./recon.sh reset-breaker <target>
-  ./recon.sh info-gather <target|*.wildcard>   # §12.2 one-command autonomy (agent on)
+  ./recon.sh info-gather <target|*.wildcard>   # section 12.2 one-command autonomy (agent on)
 """
 
 
@@ -229,7 +229,7 @@ if __name__ == "__main__":
 
 
 def cmd_info_gather(params: Params, raw_target: str) -> int:
-    """§12.2 ONE-COMMAND AUTONOMY: validate scope -> run pipeline -> monitor ->
+    """section 12.2 ONE-COMMAND AUTONOMY: validate scope -> run pipeline -> monitor ->
     remediate (agent opt-in inside the engine) -> report. Zero further input."""
     from pathlib import Path as _Path
 
@@ -238,18 +238,18 @@ def cmd_info_gather(params: Params, raw_target: str) -> int:
 
     raw = raw_target.strip()
     target = sanitize_target(raw.lstrip("*.") if raw.startswith("*.") else raw)
-    print(f"info-gather: one-command autonomy for {raw} (agent ON, §12.2)")
+    print(f"info-gather: one-command autonomy for {raw} (agent ON, section 12.2)")
     try:
         gate = _load_gate(params)
     except ScopeError as exc:
         return _fail_scope(exc)
-    # §12.7 guardrail: the ONLY scope action is validation — never modification.
+    # section 12.7 guardrail: the ONLY scope action is validation -- never modification.
     allowed, reason = gate.validate_candidate(target)
     if not allowed:
         target_dir = ensure_layout(params, target)
         log_rel = Path(str(params.require("out_of_scope_log")))
         gate.log_rejection(target_dir / log_rel, target, reason)
-        print(f"out of scope: {target} ({reason}) — agent never modifies scope.yaml (§12.7)")
+        print(f"out of scope: {target} ({reason}) -- agent never modifies scope.yaml (section 12.7)")
         return 1
     cfg = {
         "enabled": True,
@@ -269,6 +269,6 @@ def cmd_info_gather(params: Params, raw_target: str) -> int:
     config_path.write_text(_json.dumps(doc, indent=2) + "\n", encoding="utf-8")
     code = run_pipeline(params, gate, target, aggressive=False)
     report_dir = target_root(params, target) / str(params.require("report_dirname"))
-    print(f"info-gather: complete — report at {report_dir} (exit={code})")
+    print(f"info-gather: complete -- report at {report_dir} (exit={code})")
     _ = generate_all, cfg, _Path  # referenced for contract clarity
     return code

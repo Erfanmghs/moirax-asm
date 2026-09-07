@@ -1,8 +1,8 @@
-"""FastAPI dashboard backend (spec §9.1/§9.2). The ONLY docker.sock client.
+"""FastAPI dashboard backend (spec section 9.1/section 9.2). The ONLY docker.sock client.
 
 Auth: every /api route (except /api/health) requires `Authorization: Bearer
 <DASHBOARD_TOKEN>`; if DASHBOARD_TOKEN is unset the backend refuses every
-API call (fail-closed — §9.1 auth contract).
+API call (fail-closed -- section 9.1 auth contract).
 Bind: 127.0.0.1:8080 (compose maps the same), SPA served from /static.
 """
 
@@ -55,7 +55,7 @@ def _params_obj() -> Params:
 def _auth(authorization: str | None) -> None:
     token = str(os.environ.get("DASHBOARD_TOKEN") or "").strip()
     if not token:
-        raise HTTPException(status_code=503, detail="DASHBOARD_TOKEN is not configured (fail-closed, §9.1)")
+        raise HTTPException(status_code=503, detail="DASHBOARD_TOKEN is not configured (fail-closed, section 9.1)")
     if authorization != f"Bearer {token}":
         raise HTTPException(status_code=401, detail="invalid dashboard token")
 
@@ -213,7 +213,7 @@ def run_log(target: str, offset: int = Query(default=0, ge=0), authorization: st
 
 @app.get("/api/run/agent-journal/{target}")
 def agent_journal(target: str, offset: int = Query(default=0, ge=0), authorization: str | None = Header(default=None)) -> Any:
-    """§12.7: agent journal streamed live in Run Control (append-only source)."""
+    """section 12.7: agent journal streamed live in Run Control (append-only source)."""
     _auth(authorization)
     params = _params_obj()
     path = ROOT / "recon" / target / str(params.require("agent_journal_relpath"))
@@ -231,7 +231,7 @@ async def run_start(body: dict[str, Any], authorization: str | None = Header(def
     params = _params_obj()
     ok, reason = proxy_gate(params)
     if not ok:
-        raise HTTPException(status_code=502, detail=f"PROXY RULE fail-fast (§9.3): {reason}")
+        raise HTTPException(status_code=502, detail=f"PROXY RULE fail-fast (section 9.3): {reason}")
     target = str(body.get("target") or "").strip()
     if not target:
         raise HTTPException(status_code=422, detail="target is required")
@@ -258,7 +258,7 @@ async def run_resume(body: dict[str, Any], authorization: str | None = Header(de
     params = _params_obj()
     ok, reason = proxy_gate(params)
     if not ok:
-        raise HTTPException(status_code=502, detail=f"PROXY RULE fail-fast (§9.3): {reason}")
+        raise HTTPException(status_code=502, detail=f"PROXY RULE fail-fast (section 9.3): {reason}")
     target = str(body.get("target") or "").strip()
     if not target:
         raise HTTPException(status_code=422, detail="target is required")
@@ -298,7 +298,7 @@ async def keys_put(name: str, body: dict[str, Any], authorization: str | None = 
         set_key(_params_obj(), name, value)
     except DashboardError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    return JSONResponse({"saved": name, "masked": True, "note": "picked up on the next run without restart (§9.2-d)"})
+    return JSONResponse({"saved": name, "masked": True, "note": "picked up on the next run without restart (section 9.2-d)"})
 
 
 @app.delete("/api/keys/{name}")

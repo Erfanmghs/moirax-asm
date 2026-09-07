@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Install/remove /etc/hosts lines for the E2E fixture (host-network ffuf/httpx).
 
-Maps the FULL E2E zone (apex + flat + nested names) to 127.0.0.1 — the
+Maps the FULL E2E zone (apex + flat + nested names) to 127.0.0.1 -- the
 host-network fixture binds its HTTP listeners on the runner itself. The DNS
 answers (for dnsx) point at 172.17.0.1 instead: the docker bridge gateway,
 which is the same host. Marker-scoped: never touches other /etc/hosts content.

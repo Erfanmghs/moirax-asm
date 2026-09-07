@@ -3,12 +3,12 @@
 AGGREGATE CAP + SUSPECT-NAME EXCLUSION:
   - per-host cap first, then the aggregate cap bounds the TOTAL perm
     candidate set per target per run (B2 evidence: 51,872 perms from 199
-    vhost-feedback FQDNs — per-host cap alone leaves the aggregate
+    vhost-feedback FQDNs -- per-host cap alone leaves the aggregate
     unbounded);
   - wildcard-suspect and misconfig_suspect-flagged names are EXCLUDED from
     the alterx seed input.
 
-No docker, no network — pure function test.
+No docker, no network -- pure function test.
 """
 
 from __future__ import annotations

@@ -1,25 +1,25 @@
-# B5 NOTIFICATIONS & SCHEDULER (spec §4.5/§4.6/§4.7) — acceptance vehicle.
+# B5 NOTIFICATIONS & SCHEDULER (spec section 4.5/section 4.6/section 4.7) -- acceptance vehicle.
 #
 # Vehicle: example.com (committed scope), the same proven shape as the B4
 # vehicle: full pipeline (passive chain PSV-0..PSV-8 -> MERGE -> PORT-SWEEP
 # under the proven bounding) with the NEW run-end notification fan-out
-# (§4.5 summary + §4.7 self-monitoring + §4.6/§4.7 diff-driven watchtower
+# (section 4.5 summary + section 4.7 self-monitoring + section 4.6/section 4.7 diff-driven watchtower
 # evaluation over the real diff.json) executed against a REAL run.
 #
 # CI has NO Telegram credentials (by design): the honest skip-silently path
-# (§4.5 "if unset → skip silently") is what the vehicle exercises; the three
+# (section 4.5 "if unset -> skip silently") is what the vehicle exercises; the three
 # companion acceptance scenarios (forced failure -> FAILED alert; flood ->
 # exactly ONE digest; closed-port-only diff -> silence) are re-proven
 # in-CI against the FROZEN code with fake senders (assertions I2..I4).
 #
-# Transient runtime accommodations (NEVER committed; before-copies kept) —
+# Transient runtime accommodations (NEVER committed; before-copies kept) --
 # the exact proven B4 set:
 #   - REM5 resolver-fleet refresh from the committed seed
 #   - active_branch_modules: [] (passive-producer bounding)
 #   - passive_branch_budget_sec 1200 -> 3000; passive_recursion_depth 2 -> 1
 #   - portsweep_profile full -> custom "80,443,8080"; duration 24 -> 1
 # Committed defaults stay intact (assertion I6 checks git HEAD via frozen
-# loader — B3 F10 discipline).
+# loader -- B3 F10 discipline).
 #
 # Steps: checkout -> toolchain -> preflight G-Y1..G-Y8 -> unit suite ->
 # image pulls (soft) -> passive-tools build -> reconcile stale state ->
@@ -50,7 +50,7 @@ jobs:
           docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
           python3 --version
 
-      - name: "Install dashboard deps (fastapi + uvicorn + httpx for TestClient — B6 unit suite shares this job)"
+      - name: "Install dashboard deps (fastapi + uvicorn + httpx for TestClient -- B6 unit suite shares this job)"
         run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5"
 
       - name: Preflight gates (G-Y1..G-Y8)
@@ -59,7 +59,7 @@ jobs:
       - name: Unit proof (full regression suite incl. B5 notifications+scheduler)
         run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
 
-      - name: "Pull tool images (soft — passive fleet + sweep)"
+      - name: "Pull tool images (soft -- passive fleet + sweep)"
         run: |
           set +e
           : > ci/b5_pull_report.txt
@@ -180,7 +180,7 @@ jobs:
           print("Vehicle validation: frozen loader parses tools.yaml; B4 bounding set + B5 committed notification defaults intact.")
           PY
 
-      - name: Run vehicle (example.com — passive chain + MERGE + sweep + notify fan-out)
+      - name: Run vehicle (example.com -- passive chain + MERGE + sweep + notify fan-out)
         run: |
           set +e
           ./recon.sh run example.com 2>&1 | tee ci/b5_run_console.log

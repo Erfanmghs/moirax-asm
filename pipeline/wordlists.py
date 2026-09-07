@@ -1,4 +1,4 @@
-"""Wordlist registry: modules resolve keys from wordlists.yaml, never raw paths (§5.6)."""
+"""Wordlist registry: modules resolve keys from wordlists.yaml, never raw paths (section 5.6)."""
 
 from __future__ import annotations
 

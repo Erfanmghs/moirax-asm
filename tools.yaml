@@ -104,10 +104,10 @@ settings:
   ffuf_match_codes: all
   ffuf_auto_calibrate: true
   max_permutations_per_host: 50000
-  # DNSR-2 AGGREGATE CAP (spec v1.9, approved Option-1 item 3 — named §5.6
+  # DNSR-2 AGGREGATE CAP (spec v1.9, approved Option-1 item 3 -- named section 5.6
   # dashboard-editable parameter). Bounds the TOTAL alterx perm candidate set
   # per target per run, enforced AFTER the per-host caps. B2 evidence: 51,872
-  # perms from 199 vhost-feedback FQDNs — per-host cap alone leaves the
+  # perms from 199 vhost-feedback FQDNs -- per-host cap alone leaves the
   # aggregate unbounded. Default = max_permutations_per_host (50,000): one
   # host may consume the entire aggregate, never more than that, and the
   # observed B2 explosion class now binds.
@@ -138,10 +138,10 @@ settings:
   portsweep_filtered_reprobe_divisor: 4
   portsweep_anomalous_open_threshold: 1000
   portsweep_nmap_sv: false
-  # SECOND STAGE nmap -sV (designated VA hook): default OFF — the toggle is
+  # SECOND STAGE nmap -sV (designated VA hook): default OFF -- the toggle is
   # the only VA surface (DO-NOT-BUILD list); max-rate is a named param.
   portsweep_nmap_max_rate: 300
-  # ---- B4 PORT-SWEEP (spec §8 order-4 post-MERGE) — wiring + artifacts.
+  # ---- B4 PORT-SWEEP (spec section 8 order-4 post-MERGE) -- wiring + artifacts.
   portsweep_module: port-sweep
   portsweep_data_json: 30_ports/naabu-full/data.json
   portsweep_summary: 30_ports/naabu-full/summary.md
@@ -149,7 +149,7 @@ settings:
   portsweep_guarantee_hosts_rel: 30_ports/naabu-full/resolution-guarantee-hosts.txt
   portsweep_guarantee_output_rel: 30_ports/naabu-full/resolution-guarantee.json
   portsweep_raw_dir: logs/raw/naabu-sweep
-  # custom profile (dashboard port-range + rate) — empty default keeps the
+  # custom profile (dashboard port-range + rate) -- empty default keeps the
   # profile non-executable until the operator chooses a range (never silent).
   portsweep_custom_ports: ""
   portsweep_custom_rate_cap: 1000
@@ -164,7 +164,7 @@ settings:
   crtsh_max_time_sec: 120
   crtsh_retries: 3
   amass_timeout_min: 20
-  # subfinder-seed per-source timeout (seconds) — bounds the container so a
+  # subfinder-seed per-source timeout (seconds) -- bounds the container so a
   # dead third-party source can never hang it into a breaker window.
   subfinder_seed_timeout: 20
   passive_recursion_depth: 2
@@ -224,12 +224,12 @@ settings:
     - vhost_fierce
     - vhost_services
     - vhost_env
-  # FFUF-3 (spec v1.9 §8): output paths — never collide with FFUF-2 output.
+  # FFUF-3 (spec v1.9 section 8): output paths -- never collide with FFUF-2 output.
   ffuf3_data_json: 15_vhosts/ffuf-3/data.json
   ffuf3_summary: 15_vhosts/ffuf-3/summary.md
   # FFUF-3 explosion guard (REM11, run #15 evidence): max dead-name probe
   # jobs per run; over-cap truncates with an explicit ffuf3_dead_probe_cap
-  # partial marker (never silent). Named §5.6 dashboard-editable parameter.
+  # partial marker (never silent). Named section 5.6 dashboard-editable parameter.
   ffuf3_max_dead_probes: 1000
   tool_retry_count: 2
   retry_backoff_base_sec: 1
@@ -285,7 +285,7 @@ settings:
   echo_active_hosts: "www.example.com api.example.com"
   echo_fail_script: "exit 1"
   proxy_url: ""
-  # §9.3 PROXY RULE reachability probe (set-but-unreachable -> FAIL FAST)
+  # section 9.3 PROXY RULE reachability probe (set-but-unreachable -> FAIL FAST)
   proxy_check_timeout_sec: 3
   ffuf_host_header: ""
   ffuf_mode: host
@@ -345,13 +345,13 @@ settings:
   active_branch_modules:
     - ffuf
     - dns-resolve
-    # FFUF-3 (spec v1.9 §8): appended ACTIVE sub-step — runs after DNS-RESOLVE
+    # FFUF-3 (spec v1.9 section 8): appended ACTIVE sub-step -- runs after DNS-RESOLVE
     # completes and BEFORE MERGE; existing module orders untouched.
     - ffuf-3
     - port-check
-  # ---- B3 PASSIVE BRANCH (spec §8 PSV-0..PSV-8) — module wiring + artifacts.
+  # ---- B3 PASSIVE BRANCH (spec section 8 PSV-0..PSV-8) -- module wiring + artifacts.
   # Order law (PSV-0 first ... PSV-6 last) lives inside the passive-recon
-  # orchestrator; the branch runs PASSIVE ∥ ACTIVE (§7.2a) untouched.
+  # orchestrator; the branch runs PASSIVE || ACTIVE (section 7.2a) untouched.
   passive_branch_modules:
     - passive-recon
   passive_data_json: 10_subdomains/passive/data.json
@@ -361,10 +361,10 @@ settings:
   search_engines_registry: search_engines.yaml
   dorks_registry: dorks.yaml
   dorks_forge_output: dorks/forge/search-dorks.txt
-  # CT fallback (§8 PSV-2): the swap is a tools.yaml profile switch, never a
-  # pipeline edit — crtsh.fallback chains to this registered tool.
+  # CT fallback (section 8 PSV-2): the swap is a tools.yaml profile switch, never a
+  # pipeline edit -- crtsh.fallback chains to this registered tool.
   ct_fallback_tool: certspotter
-  # B5 NOTIFICATIONS & SCHEDULER (§4.5/§4.6/§4.7 + §9.2-e dashboard Settings).
+  # B5 NOTIFICATIONS & SCHEDULER (section 4.5/section 4.6/section 4.7 + section 9.2-e dashboard Settings).
   # digest_threshold is the dashboard-editable default; dashboard/config.json
   # overrides it at runtime (gitignored, never committed). Credential env names
   # were registered at B0 (telegram_bot_token_env / telegram_chat_id_env).
@@ -374,7 +374,7 @@ settings:
   scheduler_filename: scheduler.json
   scheduler_default_interval_min: 240
   scheduler_min_interval_min: 10
-  # B8 SUPERVISOR AGENT (§12) — opt-in overseer; default OFF (§12.1: the
+  # B8 SUPERVISOR AGENT (section 12) -- opt-in overseer; default OFF (section 12.1: the
   # pipeline is fully deterministic and runs standalone without it).
   agent_enabled: false
   agent_max_llm_calls: 20
@@ -383,10 +383,10 @@ settings:
   agent_max_remediation_attempts: 3
   agent_journal_relpath: logs/agent-journal.jsonl
   remediation_filename: remediation.yaml
-  # STORAGE / LOG RETENTION (post-B user directive 2026-09-06) — run-end
+  # STORAGE / LOG RETENTION (post-B user directive 2026-09-06) -- run-end
   # housekeeping (pipeline/logstore.py): history snapshot retention, size-capped
   # gzip log rotation, total cap per target. dashboard/config.json `retention.*`
-  # overrides these defaults (dashboard-editable, §9.2-e pattern of agent.*).
+  # overrides these defaults (dashboard-editable, section 9.2-e pattern of agent.*).
   retention_keep_runs: 20
   retention_log_max_mb: 10
   retention_journal_max_mb: 5
@@ -783,7 +783,7 @@ tools:
     output_data_json: 30_ports/naabu-light/data.json
     output_summary: 30_ports/naabu-light/summary.md
     output_raw_dir: logs/raw/naabu-light
-  # ==== B4 PORT-SWEEP (spec §8 order-4 post-MERGE) ====
+  # ==== B4 PORT-SWEEP (spec section 8 order-4 post-MERGE) ====
   # naabu-full: SYN full range (profile=full). The -p "-" form asks naabu for
   # all 65,535 TCP ports; pacing + ramp + canary live in the module/pacer.
   naabu-full:
@@ -814,7 +814,7 @@ tools:
     parser: json
     data_kind: active
     output_raw_dir: logs/raw/naabu-sweep
-  # naabu-sweep: custom profile — the port range comes from the named param
+  # naabu-sweep: custom profile -- the port range comes from the named param
   # portsweep_custom_ports (dashboard-editable), never hardcoded.
   naabu-sweep:
     enabled: true
@@ -844,7 +844,7 @@ tools:
     parser: json
     data_kind: active
     output_raw_dir: logs/raw/naabu-sweep
-  # nmap-sv: SECOND STAGE — designated VA hook; invoked ONLY when the
+  # nmap-sv: SECOND STAGE -- designated VA hook; invoked ONLY when the
   # portsweep_nmap_sv toggle is on (default OFF -> zero containers ever).
   nmap-sv:
     enabled: true
@@ -867,7 +867,7 @@ tools:
     parser: host_lines
     data_kind: active
     output_raw_dir: logs/raw/nmap-sv
-  # ==== B3 PASSIVE BRANCH (spec §8 PSV-0..PSV-8) ====
+  # ==== B3 PASSIVE BRANCH (spec section 8 PSV-0..PSV-8) ====
   # PSV-1/2/7/8 HTTP fetches + engine-pool requests run through this generic
   # curl spec; the fetch command is assembled from NAMED registry parameters
   # (search_engines.yaml) and quoted by the module. PSV-1..PSV-5 + PSV-7
@@ -889,7 +889,7 @@ tools:
     output_summary: logs/raw/curl-fetch/summary.md
     output_raw_dir: logs/raw/curl-fetch
   # PSV-2 crt.sh primary (retry x3 exponential, bare-domain variant) with the
-  # registered CT fallback chained via the adapter (§4.3) — profile switch via
+  # registered CT fallback chained via the adapter (section 4.3) -- profile switch via
   # ct_fallback_tool, never a pipeline edit.
   crtsh:
     enabled: true
@@ -923,7 +923,7 @@ tools:
     output_data_json: logs/raw/certspotter/data.json
     output_summary: logs/raw/certspotter/summary.md
     output_raw_dir: logs/raw/certspotter
-  # PSV-3 OSINT agents — each in its own container, each writing its OWN
+  # PSV-3 OSINT agents -- each in its own container, each writing its OWN
   # source file for attribution (never one shared subs.txt).
   subfinder:
     enabled: true
@@ -944,8 +944,8 @@ tools:
     output_data_json: logs/raw/subfinder/data.json
     output_summary: logs/raw/subfinder/summary.md
     output_raw_dir: logs/raw/subfinder
-  # PSV-5 recursion variant: spec §8 names `subfinder -d <host>` (no -all)
-  # for deeper per-seed queries — faster and breaker-window friendly.
+  # PSV-5 recursion variant: spec section 8 names `subfinder -d <host>` (no -all)
+  # for deeper per-seed queries -- faster and breaker-window friendly.
   subfinder-seed:
     enabled: true
     branch: passive
@@ -1021,7 +1021,7 @@ tools:
     output_summary: logs/raw/assetfinder-related/summary.md
     output_raw_dir: logs/raw/assetfinder-related
   # DNS-valid subset (RESOLVER FORGE output; built-in wildcard detection).
-  # Fallback: same contract served by the pinned dnsx image (§4.3 chain).
+  # Fallback: same contract served by the pinned dnsx image (section 4.3 chain).
   assetfinder-resolved:
     enabled: true
     branch: passive
@@ -1101,7 +1101,7 @@ tools:
     output_data_json: logs/raw/findomain/data.json
     output_summary: logs/raw/findomain/summary.md
     output_raw_dir: logs/raw/findomain
-  # PSV-4 ARCHIVES — URL streams parsed by the module (per-tool raw file +
+  # PSV-4 ARCHIVES -- URL streams parsed by the module (per-tool raw file +
   # gated union in archives.txt); direct CDX fallback when both fail.
   waybackurls:
     enabled: true
@@ -1152,9 +1152,9 @@ tools:
     output_data_json: logs/raw/cdx-fallback/data.json
     output_summary: logs/raw/cdx-fallback/summary.md
     output_raw_dir: logs/raw/cdx-fallback
-  # PSV-6 HTTPX-PROBE — the ONLY passive sub-step that sends packets toward
-  # the target (light HTTP probe); host network for accurate probing; §11.4
-  # breaker + §11.5 ceiling apply via the shared adapter.
+  # PSV-6 HTTPX-PROBE -- the ONLY passive sub-step that sends packets toward
+  # the target (light HTTP probe); host network for accurate probing; section 11.4
+  # breaker + section 11.5 ceiling apply via the shared adapter.
   httpx-passive:
     enabled: true
     branch: passive

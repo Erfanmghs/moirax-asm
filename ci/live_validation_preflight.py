@@ -14,7 +14,7 @@ validates exactly the working copy the vehicle will execute:
   G-L5  resolvers/seed.txt carries the pinned anycast resolver fleet and the
         runtime resolvers.yaml disables public source URLs (REM5 pattern)
 
-Any gate failure is fatal (exit 1) — the vehicle never starts on a
+Any gate failure is fatal (exit 1) -- the vehicle never starts on a
 drifted working copy.
 """
 from __future__ import annotations

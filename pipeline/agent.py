@@ -1,30 +1,30 @@
-"""SUPERVISOR AGENT (§12) — OPT-IN overseer, deterministic-first.
+"""SUPERVISOR AGENT (section 12) -- OPT-IN overseer, deterministic-first.
 
-§12.1  Agent-optional: the pipeline is fully deterministic without it. When
+section 12.1  Agent-optional: the pipeline is fully deterministic without it. When
        disabled (default) this module is never engaged and behaviour is
        byte-identical to B0..B7.
-§12.2  One-command autonomy: `info-gather <target>` (CLI, cli.py) owns the
+section 12.2  One-command autonomy: `info-gather <target>` (CLI, cli.py) owns the
        whole flow: validate scope -> run -> monitor -> remediate -> report.
-§12.3  Supervision loop: DETERMINISTIC checks FIRST -> §4.3 retry/fallback
+section 12.3  Supervision loop: DETERMINISTIC checks FIRST -> section 4.3 retry/fallback
        (adapter-owned, already happened) -> agent engages -> diagnose ->
        bounded remediation (<= agent_max_remediation_attempts per module per
        run, actions ONLY from the remediation.yaml playbook) -> fixed?
        continue : Telegram FAILED/ANOMALY alert with diagnosis + attempted
        fixes -> run continues degraded or stops.
-§12.4  Resource frugality: EVENT-DRIVEN (invoked only on module failure or
-       run end — never polling); healthy runs consume ZERO LLM calls;
+section 12.4  Resource frugality: EVENT-DRIVEN (invoked only on module failure or
+       run end -- never polling); healthy runs consume ZERO LLM calls;
        diagnoses cached by failure signature (same signature -> replay the
        known fix, no re-consult); hard budget agent_max_llm_calls (default
-       20) — exhausted -> pure deterministic alerts.
-§12.5  remediation.yaml playbook (config-driven, dashboard-editable).
-§12.6  Autonomy levels: observe | suggest | auto-fix — defaults auto-fix for
+       20) -- exhausted -> pure deterministic alerts.
+section 12.5  remediation.yaml playbook (config-driven, dashboard-editable).
+section 12.6  Autonomy levels: observe | suggest | auto-fix -- defaults auto-fix for
        the PASSIVE branch, suggest for the ACTIVE branch; overridable per run
        or persistent (dashboard/config.json agent.* wins over tools.yaml).
-§12.7  Guardrails (absolute, enforced in code): never modify scope.yaml,
+section 12.7  Guardrails (absolute, enforced in code): never modify scope.yaml,
        never weaken/disable the circuit breaker, never bypass the scope gate,
        never execute outside the engagement context, never delete raw logs
        (journal + logs are append-only). Every decision + action is journaled
-       to logs/agent-journal.jsonl and streamed live in Run Control (§9.2-c).
+       to logs/agent-journal.jsonl and streamed live in Run Control (section 9.2-c).
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from typing import Any, Callable
 from pipeline.params import Params
 from pipeline.yaml_util import load_yaml_file
 
-# §12.5 ALLOW-LIST — the ONLY remediation actions the agent may apply.
+# section 12.5 ALLOW-LIST -- the ONLY remediation actions the agent may apply.
 ALLOWED_ACTIONS = (
     "halve_concurrency_retry",
     "refresh_resolver_forge_retry",
@@ -47,7 +47,7 @@ ALLOWED_ACTIONS = (
     "repin_and_restart",
 )
 
-# §12.6 autonomy levels + frozen per-branch defaults.
+# section 12.6 autonomy levels + frozen per-branch defaults.
 AUTONOMY_LEVELS = ("observe", "suggest", "auto-fix")
 
 GUARDRAILS = (
@@ -67,7 +67,7 @@ class AgentError(RuntimeError):
 
 def load_agent_config(params: Params) -> dict[str, Any]:
     """Persistent agent configuration: dashboard/config.json `agent` object
-    (dashboard toggle, §12.6) wins over tools.yaml params (persistent)."""
+    (dashboard toggle, section 12.6) wins over tools.yaml params (persistent)."""
     config: dict[str, Any] = {}
     rel = str(params.require("dashboard_config_relpath"))
     path = params.root / rel
@@ -87,7 +87,7 @@ def load_agent_config(params: Params) -> dict[str, Any]:
 
 
 def load_playbook(params: Params) -> list[dict[str, Any]]:
-    """§12.5 playbook — config-driven, never hardcoded."""
+    """section 12.5 playbook -- config-driven, never hardcoded."""
     rel = str(params.require("remediation_filename"))
     path = params.root / rel
     if not path.is_file():
@@ -100,7 +100,7 @@ def load_playbook(params: Params) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------- journal
 
 class AgentJournal:
-    """§12.7 append-only journal — never truncated, never deleted."""
+    """section 12.7 append-only journal -- never truncated, never deleted."""
 
     def __init__(self, params: Params, target_dir: Path) -> None:
         self.path = target_dir / str(params.require("agent_journal_relpath"))
@@ -116,18 +116,18 @@ class AgentJournal:
 
 def deterministic_checks(module: str, exit_code: int | None, data_doc: dict[str, Any] | None,
                          state_updated: bool) -> list[str]:
-    """§12.3 DETERMINISTIC checks FIRST (exit code, schema-valid data.json,
+    """section 12.3 DETERMINISTIC checks FIRST (exit code, schema-valid data.json,
     zero-result anomaly, state.json updated)."""
     failures: list[str] = []
     if exit_code is not None and exit_code not in (0, 3):
         failures.append(f"exit_code={exit_code}")
     if data_doc is not None:
         if "schema_version" not in data_doc or "module" not in data_doc:
-            failures.append("data.json schema-invalid (§6.2)")
+            failures.append("data.json schema-invalid (section 6.2)")
         module_key = str(data_doc.get("module") or module)
         counts = data_doc.get("counts") or {}
         if counts and all(v == 0 for v in counts.values() if isinstance(v, int)):
-            failures.append("zero-result anomaly (suspected pipeline breakage, §4.7)")
+            failures.append("zero-result anomaly (suspected pipeline breakage, section 4.7)")
     if not state_updated:
         failures.append("state.json not updated")
     return failures
@@ -160,9 +160,9 @@ def apply_remediation(
     hooks: dict[str, Callable[[], str]] | None = None,
 ) -> str:
     """Apply ONE allow-list remediation action. Anything outside the allow-list
-    raises (§12.5: never hardcoded, never invented at runtime)."""
+    raises (section 12.5: never hardcoded, never invented at runtime)."""
     if action not in ALLOWED_ACTIONS:
-        raise AgentError(f"action {action!r} is outside the §12.5 allow-list")
+        raise AgentError(f"action {action!r} is outside the section 12.5 allow-list")
     result = ""
     if hooks and action in hooks:
         result = hooks[action]()
@@ -176,7 +176,7 @@ def apply_remediation(
 # ------------------------------------------------------------ supervisor
 
 class Supervisor:
-    """Event-driven supervisor engaged on module failure / run end (§12.3)."""
+    """Event-driven supervisor engaged on module failure / run end (section 12.3)."""
 
     def __init__(self, params: Params, target_dir: Path, run_overrides: dict[str, Any] | None = None) -> None:
         self.params = params
@@ -188,7 +188,7 @@ class Supervisor:
         self.attempts: dict[str, int] = {}
         self.diagnosis_cache: dict[str, dict[str, Any]] = {}
         self.llm_calls = 0
-        self.llm_hook: Callable[[str], str] | None = None  # §12.4 zero LLM by default
+        self.llm_hook: Callable[[str], str] | None = None  # section 12.4 zero LLM by default
 
     def enabled(self) -> bool:
         return bool(self.config.get("enabled"))
@@ -199,8 +199,8 @@ class Supervisor:
         return level if level in AUTONOMY_LEVELS else "observe"
 
     def _llm_diagnose(self, signature: str) -> str | None:
-        """§12.4: batched/cached/budgeted LLM consult. Ships UNPLUGGED (None)
-        — the deterministic playbook is the knowledge base; when a hook is
+        """section 12.4: batched/cached/budgeted LLM consult. Ships UNPLUGGED (None)
+        -- the deterministic playbook is the knowledge base; when a hook is
         provided and budget remains, one call per NEW failure signature."""
         if self.llm_hook is None:
             return None
@@ -211,7 +211,7 @@ class Supervisor:
         self.llm_calls += 1
         try:
             diagnosis = self.llm_hook(signature)
-        except Exception as exc:  # noqa: BLE001 — LLM failure never breaks the loop
+        except Exception as exc:  # noqa: BLE001 -- LLM failure never breaks the loop
             diagnosis = f"llm-hook-error: {exc}"
         return diagnosis
 
@@ -223,7 +223,7 @@ class Supervisor:
         stderr_tail: str = "",
         hooks: dict[str, Callable[[], str]] | None = None,
     ) -> dict[str, Any]:
-        """§12.3 loop after the adapter's §4.3 retries already failed."""
+        """section 12.3 loop after the adapter's section 4.3 retries already failed."""
         if not self.enabled():
             return {"engaged": False}
         signature = diagnose_signature(reason, stderr_tail)
@@ -243,8 +243,8 @@ class Supervisor:
         }
         if attempts >= int(self.params.require("agent_max_remediation_attempts")):
             verdict["escalated"] = True
-            verdict["escalation_reason"] = "attempt budget exhausted (§12.3 ≤3)"
-            self.journal.append("escalate", {"module": module, "reason": "attempt budget exhausted (§12.3 ≤3)"})
+            verdict["escalation_reason"] = "attempt budget exhausted (section 12.3 <=3)"
+            self.journal.append("escalate", {"module": module, "reason": "attempt budget exhausted (section 12.3 <=3)"})
             return verdict
 
         play = match_playbook(self.playbook, signature)
@@ -273,7 +273,7 @@ class Supervisor:
             verdict["actions"].append({"action": action, "mode": "observe"})
             return verdict
         if effective == "suggest":
-            self.journal.append("suggest", {"module": module, "action": action, "note": "waiting for user (§12.6)"})
+            self.journal.append("suggest", {"module": module, "action": action, "note": "waiting for user (section 12.6)"})
             verdict["actions"].append({"action": action, "mode": "suggest"})
             return verdict
         result = apply_remediation(self.params, action, module, attempts + 1, {}, self.journal, hooks)
@@ -282,7 +282,7 @@ class Supervisor:
         return verdict
 
     def frugality_report(self) -> dict[str, Any]:
-        """§12.4 disclosure: event-driven + zero-LLM-on-healthy proof."""
+        """section 12.4 disclosure: event-driven + zero-LLM-on-healthy proof."""
         return {
             "llm_calls": self.llm_calls,
             "budget": int(self.config.get("max_llm_calls", 20)),

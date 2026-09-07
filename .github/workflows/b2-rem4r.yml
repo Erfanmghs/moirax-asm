@@ -1,4 +1,4 @@
-# TEST FIXTURE (B2 acceptance smoke) — REM4-R executor workflow.
+# TEST FIXTURE (B2 acceptance smoke) -- REM4-R executor workflow.
 # Drives the B2 acceptance fixture re-run on a disposable Ubuntu runner:
 # fixture up -> preflight gates -> unit proof -> run -> assertions -> teardown.
 # Dispatched manually (workflow_dispatch) by the supervisor; no schedule.

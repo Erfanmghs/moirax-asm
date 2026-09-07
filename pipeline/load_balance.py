@@ -1,4 +1,4 @@
-"""DNSR LOAD BALANCE: RAMP + CANARY (master §8)."""
+"""DNSR LOAD BALANCE: RAMP + CANARY (master section 8)."""
 
 from __future__ import annotations
 

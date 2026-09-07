@@ -1,6 +1,6 @@
 schema_version: 1
-# Per-module dashboard view descriptors (§6.5/§9.2-b): the ONLY lever for
-# dashboard column/field changes — UI tuning stays code-free. Block lists
+# Per-module dashboard view descriptors (section 6.5/section 9.2-b): the ONLY lever for
+# dashboard column/field changes -- UI tuning stays code-free. Block lists
 # only (the frozen stdlib loader does not parse inline flow sequences).
 modules:
   ffuf:

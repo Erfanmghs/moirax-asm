@@ -1,10 +1,10 @@
-"""REPORTING (§10) — human + machine deliverables under 90_report/.
+"""REPORTING (section 10) -- human + machine deliverables under 90_report/.
 
-PRECISION CONTRACT (§10.2): every format is rendered FROM the canonical
-data.json files (§6.3) only — raw tool stdout is never re-parsed — so all
+PRECISION CONTRACT (section 10.2): every format is rendered FROM the canonical
+data.json files (section 6.3) only -- raw tool stdout is never re-parsed -- so all
 formats agree exactly. Every export embeds the run timestamp + scope.yaml
-digest → any artifact is traceable to the exact run and the exact
-authorization state. All content in English (§10.3).
+digest -> any artifact is traceable to the exact run and the exact
+authorization state. All content in English (section 10.3).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from typing import Any
 from pipeline.params import Params
 from pipeline.yaml_util import load_yaml_file
 
-# Flat per-class CSV columns (§10.1: flat export.csv per asset class).
+# Flat per-class CSV columns (section 10.1: flat export.csv per asset class).
 CSV_CLASSES: dict[str, tuple[str, ...]] = {
     "hosts": ("host", "ips", "alive", "sources", "tags"),
     "vhosts": ("base_host", "vhost", "alive", "http_status", "misconfig_suspect"),
@@ -44,7 +44,7 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def collect(params: Params, target_dir: Path, stamp: str) -> dict[str, Any]:
-    """Canonical bundle: assets.json rows + every module data.json (§6.3)."""
+    """Canonical bundle: assets.json rows + every module data.json (section 6.3)."""
     assets_doc = _read_json(target_dir / str(params.require("assets_relpath")))
     module_docs: dict[str, dict[str, Any]] = {}
     for path in sorted(target_dir.rglob("data.json")):
@@ -78,7 +78,7 @@ def write_report_md(params: Params, target_dir: Path, bundle: dict[str, Any]) ->
     out = target_dir / str(params.require("report_dirname")) / "report.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     lines = [
-        f"# Recon report — {bundle['target']}",
+        f"# Recon report -- {bundle['target']}",
         "",
         f"- run timestamp: {bundle['run_timestamp']}",
         f"- scope digest: `{bundle['scope_digest']}`",
@@ -90,7 +90,7 @@ def write_report_md(params: Params, target_dir: Path, bundle: dict[str, Any]) ->
         f"The run enumerated {bundle['counts']['hosts']} host assets "
         f"({bundle['counts']['alive_hosts']} alive) for {bundle['target']}. "
         "Scope violations, if any, are logged in logs/out_of_scope.log and were "
-        "never scanned; every candidate was re-validated at MERGE time (§7.3).",
+        "never scanned; every candidate was re-validated at MERGE time (section 7.3).",
         "",
         "## Per-module sections",
         "",
@@ -99,7 +99,7 @@ def write_report_md(params: Params, target_dir: Path, bundle: dict[str, Any]) ->
         module = str(doc.get("module") or rel.split("/")[0])
         counts = doc.get("counts") or {}
         count_txt = ", ".join(f"{k}={v}" for k, v in counts.items()) if counts else "see data.json"
-        lines.append(f"- `{rel}` — module **{module}**: {count_txt}")
+        lines.append(f"- `{rel}` -- module **{module}**: {count_txt}")
     lines += ["", "## Pointers", "", "Each module's canonical artifact is its `data.json`; the raw stdout archive lives under `logs/raw/` (never re-parsed).", ""]
     out.write_text("\n".join(lines), encoding="utf-8")
     return out
@@ -128,17 +128,17 @@ def write_report_html(params: Params, target_dir: Path, bundle: dict[str, Any], 
             f"<tr><td>{r.get('host')}{badge}</td><td>{', '.join(r.get('ips') or [])}</td>"
             f"<td>{alive}</td><td>{', '.join(r.get('sources') or [])}</td><td>{', '.join(r.get('tags') or [])}</td></tr>"
         )
-    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>recon report — {bundle['target']}</title>
+    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>recon report -- {bundle['target']}</title>
 <style>{_THEME_CSS}</style></head><body>
-<h1>recon report — {bundle['target']}</h1>
-<p>run timestamp: {bundle['run_timestamp']} &nbsp;·&nbsp; scope digest: <code>{bundle['scope_digest']}</code></p>
+<h1>recon report -- {bundle['target']}</h1>
+<p>run timestamp: {bundle['run_timestamp']} &nbsp;|&nbsp; scope digest: <code>{bundle['scope_digest']}</code></p>
 <h2>counts</h2>
-<p>hosts: {bundle['counts']['hosts']} · alive: {bundle['counts']['alive_hosts']} · module data.json: {bundle['counts']['module_docs']}</p>
+<p>hosts: {bundle['counts']['hosts']} | alive: {bundle['counts']['alive_hosts']} | module data.json: {bundle['counts']['module_docs']}</p>
 <h2>assets</h2>
 <table><thead><tr><th>host</th><th>ips</th><th>alive</th><th>sources</th><th>tags</th></tr></thead>
 <tbody>{''.join(rows)}</tbody></table>
 <h2>modules</h2>
-<ul>{''.join(f'<li><code>{rel}</code> — {doc.get("module", "")}</li>' for rel, doc in bundle['module_docs'].items())}</ul>
+<ul>{''.join(f'<li><code>{rel}</code> -- {doc.get("module", "")}</li>' for rel, doc in bundle['module_docs'].items())}</ul>
 </body></html>"""
     out.write_text(html, encoding="utf-8")
     return out
@@ -197,7 +197,7 @@ def write_export_json(params: Params, target_dir: Path, bundle: dict[str, Any]) 
 
 def write_report_pdf(params: Params, target_dir: Path, bundle: dict[str, Any]) -> Path:
     """PDF render of the report content (reportlab; graceful fallback to a
-    disclosed note when reportlab is unavailable — never silent)."""
+    disclosed note when reportlab is unavailable -- never silent)."""
     out = target_dir / str(params.require("report_dirname")) / "report.pdf"
     out.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -259,7 +259,7 @@ def write_manifest(params: Params, target_dir: Path, bundle: dict[str, Any], fil
 
 
 def verify_bundle(params: Params, target_dir: Path) -> tuple[bool, str]:
-    """§10.2 tamper check: re-collect + compare manifest digests."""
+    """section 10.2 tamper check: re-collect + compare manifest digests."""
     manifest_path = target_dir / str(params.require("report_dirname")) / "report_manifest.json"
     if not manifest_path.is_file():
         return False, "no manifest (report not generated)"
@@ -278,7 +278,7 @@ def verify_bundle(params: Params, target_dir: Path) -> tuple[bool, str]:
 
 
 def generate_all(params: Params, target_dir: Path, stamp: str | None = None) -> dict[str, Any]:
-    """Run-end AND dashboard on-demand entrypoint. Never raises — a reporting
+    """Run-end AND dashboard on-demand entrypoint. Never raises -- a reporting
     failure must never flip a pipeline verdict (outcome printed by callers)."""
     stamp = stamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     bundle = collect(params, target_dir, stamp)

@@ -1,7 +1,7 @@
-"""SCHEDULER / WATCHTOWER (§4.6).
+"""SCHEDULER / WATCHTOWER (section 4.6).
 
 Scheduler state (`interval`, `enabled`, `last_run`) lives in `scheduler.json`,
-editable from the dashboard (§9.2-c). Validated minimum interval = 10 minutes
+editable from the dashboard (section 9.2-c). Validated minimum interval = 10 minutes
 (spec: "validated minimum 10 min"). The loop itself runs on the operator
 workstation (dashboard service / CLI); this module owns the state machine so
 both entrypoints share one frozen implementation.
@@ -44,7 +44,7 @@ def save_schedule(params: Params, doc: dict[str, Any]) -> Path:
 
 
 def validate(doc: dict[str, Any], min_interval_min: int) -> list[str]:
-    """§4.6 validation — interval must be an integer ≥ the 10-minute floor."""
+    """section 4.6 validation -- interval must be an integer >= the 10-minute floor."""
     errors: list[str] = []
     interval = doc.get("interval_minutes")
     if not isinstance(interval, int) or isinstance(interval, bool):

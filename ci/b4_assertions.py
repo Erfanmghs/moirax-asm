@@ -1,11 +1,11 @@
-"""B4 PORT-SWEEP acceptance table — runs AFTER the example.com vehicle.
+"""B4 PORT-SWEEP acceptance table -- runs AFTER the example.com vehicle.
 
   H1  MANDATORY  STAGE-SCOPED (B4 = the port-sweep stage): sweep module done,
                  the sweep RAN (skipped != previous_in_progress), and the
                  port-sweep lane is CLEAN (no port-sweep breaker pause, no
                  portsweep partial marker). Run-level anomaly from B3-era
                  passive lanes (third-party variance) is DISCLOSED in G3, not
-                 hidden — the stage under test is judged on its own lane.
+                 hidden -- the stage under test is judged on its own lane.
   H2  MANDATORY  IP DEDUP: every unique IP in target-set.txt scanned EXACTLY
                  once (naabu-invoke lines), results attributed to ALL hosts
   H3  MANDATORY  RULE 3: target-set.txt materialized + logged BEFORE the first
@@ -13,15 +13,15 @@
   H4  MANDATORY  PACING: pace.effective_pps == the spec formula recomputed
                  from target-set size + profile ports_total; window flag
                  consistent; if breached -> remaining_ips disclosed
-  H5  MANDATORY  RULE 1: resolution guarantee accounted — hosts>0 => ONE
+  H5  MANDATORY  RULE 1: resolution guarantee accounted -- hosts>0 => ONE
                  dnsx-list invocation in run.log, unresolved entries carry
                  reasons; hosts==0 => explicit zero-disclosure line present
   H6  MANDATORY  nmap toggle OFF -> ZERO nmap invocations anywhere in run.log
   H7  MANDATORY  SCOPE: every scanned IP verdict-eligible under the committed
                  gate; scanned IP set == target-set minus unreachable/deferred
-  H8  MANDATORY  data.json exact §8 keys + COMMITTED content intact (HEAD
+  H8  MANDATORY  data.json exact section 8 keys + COMMITTED content intact (HEAD
                  blobs of tools.yaml/tools.lock re-parsed with the frozen
-                 loader — the working tree carries the INTENDED transient
+                 loader -- the working tree carries the INTENDED transient
                  vehicle overrides, never committed) + verify_b1.py
                  working-tree diff empty
   G1  DISCLOSURE canary state: sentinels mined (or first-run disarm note),
@@ -128,7 +128,7 @@ def main() -> int:
 
     # ---- H4 pacing formula ------------------------------------------------------
     # Recomputed from the RUN'S OWN recorded pace record (profile/ports_total/
-    # rate_cap are authoritative — the working tree carries transient vehicle
+    # rate_cap are authoritative -- the working tree carries transient vehicle
     # overrides) + the independently-parsed target-set size.
     pace_rec = payload.get("pace") or {}
     profile = str(pace_rec.get("profile") or "unknown")
@@ -190,7 +190,7 @@ def main() -> int:
         for k in ("schema_version", "module", "scans", "services", "pace", "unique_ips_scanned", "duplicates_skipped")
     ) and payload.get("module") == "port-sweep"
     # The WORKING TREE carries the intended transient vehicle overrides (never
-    # committed; before-copies are the evidence) — so the committed-content
+    # committed; before-copies are the evidence) -- so the committed-content
     # law is verified against the HEAD blobs with the frozen loader, exactly
     # the B3 F10 discipline.
     import tempfile

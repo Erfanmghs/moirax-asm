@@ -41,7 +41,7 @@ images:
     tag: "v2.3.5"
     digest: ""
   # B4 PORT-SWEEP second stage (designated VA hook): nmap -sV, toggle OFF by
-  # default — the image is pinned so flipping the toggle needs zero re-pinning.
+  # default -- the image is pinned so flipping the toggle needs zero re-pinning.
   nmap:
     image: instrumentisto/nmap
     tag: "7.98-r2"

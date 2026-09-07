@@ -1,4 +1,4 @@
-# B3 FIRST SUB-STEP (spec v1.9 Option-1 mandate) — FFUF-3 production
+# B3 FIRST SUB-STEP (spec v1.9 Option-1 mandate) -- FFUF-3 production
 # implementation + DNSR-2 aggregate-cap/suspect-exclusion refinement.
 #
 # Vehicle: fixture-target.test (deterministic, committed scope) with a
@@ -6,7 +6,7 @@
 # edit, never committed; before-copy kept as evidence) + transient REM5
 # resolver fleet pin. Production defaults remain committed (G-B6).
 #
-# Authorized code delta (B3 scope, spec v1.9 §8.2 next-phase rule):
+# Authorized code delta (B3 scope, spec v1.9 section 8.2 next-phase rule):
 #   FFUF-3 module (pipeline/modules/ffuf3.py + wiring) and DNSR-2 refinement
 #   (pipeline/modules/dns_resolve.py). verify_b1.py diff stays empty.
 #

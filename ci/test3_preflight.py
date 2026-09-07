@@ -1,4 +1,4 @@
-"""TEST 3 (REAL-TARGET, T3) preflight gates — run BEFORE `recon.sh run example.com`.
+"""TEST 3 (REAL-TARGET, T3) preflight gates -- run BEFORE `recon.sh run example.com`.
 
   G-T1  deterministic forge materialization from working selection
         -> sha256 must equal the integrity anchor 7ee5fd81...9d3d, 200 lines

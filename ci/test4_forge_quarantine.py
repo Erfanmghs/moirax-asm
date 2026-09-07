@@ -1,4 +1,4 @@
-"""TEST 4 (T4-A) — resolver quarantine machinery proof (deterministic injection).
+"""TEST 4 (T4-A) -- resolver quarantine machinery proof (deterministic injection).
 
 The forge contract (pipeline/resolver_forge.py docstring): aggregate, validate,
 quarantine <80% answer ratio, >= min_healthy gate. Never deterministically

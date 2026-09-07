@@ -1,6 +1,6 @@
-/* recon-pipeline SPA — panels a–e (§9.2), URL-shareable global filters (§9.2-b),
-   sortable tables + badges + collapsible JSON inspector (§9.4). Zero-build
-   vanilla JS; the API contract (§9.1) is the stable surface. */
+/* recon-pipeline SPA -- panels a-e (section 9.2), URL-shareable global filters (section 9.2-b),
+   sortable tables + badges + collapsible JSON inspector (section 9.4). Zero-build
+   vanilla JS; the API contract (section 9.1) is the stable surface. */
 "use strict";
 
 const $ = (sel) => document.querySelector(sel);
@@ -47,7 +47,7 @@ async function loadTools() {
   const tbody = $("#tools-table tbody");
   tbody.innerHTML = "";
   for (const t of doc.tools) {
-    const params = Object.entries(t.params || {}).map(([k, v]) => `${k}=${esc(v)}`).join(" ") || "—";
+    const params = Object.entries(t.params || {}).map(([k, v]) => `${k}=${esc(v)}`).join(" ") || "--";
     const tr = document.createElement("tr");
     tr.innerHTML = `<td>${esc(t.name)}</td><td class="dim">${esc(t.branch || "")}</td>` +
       `<td class="dim">${esc(t.image_ref || "")}</td>` +
@@ -82,7 +82,7 @@ async function loadWordlists() {
           `<td>${esc(key)}</td><td class="dim">${esc(group)}</td></tr>`);
       }
     }
-    box.innerHTML = `<table><thead><tr><th>SEL</th><th>${esc(task)} — registry key</th><th>GROUP</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+    box.innerHTML = `<table><thead><tr><th>SEL</th><th>${esc(task)} -- registry key</th><th>GROUP</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
     const bar = document.createElement("div");
     bar.className = "row";
     bar.innerHTML = `<button data-all="${esc(task)}">SELECT-ALL (all groups)</button><button data-save="${esc(task)}">SAVE SELECTION</button>`;
@@ -101,7 +101,7 @@ async function loadWordlists() {
       const tables = [...root.querySelectorAll("table")];
       const box = tables.find((t) => t.querySelector(`[data-save="${task}"]`)) || null;
       root.querySelectorAll("input[type=checkbox][data-key]").forEach((cb) => { cb.checked = true; });
-      toast("select-all ticked — remember SAVE SELECTION");
+      toast("select-all ticked -- remember SAVE SELECTION");
     }
     if (save) {
       const task = save.dataset.save;
@@ -123,7 +123,7 @@ function readFilterUI() {
 function writeFilterUI(f) {
   for (const id of FILTER_IDS) $("#f-" + id).value = f[id] || "";
 }
-function shareFilters(f) { // URL-shareable state (§9.2-b)
+function shareFilters(f) { // URL-shareable state (section 9.2-b)
   const qs = new URLSearchParams(f).toString();
   const url = location.origin + location.pathname + "?panel=results" + (qs ? "&" + qs : "");
   history.pushState({}, "", url);
@@ -207,7 +207,7 @@ async function loadReports() {
   const doc = await api("GET", "/api/report/" + encodeURIComponent(target));
   if (!doc.exists) {
     badge.textContent = "no bundle"; badge.className = "badge dead";
-    tbody.innerHTML = '<tr><td colspan="4" class="dim">no report bundle yet — press GENERATE NOW</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="dim">no report bundle yet -- press GENERATE NOW</td></tr>';
     $("#rep-manifest").textContent = "";
     return;
   }
@@ -216,7 +216,7 @@ async function loadReports() {
   const m = doc.manifest || {};
   const files = m.files || {};
   tbody.innerHTML = Object.entries(files).map(([name, f]) =>
-    `<tr><td>${esc(name)}</td><td class="dim">${esc(f.path)}</td><td class="dim">${esc(String(f.sha256 || "").slice(0, 16))}…</td>` +
+    `<tr><td>${esc(name)}</td><td class="dim">${esc(f.path)}</td><td class="dim">${esc(String(f.sha256 || "").slice(0, 16))}...</td>` +
     `<td><a class="badge ok" href="/static-file/${esc(target)}/${esc(f.path)}" target="_blank">OPEN</a></td></tr>`).join("") ||
     '<tr><td colspan="4" class="dim">manifest has no files</td></tr>';
   const pre = $("#rep-manifest");
@@ -389,7 +389,7 @@ $("#token-save").addEventListener("click", async () => {
 $("#f-apply").addEventListener("click", () => { shareFilters(readFilterUI()); loadResults(); });
 $("#f-share").addEventListener("click", async () => {
   const url = shareFilters(readFilterUI());
-  try { await navigator.clipboard.writeText(url); toast("filter URL copied — state restores from URL"); }
+  try { await navigator.clipboard.writeText(url); toast("filter URL copied -- state restores from URL"); }
   catch (_e) { toast(url); }
 });
 $("#f-clear").addEventListener("click", () => { writeFilterUI({}); shareFilters({}); loadResults(); });
@@ -445,9 +445,9 @@ async function health() {
   try {
     const r = await fetch("/api/health");
     const doc = await r.json();
-    el.textContent = doc.ok ? "● online" : "● ?"; 
+    el.textContent = doc.ok ? "- online" : "- ?"; 
     el.className = "badge " + (doc.ok ? "ok" : "dead");
-  } catch (_e) { el.textContent = "● offline"; el.className = "badge alert"; }
+  } catch (_e) { el.textContent = "- offline"; el.className = "badge alert"; }
 }
 
 function loadPanel(name) {

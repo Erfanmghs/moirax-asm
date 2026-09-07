@@ -1,14 +1,14 @@
-"""B6 DASHBOARD preflight gates — run BEFORE the vehicle `recon.sh run`.
+"""B6 DASHBOARD preflight gates -- run BEFORE the vehicle `recon.sh run`.
 
   G-Z1  committed B6 defaults (bind host/port, dashboard config relpath,
         proxy unset default + check timeout, digest/scheduler defaults intact)
-  G-Z2  backend surface: dashboard/app.py exposes the §9.2 API routes and the
-        §9.1 DASHBOARD_TOKEN fail-closed auth
-  G-Z3  SPA present + §9.4 theme markers (dark palette, monospace technical
-        values, sticky headers, badges, JSON inspector) + panels a–e
+  G-Z2  backend surface: dashboard/app.py exposes the section 9.2 API routes and the
+        section 9.1 DASHBOARD_TOKEN fail-closed auth
+  G-Z3  SPA present + section 9.4 theme markers (dark palette, monospace technical
+        values, sticky headers, badges, JSON inspector) + panels a-e
   G-Z4  views.yaml frozen-loader contract: every module fields is a LIST
-        (REM20 — committed file was mangled at B0 and unparseable as lists)
-  G-Z5  §9.3 proxy rule: engine fail-fast wiring + proxy_gate implementation
+        (REM20 -- committed file was mangled at B0 and unparseable as lists)
+  G-Z5  section 9.3 proxy rule: engine fail-fast wiring + proxy_gate implementation
   G-Z6  verify_b1.py has no working-tree diff (frozen since handoff)
   G-Z7  vehicle scope: example.com retained
   G-Z8  unit coverage markers in tests/test_dashboard.py

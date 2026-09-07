@@ -1,4 +1,4 @@
-"""Named parameters from tools.yaml and tools.lock (§5.6)."""
+"""Named parameters from tools.yaml and tools.lock (section 5.6)."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ class Params:
 
     def require(self, name: str) -> Any:
         if name not in self.settings:
-            raise KeyError(f"unnamed parameter {name!r} — register it in tools.yaml settings")
+            raise KeyError(f"unnamed parameter {name!r} -- register it in tools.yaml settings")
         return self.settings[name]
 
     def dashboard_image(self) -> str:

@@ -1,15 +1,15 @@
 schema_version: 1
-# SEARCH-FORGE engine pool (master spec §8 PSV-0).
+# SEARCH-FORGE engine pool (master spec section 8 PSV-0).
 # The pipeline NEVER raw-scrapes Google/Bing HTML from pipeline IPs; all search
 # traffic flows through this registered engine pool of API-routed providers.
-# Keys come from §9.2-d/.env (comma-separated value = multiple keys per engine
+# Keys come from section 9.2-d/.env (comma-separated value = multiple keys per engine
 # -> per-request key rotation with per-key quota tracking). Keyless engines are
 # throttled (rate_per_min). Engine response kinds: html | json | xml.
 #
 # BLOCK HANDLING (PSV-0): HTTP 429/403 or captcha signal -> engine marked
 # COOLDOWN (exponential backoff + jitter), traffic instantly re-routed to the
 # next healthy engine; engine error-rate > 20% over 60s -> ISOLATED (per-engine
-# mirror of the §11.4 breaker); cooldown engines re-probed after the backoff
+# mirror of the section 11.4 breaker); cooldown engines re-probed after the backoff
 # window. Per-dork TTL cache -> scheduled re-runs never re-burn quota.
 settings:
   cooldown_backoff_base_sec: 2

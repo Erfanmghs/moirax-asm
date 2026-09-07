@@ -1,4 +1,4 @@
-"""TEST 4 (T4-B) — restore verification (offline gates, run on the runner).
+"""TEST 4 (T4-B) -- restore verification (offline gates, run on the runner).
 
 Verifies that the committed config is back at the production/real-run state:
   C1  selection defaults active: NO test-mode `selection:` overrides in

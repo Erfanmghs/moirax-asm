@@ -1,13 +1,13 @@
-"""E2E FIXTURE acceptance table (E0..E10) — full-pipeline vehicle on the
+"""E2E FIXTURE acceptance table (E0..E10) -- full-pipeline vehicle on the
 multi-port/nested-subdomain fixture (fixture-target.test -> 172.17.0.1).
 
 Discipline (B3 F10 / REM19 H8 / REM4-R A4 lineage):
 - E0 stale-evidence guard: every asserted data.json must be NEWER than the
-  workflow start (env E2E_RUN_STARTED_AT, epoch seconds) — a skipped module
+  workflow start (env E2E_RUN_STARTED_AT, epoch seconds) -- a skipped module
   must never pass on committed stale files.
 - The table asserts the RUN'S OWN evidence under recon/fixture-target.test,
   never committed artifacts.
-- Disclosure row: run status/reason/failing_module printed verbatim — a
+- Disclosure row: run status/reason/failing_module printed verbatim -- a
   degraded run can still PASS stage-scoped checks as long as the ACTIVE
   chain (DNSR -> ffuf3 -> merge -> port-sweep -> report) is proven and the
   disclosure is honest.
@@ -142,7 +142,7 @@ def main() -> int:
     check("E7 report-bundle-verified", bool(manifest_path.is_file()) and verified, str(reason))
 
     # --- E8 storage housekeeping engaged --------------------------------------
-    # The ledger line is printed on engine STDOUT — read the console tee (and
+    # The ledger line is printed on engine STDOUT -- read the console tee (and
     # run.log defensively; stdout is block-buffered if the job is killed).
     candidates = [ROOT / "ci" / "e2e_run_console.log", TARGET_DIR / "logs" / "run.log"]
     storage_lines = []

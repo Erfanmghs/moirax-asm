@@ -1,4 +1,4 @@
-"""B7 REPORTING acceptance table — runs AFTER the example.com vehicle.
+"""B7 REPORTING acceptance table -- runs AFTER the example.com vehicle.
 
   K1  MANDATORY  Run-end generation on the REAL vehicle: 90_report/ carries
                  report.md/html, export.csv/json, report.pdf, manifest; the
@@ -16,7 +16,7 @@
                  with the frozen loader) + verify_b1.py working-tree diff empty
   K7  MANDATORY  PDF deliverable: real %PDF bytes OR the disclosed reportlab
                  skip note (never silent, never a crash)
-  K8  MANDATORY  §9.4 theme embedded in the real report.html
+  K8  MANDATORY  section 9.4 theme embedded in the real report.html
   G1  DISCLOSURE  Real run counts (hosts / alive / module docs)
 
 Exit 0 iff all MANDATORY rows PASS.
@@ -94,7 +94,7 @@ def main() -> int:
     check("K3", "MANDATORY", stamp_ok and digest_ok,
           f"run_timestamp={manifest.get('run_timestamp')} scope_digest_match={digest_ok}")
 
-    # ---- K4 tamper check (isolated copy — repo never mutated) ---------------------
+    # ---- K4 tamper check (isolated copy -- repo never mutated) ---------------------
     ok_real, reason_real = verify_bundle(params, TD)
     tampered_fails = False
     tamper_reason = ""
@@ -176,7 +176,7 @@ def main() -> int:
 
     # ---- G1 real counts disclosure ----------------------------------------------------------------
     check("G1", "DISCLOSURE", True,
-          f"counts={json.dumps(counts, sort_keys=True)} scope_digest={str(manifest.get('scope_digest'))[:16]}…")
+          f"counts={json.dumps(counts, sort_keys=True)} scope_digest={str(manifest.get('scope_digest'))[:16]}...")
 
     table = ["id\tclass\tstatus\tdetail"]
     table += [f"{hid}\t{cls}\t{st}\t{det}" for hid, cls, st, det in rows]

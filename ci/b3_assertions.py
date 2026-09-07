@@ -167,7 +167,7 @@ def main() -> int:
     else:
         # no ffuf-3 rows on this vehicle (skip or all-answers-filtered):
         # MERGE passthrough is UNCHANGED as-frozen code, acceptance-tested in
-        # TEST 2 (A8/R3) and unit-covered; nothing to re-prove here — disclose.
+        # TEST 2 (A8/R3) and unit-covered; nothing to re-prove here -- disclose.
         row("D5", "MANDATORY", True,
             f"no ffuf-3 rows on vehicle (rows=0, skip_logged={skip_logged}); MERGE passthrough unchanged as-frozen (TEST 2 A8/R3 + unit tests)")
 

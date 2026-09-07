@@ -1,6 +1,6 @@
-"""Telegram notifications — §4.5 run summary, §4.6 watchtower instant alerts,
-§4.7 digest threshold + alert filters + self-monitoring.
-Credentials: dashboard/config.json (§9.2-e) first, .env fallback; unset → skip silently.
+"""Telegram notifications -- section 4.5 run summary, section 4.6 watchtower instant alerts,
+section 4.7 digest threshold + alert filters + self-monitoring.
+Credentials: dashboard/config.json (section 9.2-e) first, .env fallback; unset -> skip silently.
 """
 
 from __future__ import annotations
@@ -18,13 +18,13 @@ from pipeline.params import Params
 
 SendFn = Callable[[str], None]
 
-# §4.6 instant-alert classes: NEW SUBDOMAIN (hosts) + NEWLY OPENED PORT (ports).
-# Every other diff class (services / tech / removed / closed ports) → dashboard
-# diff view only, never Telegram (§4.6, §8 PORT-SWEEP watchtower wiring).
+# section 4.6 instant-alert classes: NEW SUBDOMAIN (hosts) + NEWLY OPENED PORT (ports).
+# Every other diff class (services / tech / removed / closed ports) -> dashboard
+# diff view only, never Telegram (section 4.6, section 8 PORT-SWEEP watchtower wiring).
 ALERT_CLASSES = ("hosts", "ports")
 
-# Default §4.7 alert-filter rules when the dashboard has not configured any:
-# both §4.6 classes are alert-worthy, no extra condition.
+# Default section 4.7 alert-filter rules when the dashboard has not configured any:
+# both section 4.6 classes are alert-worthy, no extra condition.
 DEFAULT_ALERT_RULES: list[dict[str, Any]] = [
     {"class": "hosts", "enabled": True, "require_new_ip": False},
     {"class": "ports", "enabled": True, "require_new_ip": False},
@@ -49,7 +49,7 @@ def load_dotenv(root: Path, filename: str) -> None:
 
 
 def load_dashboard_config(params: Params) -> dict[str, Any]:
-    """§9.2-e dashboard Settings persistence (gitignored, never committed)."""
+    """section 9.2-e dashboard Settings persistence (gitignored, never committed)."""
     rel = str(params.require("dashboard_config_relpath"))
     path = params.root / rel
     if not path.is_file():
@@ -62,7 +62,7 @@ def load_dashboard_config(params: Params) -> dict[str, Any]:
 
 
 def resolve_credentials(params: Params) -> tuple[str, str]:
-    """§4.5 credentials configured in the dashboard first, .env fallback."""
+    """section 4.5 credentials configured in the dashboard first, .env fallback."""
     config = load_dashboard_config(params)
     tg = config.get("telegram") or {}
     token = str(tg.get("bot_token") or "").strip()
@@ -78,7 +78,7 @@ def resolve_credentials(params: Params) -> tuple[str, str]:
 
 
 def _deliver(params: Params, text: str, sender: SendFn | None) -> bool:
-    """Send one message; unset credentials → skip silently (§4.5)."""
+    """Send one message; unset credentials -> skip silently (section 4.5)."""
     if sender is not None:
         sender(text)
         return True
@@ -98,7 +98,7 @@ def _deliver(params: Params, text: str, sender: SendFn | None) -> bool:
 
 
 def send_status(params: Params, status: str, module: str, reason: str, sender: SendFn | None = None) -> bool:
-    """§4.7 self-monitoring explicit status alert: status + reason + module."""
+    """section 4.7 self-monitoring explicit status alert: status + reason + module."""
     text = f"{status}: module={module} reason={reason}"
     return _deliver(params, text, sender)
 
@@ -112,7 +112,7 @@ def send_run_summary(
     report_path: str,
     sender: SendFn | None = None,
 ) -> bool:
-    """§4.5 end-of-run summary: target, final status, per-module asset counts,
+    """section 4.5 end-of-run summary: target, final status, per-module asset counts,
     duration, report path. completed|partial|failed."""
     per_module = " ".join(f"{key}={val}" for key, val in counts.items()) or "modules=0"
     minutes = int(duration_sec // 60)
@@ -133,12 +133,12 @@ def alert_worthy(
     asset: dict[str, Any],
     prev_index: dict[str, set[str]],
 ) -> bool:
-    """§4.7 alert-filter rules — decide whether one new asset is alert-worthy.
+    """section 4.7 alert-filter rules -- decide whether one new asset is alert-worthy.
 
-    Rule schema (dashboard-editable, §9.2-e):
+    Rule schema (dashboard-editable, section 9.2-e):
       {"class": "hosts"|"ports", "enabled": bool, "require_new_ip": bool}
     require_new_ip: host must resolve to an IP never seen in the previous run
-    (the "new subdomain resolving to a NEW IP" example in §4.7).
+    (the "new subdomain resolving to a NEW IP" example in section 4.7).
     """
     for rule in rules:
         if not isinstance(rule, dict) or str(rule.get("class")) != cls:
@@ -158,7 +158,7 @@ def alert_worthy(
 
 
 def _prev_index_from_diff(diff_doc: dict[str, Any]) -> dict[str, set[str]]:
-    """IPs already known to the PREVIOUS run — mined from removed/changed rows
+    """IPs already known to the PREVIOUS run -- mined from removed/changed rows
     (added rows are new by definition; their IPs are the NEW ones)."""
     seen: set[str] = set()
     for bucket in ("removed", "changed"):
@@ -169,7 +169,7 @@ def _prev_index_from_diff(diff_doc: dict[str, Any]) -> dict[str, set[str]]:
                 seen.add(str(row["ip"]))
             for ip in row.get("ips") or []:
                 seen.add(str(ip))
-        # changed rows carry {"before","after"} — mine both sides
+        # changed rows carry {"before","after"} -- mine both sides
         if bucket == "changed":
             for row in (diff_doc.get("changed") or {}).get("hosts") or []:
                 for side in ("before", "after"):
@@ -187,13 +187,13 @@ def evaluate_diff_alerts(
     diff_doc: dict[str, Any],
     sender: SendFn | None = None,
 ) -> dict[str, Any]:
-    """§4.6 watchtower + §4.7 digest threshold, driven by diff.json (§6.6).
+    """section 4.6 watchtower + section 4.7 digest threshold, driven by diff.json (section 6.6).
 
     NEW SUBDOMAIN (added hosts) and NEWLY OPENED PORT (added ports) are the
     instant-alert classes; closed ports / removed hosts are never alerted;
     other classes surface in the dashboard diff view only.
     Digest: instant per asset while alert-worthy count < threshold (default 10,
-    dashboard-editable); at/above → ONE grouped digest message.
+    dashboard-editable); at/above -> ONE grouped digest message.
     """
     config = load_dashboard_config(params)
     rules = config.get("alert_rules") if isinstance(config.get("alert_rules"), list) else DEFAULT_ALERT_RULES
@@ -276,7 +276,7 @@ def run_end_notifications(
     duration_sec: float,
     sender: SendFn | None = None,
 ) -> dict[str, Any]:
-    """§4.5 + §4.7 run-end fan-out. Never raises — notification failure must
+    """section 4.5 + section 4.7 run-end fan-out. Never raises -- notification failure must
     never flip a pipeline verdict; every outcome is printed (never-silent)."""
     ledger: dict[str, Any] = {"summary_sent": False, "status_alert_sent": False, "alerts": None}
     completed = str(params.require("run_status_completed"))
@@ -305,6 +305,6 @@ def run_end_notifications(
         diff_path = target_dir / diff_rel
         if diff_path.is_file():
             ledger["alerts"] = evaluate_diff_alerts(params, read_json(diff_path), sender)
-    except Exception as exc:  # noqa: BLE001 — notification must never fail a run
+    except Exception as exc:  # noqa: BLE001 -- notification must never fail a run
         ledger["error"] = str(exc)
     return ledger

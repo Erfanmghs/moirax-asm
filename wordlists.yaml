@@ -1,8 +1,8 @@
 schema_version: 1
-# Curated SecLists registry for WIDE-phase hostname tasks only (master §5.6 + §8).
+# Curated SecLists registry for WIDE-phase hostname tasks only (master section 5.6 + section 8).
 # Paths are relative to seclists_root (/usr/share/seclists in containers).
 # Module code MUST look up keys here; raw filesystem paths are forbidden.
-# Content-discovery lists (directories/files/parameters/extensions) are excluded (companion §7 NARROW).
+# Content-discovery lists (directories/files/parameters/extensions) are excluded (companion section 7 NARROW).
 
 lists:
   dns_fast_top5000:
@@ -112,7 +112,7 @@ lists:
     shape: hostname
     rationale: "TEST FIXTURE (B2 acceptance smoke): first 200 normalized dns_fast_top5000 labels."
   e2e_nested_fixture:
-    # TEST FIXTURE (E2E): DOTTED multi-label names — proves the DNS lane
+    # TEST FIXTURE (E2E): DOTTED multi-label names -- proves the DNS lane
     # discovers NESTED subdomains (word.fixture-target.test -> a.b.c.fixture-
     # target.test) when the selected wordlist carries dotted entries.
     path: wordlists/local/e2e-nested.txt
@@ -150,8 +150,8 @@ tasks:
       - dns_exp_trickest
   FFUF-0:
     default_key: dns_exp_combined
-    # §8 operator ticks (B6 dashboard later). No UI in B2.
-    # Committed / real-run default_selection — RESTORED at TEST 4:
+    # section 8 operator ticks (B6 dashboard later). No UI in B2.
+    # Committed / real-run default_selection -- RESTORED at TEST 4:
     default_selection:
       - dns_fast_top5000
       - dns_exp_combined

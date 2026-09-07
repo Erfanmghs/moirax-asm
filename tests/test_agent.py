@@ -1,4 +1,4 @@
-"""B8 SUPERVISOR AGENT unit proof (spec §12) — deterministic, no network, no LLM."""
+"""B8 SUPERVISOR AGENT unit proof (spec section 12) -- deterministic, no network, no LLM."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def _supervisor(params: Params, run_overrides: dict | None = None) -> Supervisor
 
 
 class TestOptInDefault(unittest.TestCase):
-    """§12.1 agent-optional: default OFF; disabled -> zero engagement."""
+    """section 12.1 agent-optional: default OFF; disabled -> zero engagement."""
 
     def test_default_disabled(self):
         s = _supervisor(_isolated_params())
@@ -58,18 +58,18 @@ class TestOptInDefault(unittest.TestCase):
 
 
 class TestDeterministicChecks(unittest.TestCase):
-    """§12.3 DETERMINISTIC checks FIRST."""
+    """section 12.3 DETERMINISTIC checks FIRST."""
 
     def test_exit_code_failure(self):
         self.assertIn("exit_code=2", deterministic_checks("m", 2, None, True))
 
     def test_schema_invalid(self):
         fails = deterministic_checks("m", 0, {"counts": {"a": 1}}, True)
-        self.assertIn("data.json schema-invalid (§6.2)", fails)
+        self.assertIn("data.json schema-invalid (section 6.2)", fails)
 
     def test_zero_result_anomaly(self):
         fails = deterministic_checks("m", 0, {"schema_version": 1, "module": "m", "counts": {"a": 0, "b": 0}}, True)
-        self.assertIn("zero-result anomaly (suspected pipeline breakage, §4.7)", fails)
+        self.assertIn("zero-result anomaly (suspected pipeline breakage, section 4.7)", fails)
 
     def test_state_not_updated(self):
         fails = deterministic_checks("m", 0, None, False)
@@ -80,7 +80,7 @@ class TestDeterministicChecks(unittest.TestCase):
 
 
 class TestPlaybook(unittest.TestCase):
-    """§12.5 config-driven playbook + allow-list."""
+    """section 12.5 config-driven playbook + allow-list."""
 
     def test_playbook_loads_spec_examples(self):
         params = _isolated_params()
@@ -105,7 +105,7 @@ class TestPlaybook(unittest.TestCase):
 
 
 class TestSupervisionLoop(unittest.TestCase):
-    """§12.3 bounded remediation + escalation; §12.6 autonomy levels."""
+    """section 12.3 bounded remediation + escalation; section 12.6 autonomy levels."""
 
     def test_passive_default_auto_fix_applies(self):
         params = _isolated_params()
@@ -132,7 +132,7 @@ class TestSupervisionLoop(unittest.TestCase):
             self.assertTrue(verdict.get("fixed"), f"attempt {i + 1} applies")
         verdict = s.on_module_failure("subfinder", "passive", "resolver timeout cascade")
         self.assertTrue(verdict["escalated"])
-        self.assertFalse(verdict.get("fixed"), "4th attempt is beyond the ≤3 budget (§12.3)")
+        self.assertFalse(verdict.get("fixed"), "4th attempt is beyond the <=3 budget (section 12.3)")
 
     def test_no_signature_escalates_with_diagnosis(self):
         params = _isolated_params()
@@ -150,7 +150,7 @@ class TestSupervisionLoop(unittest.TestCase):
 
 
 class TestFrugality(unittest.TestCase):
-    """§12.4 event-driven, zero LLM on healthy runs, cache + budget."""
+    """section 12.4 event-driven, zero LLM on healthy runs, cache + budget."""
 
     def test_zero_llm_calls_by_default(self):
         s = _supervisor(_isolated_params(), {"enabled": True})
@@ -176,7 +176,7 @@ class TestFrugality(unittest.TestCase):
 
 
 class TestJournal(unittest.TestCase):
-    """§12.7 append-only journal."""
+    """section 12.7 append-only journal."""
 
     def test_journal_append_only_jsonl(self):
         params = _isolated_params()
@@ -196,7 +196,7 @@ class TestJournal(unittest.TestCase):
 
 
 class TestGuardrails(unittest.TestCase):
-    """§12.7 absolute guardrails, enforced in code."""
+    """section 12.7 absolute guardrails, enforced in code."""
 
     def test_allow_list_never_contains_scope_or_breaker_actions(self):
         forbidden = ("modify_scope", "disable_breaker", "bypass_scope", "delete_logs")
@@ -211,7 +211,7 @@ class TestGuardrails(unittest.TestCase):
     def test_info_gather_validates_never_modifies_scope(self):
         cli_text = (_ROOT / "pipeline" / "cli.py").read_text(encoding="utf-8")
         self.assertIn("info-gather", cli_text)
-        self.assertIn("agent never modifies scope.yaml (§12.7)", cli_text)
+        self.assertIn("agent never modifies scope.yaml (section 12.7)", cli_text)
 
     def test_config_validation_of_autonomy(self):
         from dashboard.service import validate_settings

@@ -1,14 +1,14 @@
-# B8 SUPERVISOR AGENT (spec §12) — acceptance vehicle.
+# B8 SUPERVISOR AGENT (spec section 12) -- acceptance vehicle.
 #
 # Vehicle: example.com (committed scope), the proven bounding set. The NEW
-# run-end reporting stage renders report.md / report.html (§9.4 theme) /
+# run-end reporting stage renders report.md / report.html (section 9.4 theme) /
 # export.csv / export.json / report.pdf + report_manifest.json FROM the
-# canonical data.json files only (§10.2), embedding the run timestamp +
+# canonical data.json files only (section 10.2), embedding the run timestamp +
 # scope.yaml digest. The K-table then proves the companion acceptance
 # (counts equal across formats; tampered data.json fails the digest check)
 # on the REAL vehicle output, plus dashboard on-demand regeneration.
 #
-# Transient runtime accommodations (NEVER committed; before-copies kept) —
+# Transient runtime accommodations (NEVER committed; before-copies kept) --
 # the exact proven B4/B5/B6 set.
 #
 # Steps: checkout -> toolchain -> pip deps (fastapi/uvicorn/httpx/reportlab)
@@ -49,7 +49,7 @@ jobs:
       - name: Unit proof (full regression suite incl. B8 agent)
         run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
 
-      - name: "Pull tool images (soft — passive fleet + sweep)"
+      - name: "Pull tool images (soft -- passive fleet + sweep)"
         run: |
           set +e
           : > ci/b8_pull_report.txt
@@ -165,7 +165,7 @@ jobs:
           print("Vehicle validation: frozen loader parses tools.yaml; bounding set intact.")
           PY
 
-      - name: Run vehicle (example.com — full pipeline + run-end reporting)
+      - name: Run vehicle (example.com -- full pipeline + run-end reporting)
         run: |
           set +e
           ./recon.sh run example.com 2>&1 | tee ci/b8_run_console.log

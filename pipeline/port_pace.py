@@ -1,4 +1,4 @@
-"""PORT-SWEEP PACER: RAMP + CANARY + duration budget (master §8 PORT-SWEEP).
+"""PORT-SWEEP PACER: RAMP + CANARY + duration budget (master section 8 PORT-SWEEP).
 
 Mirrors the DNS-RESOLVE LOAD BALANCE discipline (pipeline/load_balance.py)
 for the port plane:
@@ -9,7 +9,7 @@ for the port plane:
   ``portsweep_sentinel_limit`` known-open sentinel (ip, port) pairs mined from
   the PREVIOUS sweep/port-check history via a plain TCP connect. Any miss
   halves the rate immediately; ``circuit_breaker_bad_windows`` consecutive bad
-  windows force-pause the module through the circuit breaker (§4.7 ANOMALY
+  windows force-pause the module through the circuit breaker (section 4.7 ANOMALY
   path). No sentinels from a previous run -> the canary is explicitly disarmed
   (never silent) and armed from the next completed sweep.
 - PACING: the orchestrator derives the duration-budgeted effective pps
@@ -64,7 +64,7 @@ class PortPacer:
         return max(1, int(pps))
 
     def tick(self, sentinels: list[tuple[str, int]], cap: float) -> bool:
-        """Return False if the canary paused the module (ANOMALY, §4.7)."""
+        """Return False if the canary paused the module (ANOMALY, section 4.7)."""
         now = self.clock.time()
         interval = float(self.params.require("portsweep_ramp_interval_sec"))
         if now - self.state.last_ramp >= interval:
@@ -78,7 +78,7 @@ class PortPacer:
             if not sentinels:
                 # First sweep (or no open ports ever recorded): the canary is
                 # disarmed with an explicit disclosure, never silently.
-                self._log("canary disarmed: no sentinel ports from a previous run — armed next sweep")
+                self._log("canary disarmed: no sentinel ports from a previous run -- armed next sweep")
                 return True
             return self._canary(sentinels)
         return not self.state.paused

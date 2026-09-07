@@ -1,4 +1,4 @@
-"""B7 REPORTING unit proof (spec §10) — deterministic, no network."""
+"""B7 REPORTING unit proof (spec section 10) -- deterministic, no network."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def _params() -> Params:
 
 
 def _vehicle_dir() -> tuple[Params, Path]:
-    """Synthetic canonical layout mirroring §6.3 module outputs."""
+    """Synthetic canonical layout mirroring section 6.3 module outputs."""
     tmp = Path(tempfile.mkdtemp()) / "example.com"
     (tmp / "00_assets").mkdir(parents=True)
     (tmp / "10_subdomains" / "passive").mkdir(parents=True)
@@ -53,7 +53,7 @@ def _vehicle_dir() -> tuple[Params, Path]:
 
 
 class TestPrecisionContract(unittest.TestCase):
-    """§10.2: every format FROM canonical data.json; embeds stamp + scope digest."""
+    """section 10.2: every format FROM canonical data.json; embeds stamp + scope digest."""
 
     def test_scope_digest_stable(self):
         p1 = scope_digest(_params())
@@ -107,14 +107,14 @@ class TestPrecisionContract(unittest.TestCase):
         params, td = _vehicle_dir()
         generate_all(params, td, "20260101T000000Z")
         html = (td / "90_report" / "report.html").read_text(encoding="utf-8")
-        self.assertIn("#0a0e14", html, "§9.4 dark palette embedded")
+        self.assertIn("#0a0e14", html, "section 9.4 dark palette embedded")
         self.assertIn("badge", html)
 
     def test_diff_badge_new_host(self):
         params, td = _vehicle_dir()
         generate_all(params, td, "20260101T000000Z")
         html = (td / "90_report" / "report.html").read_text(encoding="utf-8")
-        self.assertIn("NEW</span>", html, "diff badge for added host (§6.6 wiring)")
+        self.assertIn("NEW</span>", html, "diff badge for added host (section 6.6 wiring)")
 
 
 class TestTamperCheck(unittest.TestCase):
@@ -162,7 +162,7 @@ class TestWiring(unittest.TestCase):
         text = (_ROOT / "pipeline" / "engine.py").read_text(encoding="utf-8")
         self.assertIn("generate_all(params, target_dir, stamp)", text)
         self.assertIn("report: generated=", text, "never-silent ledger line")
-        # REM24 (run #36 evidence): anomaly-terminated runs get reports too (§10.1)
+        # REM24 (run #36 evidence): anomaly-terminated runs get reports too (section 10.1)
         terminal_block = text.split("terminal = {")[1].split("}")[0]
         for status_param in ("run_status_completed", "run_status_partial", "run_status_failed", "run_status_anomaly", "run_status_stopped"):
             self.assertIn(status_param, terminal_block, f"{status_param} must be a report-generating terminal status")
@@ -179,7 +179,7 @@ def bundle_scope(params: Params) -> str:
 
 def _pdf_text(raw: bytes) -> bytes:
     """Decompress the first FlateDecode content stream (ASCII85-wrapped) so the
-    text layer can be asserted — the precision check reads REAL rendered text."""
+    text layer can be asserted -- the precision check reads REAL rendered text."""
     import base64
     import re
     import zlib

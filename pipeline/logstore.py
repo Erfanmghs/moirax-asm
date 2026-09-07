@@ -5,18 +5,18 @@ at EVERY run end (engine hook) and is dashboard-configurable via
 dashboard/config.json `retention.*` on top of the tools.yaml defaults.
 
 Contract:
-- NEVER-FAIL for the pipeline: housekeep() raises nothing to the run verdict —
-  the engine call-site wraps it in try/except exactly like reporting (§10.1).
+- NEVER-FAIL for the pipeline: housekeep() raises nothing to the run verdict --
+  the engine call-site wraps it in try/except exactly like reporting (section 10.1).
 - PROTECTED (never deleted): data.json, runs.json, state.json, diff.json,
   the current report dir (90_report), the current logs/run.log and
   logs/agent-journal.jsonl, and anything outside the two managed surfaces.
 - MANAGED SURFACES ONLY:
-    1. history/<stamp>/ snapshots — keep the newest N, prune older.
-    2. logs/*.gz — rotation archives created here (gzip level 9); prune
+    1. history/<stamp>/ snapshots -- keep the newest N, prune older.
+    2. logs/*.gz -- rotation archives created here (gzip level 9); prune
        beyond the keep count; also consumed by the total-size cap.
 - Rotation: when a managed log exceeds its cap it is archived to
   <name>.<UTC stamp>.gz and the live file is truncated in place (append-only
-  writers keep working — the engine opens run.log in "a" mode per line).
+  writers keep working -- the engine opens run.log in "a" mode per line).
 
 Purity: stdlib only, no dashboard import (dashboard imports pipeline, never
 the reverse); reads the dashboard config JSON with a defensive loader so a
@@ -83,7 +83,7 @@ def _dir_size(path: Path) -> int:
 
 
 def _history_dirs(target_dir: Path) -> list[Path]:
-    """Snapshot dirs we own — strictly timestamp-named, sorted oldest first."""
+    """Snapshot dirs we own -- strictly timestamp-named, sorted oldest first."""
     hist = target_dir / "history"
     if not hist.is_dir():
         return []

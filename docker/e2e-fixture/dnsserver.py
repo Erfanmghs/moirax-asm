@@ -68,7 +68,7 @@ def start_dns_daemon(bind: str, port: int, zone: tuple[str, ...], answer_ip: str
             ancount = 1
             answers = struct.pack("!HHIHI", 0xC00C, _QTYPE_A, _CLASS_IN, 300, 4) + answer_bytes
         elif qtype == _QTYPE_A and qclass == _CLASS_IN:
-            flags |= 0x0003  # NXDOMAIN — honest miss
+            flags |= 0x0003  # NXDOMAIN -- honest miss
         header = query_id + struct.pack("!HHHHH", flags, qdcount, ancount, 0, 0)
         question = _encode_name(qname) + struct.pack("!HH", qtype, qclass)
         try:

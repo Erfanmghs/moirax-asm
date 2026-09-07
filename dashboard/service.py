@@ -1,7 +1,7 @@
-"""Dashboard service logic (spec §9.2 panels a–e, §9.3 proxy rule).
+"""Dashboard service logic (spec section 9.2 panels a-e, section 9.3 proxy rule).
 
 Pure, unit-testable functions; the FastAPI layer (dashboard/app.py) stays thin.
-Secrets are NEVER logged and NEVER echoed back unmasked (§9.2-d/e).
+Secrets are NEVER logged and NEVER echoed back unmasked (section 9.2-d/e).
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from pipeline.params import Params
 from pipeline.scheduler import validate as validate_schedule
 from pipeline.yaml_util import load_yaml_file
 
-# §9.2-d provider keys inventory (key -> module -> fallback), mirrors
+# section 9.2-d provider keys inventory (key -> module -> fallback), mirrors
 # docs/api-keys.md. The API-keys panel manages exactly these names.
 KEYS_REGISTRY: list[dict[str, str]] = [
     {"name": "SERPER_API_KEY", "module": "PSV-0/PSV-1 search forge", "fallback": "engine ISOLATED, reroute to keyless"},
@@ -36,11 +36,11 @@ KEYS_REGISTRY: list[dict[str, str]] = [
 
 
 class DashboardError(ValueError):
-    """Schema-validated write rejected (§5.4 strict validation)."""
+    """Schema-validated write rejected (section 5.4 strict validation)."""
 
 
 class ProxyUnreachableError(RuntimeError):
-    """§9.3 set-but-unreachable proxy — FAIL FAST, never silent direct."""
+    """section 9.3 set-but-unreachable proxy -- FAIL FAST, never silent direct."""
 
 
 def mask_secret(value: str) -> str:
@@ -130,19 +130,19 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
         if proxy:
             scheme = urllib.parse.urlparse(proxy).scheme.lower()
             if scheme not in ("http", "https", "socks5"):
-                errors.append("proxy_url scheme must be http/socks5 (§9.3)")
+                errors.append("proxy_url scheme must be http/socks5 (section 9.3)")
     if "digest_threshold" in patch:
         th = patch.get("digest_threshold")
         if not isinstance(th, int) or isinstance(th, bool) or th <= 0:
-            errors.append("digest_threshold must be a positive integer (§4.7)")
+            errors.append("digest_threshold must be a positive integer (section 4.7)")
     if "alert_rules" in patch:
         rules = patch.get("alert_rules")
         if not isinstance(rules, list):
-            errors.append("alert_rules must be a list (§4.7)")
+            errors.append("alert_rules must be a list (section 4.7)")
         else:
             for rule in rules:
                 if not isinstance(rule, dict) or "class" not in rule or "enabled" not in rule:
-                    errors.append("each alert rule needs class + enabled (§4.7)")
+                    errors.append("each alert rule needs class + enabled (section 4.7)")
                     break
     if "telegram" in patch:
         tg = patch.get("telegram")
@@ -153,21 +153,21 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
     if "resource_budget" in patch:
         budget = patch.get("resource_budget")
         if not isinstance(budget, dict):
-            errors.append("resource_budget must be an object (§11.5)")
+            errors.append("resource_budget must be an object (section 11.5)")
         else:
             for key in ("cpu_cores", "ram_mb"):
                 if key in budget and (not isinstance(budget[key], int) or isinstance(budget[key], bool) or budget[key] <= 0):
-                    errors.append(f"resource_budget.{key} must be a positive integer (§11.5)")
+                    errors.append(f"resource_budget.{key} must be a positive integer (section 11.5)")
     if "agent" in patch:
         agent = patch.get("agent")
         if not isinstance(agent, dict):
-            errors.append("agent must be an object (§12.6)")
+            errors.append("agent must be an object (section 12.6)")
         else:
             for key in ("autonomy_passive", "autonomy_active"):
                 if key in agent and agent[key] not in ("observe", "suggest", "auto-fix"):
-                    errors.append(f"agent.{key} must be observe|suggest|auto-fix (§12.6)")
+                    errors.append(f"agent.{key} must be observe|suggest|auto-fix (section 12.6)")
             if "max_llm_calls" in agent and (not isinstance(agent["max_llm_calls"], int) or isinstance(agent["max_llm_calls"], bool) or agent["max_llm_calls"] < 0):
-                errors.append("agent.max_llm_calls must be a non-negative integer (§12.4)")
+                errors.append("agent.max_llm_calls must be a non-negative integer (section 12.4)")
     if "retention" in patch:
         retention = patch.get("retention")
         if not isinstance(retention, dict):
@@ -197,13 +197,13 @@ _TOOLS_EDIT_KEYS = {"enabled", "flag_overrides"}
 
 
 def validate_tools_edit(tools_doc: dict[str, Any], tool: str, patch: dict[str, Any]) -> dict[str, Any]:
-    """§5.4/§9.2-a strict schema: only enable/disable + per-tool FLAG OVERRIDES
+    """section 5.4/section 9.2-a strict schema: only enable/disable + per-tool FLAG OVERRIDES
     (the adapter-merge lever the next run's command assembly consumes)."""
     if tool not in (tools_doc.get("tools") or {}):
         raise DashboardError(f"unknown tool {tool!r}")
     extra = set(patch) - _TOOLS_EDIT_KEYS
     if extra:
-        raise DashboardError(f"forbidden edit keys {sorted(extra)} — only enabled/flag_overrides (§5.4)")
+        raise DashboardError(f"forbidden edit keys {sorted(extra)} -- only enabled/flag_overrides (section 5.4)")
     clean: dict[str, Any] = {}
     if "enabled" in patch:
         if not isinstance(patch["enabled"], bool):
@@ -215,7 +215,7 @@ def validate_tools_edit(tools_doc: dict[str, Any], tool: str, patch: dict[str, A
             raise DashboardError("flag_overrides must be an object of named-parameter overrides")
         for key, value in overrides.items():
             if not re.fullmatch(r"[a-z][a-z0-9_]*", key):
-                raise DashboardError(f"flag_overrides key {key!r} is not a named parameter id (§5.6)")
+                raise DashboardError(f"flag_overrides key {key!r} is not a named parameter id (section 5.6)")
             if isinstance(value, (dict, list)):
                 raise DashboardError(f"flag_overrides value for {key!r} must be a scalar")
             clean.setdefault("flag_overrides", {})[key] = value
@@ -235,7 +235,7 @@ def apply_tools_edit(params: Params, tool: str, patch: dict[str, Any]) -> dict[s
 
 def _patch_tools_yaml(text: str, tool: str, clean: dict[str, Any]) -> str:
     """Surgical line edit of ONE tool block (2-space indent), preserving all
-    comments/formatting — the dashboard never rewrites the whole file."""
+    comments/formatting -- the dashboard never rewrites the whole file."""
     lines = text.splitlines()
     start = _find_block(lines, f"  {tool}:")
     if start is None:
@@ -387,7 +387,7 @@ _FILTER_KEYS = ("q", "source", "tag", "alive", "run", "scope")
 
 def apply_filters(rows: list[dict[str, Any]], filters: dict[str, Any], scope_includes: list[str] | None = None,
                   scope_excludes: list[str] | None = None) -> list[dict[str, Any]]:
-    """§9.2-b GLOBAL RESULT FILTERS — combinable: free-text, per-source
+    """section 9.2-b GLOBAL RESULT FILTERS -- combinable: free-text, per-source
     attribution, tags, alive/dead, run selection, scope in/excludes."""
     out = rows
     q = str(filters.get("q") or "").strip().lower()
@@ -444,7 +444,7 @@ def parse_filters_query(query: str) -> dict[str, str]:
 # --------------------------------------------------------------- coverage (b)
 
 def coverage_analytics(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """§9.2-b SOURCE COVERAGE ANALYTICS: per-source contribution (unique
+    """section 9.2-b SOURCE COVERAGE ANALYTICS: per-source contribution (unique
     assets per tool), overlap histogram (assets found by N sources),
     per-source uniqueness %."""
     contribution: dict[str, int] = {}
@@ -482,10 +482,10 @@ def check_proxy_reachable(proxy_url: str, timeout: float = 3.0) -> tuple[bool, s
 
 
 def proxy_gate(params: Params) -> tuple[bool, str]:
-    """§9.3: set-but-unreachable → FAIL FAST; unset → direct, silently."""
+    """section 9.3: set-but-unreachable -> FAIL FAST; unset -> direct, silently."""
     proxy = str(params.require("proxy_url") or "").strip()
     if not proxy:
-        return True, "proxy unset — direct connection (§9.3)"
+        return True, "proxy unset -- direct connection (section 9.3)"
     ok, reason = check_proxy_reachable(proxy, timeout=float(params.require("proxy_check_timeout_sec")))
     return ok, reason
 

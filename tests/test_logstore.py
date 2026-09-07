@@ -1,4 +1,4 @@
-"""Storage management unit proof (pipeline/logstore.py) — post-B user
+"""Storage management unit proof (pipeline/logstore.py) -- post-B user
 directive 2026-09-06: retention, rotation, total cap. Deterministic, no
 network, no docker."""
 
@@ -144,7 +144,7 @@ class TestTotalCap(unittest.TestCase):
         res = enforce_total_cap(params, tdir, max_mb=1)
         self.assertFalse(res["capped"])  # 1 MB limit not exceeded by ~18KB fixture
         # Shrink limit path via direct call with 0-ish bytes is clamped >=1 MB,
-        # so simulate by inflating data: add a 2 MB protected file — cap purges
+        # so simulate by inflating data: add a 2 MB protected file -- cap purges
         # all managed surfaces but NEVER the protected files.
         (tdir / "00_assets").mkdir(exist_ok=True)
         (tdir / "00_assets" / "assets.json").write_bytes(b"p" * (2 * 1024 * 1024))

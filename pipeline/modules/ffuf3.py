@@ -1,36 +1,36 @@
-"""FFUF-3 — POST-DNSR VHOST PASS (spec v1.9 §8 FFUF-3, approved Option-1 item 1).
+"""FFUF-3 -- POST-DNSR VHOST PASS (spec v1.9 section 8 FFUF-3, approved Option-1 item 1).
 
 Production path for the vhost-misconfiguration class on DNS-DEAD names.
 The frozen FFUF-2 flag-time DNS cross-check is impossible by the APPEND-ONLY
-order law (FFUF order 1 finishes before DNS-RESOLVE order 2) — B2 proved the
+order law (FFUF order 1 finishes before DNS-RESOLVE order 2) -- B2 proved the
 machinery via the vhost fixture (TEST 2); this module is the production
-implementation, implemented at B3 start (§8.2 next-phase rule).
+implementation, implemented at B3 start (section 8.2 next-phase rule).
 
 Semantics (exactly as specified, v1.9):
 - BASE-HOST SET (exact): FFUF-1 completed enum records UNION DNSR-3 hosts
   with resolution_status "unresolved". Both inputs are logged with counts
   before any probe.
 - PROBE BINDING: -u is bound to an ALIVE in-scope base (a host with a
-  resolved IP that answers HTTP — e.g. apex/www from the same target) with
+  resolved IP that answers HTTP -- e.g. apex/www from the same target) with
   "Host: FUZZ.<dead-name>"; the dead name is never resolved directly. If no
   alive base exists for the target, the pass is SKIPPED with an explicit log
   line (never silent).
 - FLAG RULE: misconfig_suspect true IFF DNS-dead(name) AND a NON-FILTERED
-  answer — i.e. the response survives the REM4-R1 calibration-drop
+  answer -- i.e. the response survives the REM4-R1 calibration-drop
   discipline (_wordlist_fuzz_label: the recovered label must be in the job
   wordlist). Filtered answers are logged as suppressed, never flagged.
   dns_status "dead" is inherited from the base-host-set entry's DNSR-3
   record (the probed name is never DNS-queried).
 - ASSET-PROMOTION RULING (v1.9 item 2): misconfig_suspect is an ORTHOGONAL
-  FLAG, never an alive signal — rows carry alive: null and are never
+  FLAG, never an alive signal -- rows carry alive: null and are never
   promoted; MERGE passthrough carries the flag verbatim (acceptance-tested).
 - Output schema (data.json): {"schema_version":1,"module":"ffuf-3",
   "vhosts":[{"base_host","vhost","alive":null,"http_status","length",
   "misconfig_suspect":true,"dns_status":"dead"}],
   "bases":[{"host","ip","alive"}],"suppressed":0}
 - Output path: recon/<target>/15_vhosts/ffuf-3/ (never collides with FFUF-2).
-- Caps: load flags mirror the FFUF-2 baseline; circuit breaker (§11.4) +
-  resource ceiling (§11.5) apply via the shared adapter.
+- Caps: load flags mirror the FFUF-2 baseline; circuit breaker (section 11.4) +
+  resource ceiling (section 11.5) apply via the shared adapter.
 """
 
 from __future__ import annotations
@@ -65,9 +65,9 @@ def run_ffuf3(
     ffuf1_records = _ffuf1_records(ffuf_doc)
     dnsr_status = _dnsr_status(dnsr_doc)
 
-    # BASE-HOST SET (spec v1.9 §8 FFUF-3): FFUF-1 completed enum records UNION
+    # BASE-HOST SET (spec v1.9 section 8 FFUF-3): FFUF-1 completed enum records UNION
     # DNSR-3 hosts with resolution_status "unresolved". DNSR-3's host universe
-    # per §8 is "FFUF hits + DNSR-1/2 VALID hits" — alterx PERMUTATION
+    # per section 8 is "FFUF hits + DNSR-1/2 VALID hits" -- alterx PERMUTATION
     # candidates that came back NXDOMAIN are NOT DNSR-3 hosts (run #15
     # evidence: the whole-store reading yielded 1237 dead names, 923+ of them
     # fabricated perm mutations -> an unbounded 1237-job probe). The probed
@@ -104,10 +104,10 @@ def run_ffuf3(
 
     if not bases:
         skipped_reason = "no_alive_base"
-        _note(params, target_dir, "ffuf-3 skipped: no alive in-scope base with a resolved IP — pass SKIPPED, never silent")
+        _note(params, target_dir, "ffuf-3 skipped: no alive in-scope base with a resolved IP -- pass SKIPPED, never silent")
     elif not dead_names:
         skipped_reason = "no_dns_dead_names"
-        _note(params, target_dir, "ffuf-3 skipped: no DNS-dead names in the base-host set — nothing to probe")
+        _note(params, target_dir, "ffuf-3 skipped: no DNS-dead names in the base-host set -- nothing to probe")
 
     if skipped_reason is None:
         binding = bases[0]
@@ -228,12 +228,12 @@ def _alive_bases(
     target_dir: Path,
     target: str,
 ) -> list[dict[str, Any]]:
-    """ALIVE in-scope bases of the SAME TARGET ZONE (spec v1.9 §8: 'an ALIVE
+    """ALIVE in-scope bases of the SAME TARGET ZONE (spec v1.9 section 8: 'an ALIVE
     in-scope base ... e.g. apex/www from the same target').
 
     A candidate must (a) be alive per FFUF-1's httpx probe, (b) carry a
     resolved IP in the DNSR-3 map, and (c) belong to the run target's zone
-    (host == target or host endswith "." + target) — a base from a foreign
+    (host == target or host endswith "." + target) -- a base from a foreign
     zone would probe dead names against unrelated infrastructure (run #15:
     fixture dead names bound to www.example.com -> pathological). bases[0]
     is the binding base; the target apex is preferred deterministically.
@@ -255,7 +255,7 @@ def _alive_bases(
         if not host or host not in alive_ffuf:
             continue
         if host != apex and not host.endswith(zone_suffix):
-            continue  # foreign zone — never a binding base (same-target law)
+            continue  # foreign zone -- never a binding base (same-target law)
         if not gate.enforce(target_dir, host):
             continue
         ips = row.get("ips") or []

@@ -1,4 +1,4 @@
-"""MERGE: union, exact dedupe, attribution, scope re-validation, wildcard quarantine (§7.3)."""
+"""MERGE: union, exact dedupe, attribution, scope re-validation, wildcard quarantine (section 7.3)."""
 
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ def merge_branches(
     }
     assets_path = target_dir / str(params.require("assets_relpath"))
     write_json(assets_path, payload)
-    # TEST 3 (T3-1, disclosed): composition disclosure line — attribution split
+    # TEST 3 (T3-1, disclosed): composition disclosure line -- attribution split
     # and host->IP map shape of the merged tree, so the acceptance report can
     # show exactly what this run's MERGE composed from THIS run's inputs.
     _attr_counts: dict[str, int] = {}

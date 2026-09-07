@@ -1,6 +1,6 @@
-"""B5 NOTIFICATIONS & SCHEDULER preflight gates — run BEFORE the vehicle `recon.sh run`.
+"""B5 NOTIFICATIONS & SCHEDULER preflight gates -- run BEFORE the vehicle `recon.sh run`.
 
-  G-Y1  committed B5 defaults per spec §4.5/§4.6/§4.7/§9.2-e (digest threshold
+  G-Y1  committed B5 defaults per spec section 4.5/section 4.6/section 4.7/section 9.2-e (digest threshold
         10, scheduler min interval 10 min, default interval 240, dashboard
         config relpath, report dirname 90_report, scheduler filename, telegram
         env names + timeout from B0)
@@ -10,7 +10,7 @@
         validate
   G-Y3  committed scheduler.json is valid per pipeline.scheduler.validate
         (interval >= 10 min floor, enabled bool) and carries the 3 spec keys
-  G-Y4  dashboard/config.json is gitignored + NOT committed (§9.2-e)
+  G-Y4  dashboard/config.json is gitignored + NOT committed (section 9.2-e)
   G-Y5  .env is gitignored + NOT committed (keys never committed)
   G-Y6  verify_b1.py has no working-tree diff (frozen since handoff)
   G-Y7  vehicle scope: example.com retained

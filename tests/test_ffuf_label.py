@@ -12,7 +12,7 @@ Bidirectional contract:
 Hits are passed in the FLATTENED shape produced by `pipeline.modules.ffuf._ffuf_hits`
 (`fuzz` / `host` / `url` / `status` / `length` keys), i.e. post input.FUZZ extraction.
 
-No docker, no network — pure function test (REM4-R STEP 1 unit proof).
+No docker, no network -- pure function test (REM4-R STEP 1 unit proof).
 """
 
 from __future__ import annotations

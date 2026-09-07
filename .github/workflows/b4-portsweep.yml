@@ -1,4 +1,4 @@
-# B4 PORT-SWEEP (spec §8 order-4 post-MERGE) — acceptance vehicle.
+# B4 PORT-SWEEP (spec section 8 order-4 post-MERGE) -- acceptance vehicle.
 #
 # Vehicle: example.com (committed scope). The FULL pipeline runs (passive
 # chain produces the assets; MERGE unions them) and the new post-MERGE stage
@@ -6,17 +6,17 @@
 # batched dnsx pass for no-IP hosts), RULE 2 one-scan-per-unique-IP with
 # host attribution, RULE 3 explicit target set before any scan, duration-
 # budgeted pacing, RAMP+CANARY pacer, filtering intelligence, nmap toggle
-# OFF (zero nmap containers — designated VA hook).
+# OFF (zero nmap containers -- designated VA hook).
 #
 # The ACTIVE branch is disabled by a TRANSIENT bounding override (before-copy
 # kept as evidence): the passive chain (PSV-0..PSV-8, B3-closed machinery)
-# is the asset producer, and port-sweep's RULE 1 guarantee is the IP plane —
+# is the asset producer, and port-sweep's RULE 1 guarantee is the IP plane --
 # which is exactly the path the spec mandates for post-MERGE hosts without
 # resolved IPs.
 #
 # Transient runtime accommodations (NEVER committed; before-copies kept):
 #   - REM5 resolver-fleet refresh from the committed seed (public source URLs
-#     disabled at runtime) — the guarantee pass resolves against a healthy
+#     disabled at runtime) -- the guarantee pass resolves against a healthy
 #     forged fleet (same registry law as DNSR)
 #   - active_branch_modules: [] (passive-producer bounding)
 #   - passive_branch_budget_sec 1200 -> 3000 (amass 20-min cap + recursion)
@@ -60,7 +60,7 @@ jobs:
       - name: Unit proof (full regression suite incl. B4 port-sweep)
         run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
 
-      - name: "Pull tool images (soft — naabu/dnsx/httpx + passive fleet)"
+      - name: "Pull tool images (soft -- naabu/dnsx/httpx + passive fleet)"
         run: |
           set +e
           : > ci/b4_pull_report.txt
@@ -181,7 +181,7 @@ jobs:
           print("Vehicle validation: frozen loader parses tools.yaml; active branch bounded out; sweep armed custom/3-ports/1h; nmap toggle OFF.")
           PY
 
-      - name: Run vehicle (example.com — passive chain + MERGE + PORT-SWEEP)
+      - name: Run vehicle (example.com -- passive chain + MERGE + PORT-SWEEP)
         run: |
           set +e
           ./recon.sh run example.com 2>&1 | tee ci/b4_run_console.log

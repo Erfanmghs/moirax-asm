@@ -1,0 +1,66 @@
+# C1 RELEASE SECURITY GATE — secrets + SAST + English-only/ASCII + personal
+# data + script defense. Part of the release phase (operator directive):
+# the platform publishes in ENGLISH ONLY with an attacker-proofed tree —
+# an outsider scanning the repository must find nothing usable.
+#
+# Gates (ci/c1_release_gate.py):
+#   R-1 secrets (precise provider patterns; placeholders allowed)
+#   R-2 SAST bandit over pipeline/ dashboard/ ci/ (HIGH hard-fail, MEDIUM disclosed)
+#   R-3 English-only/ASCII tree (waivers: frozen verify_b1.py, frozen spec
+#       .cursor/rules/**, historical evidence recon/**)
+#   R-4 personal data (author email fragments, personal mail domains,
+#       operator estate IPs, phone shapes)
+#   R-5 Arabic/Persian script defense (belt-and-braces under R-3)
+# Atomic units: tests/test_c1_release.py (18 tests) run with the shared suite.
+
+name: c1-release-gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [private]
+
+concurrency:
+  group: c1-release-gate
+  cancel-in-progress: false
+
+jobs:
+  c1-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: "Checkout (branch: private)"
+        uses: actions/checkout@v4
+        with:
+          ref: private
+          fetch-depth: 0
+
+      - name: Toolchain
+        run: python3 --version && pip --version
+
+      - name: "Install SAST tooling (bandit)"
+        run: pip install --quiet bandit && python3 -m bandit --version
+
+      - name: "Frozen-file integrity (verify_b1 diff-empty discipline)"
+        run: |
+          git diff HEAD -- pipeline/verify_b1.py | tee ci/c1_verifyb1_diff.txt
+          test ! -s ci/c1_verifyb1_diff.txt && echo "verify_b1 diff EMPTY"
+
+      - name: "C1 release gate (R-1..R-5)"
+        run: |
+          PYTHONPATH=. python3 ci/c1_release_gate.py 2>&1 | tee ci/c1_gate_console.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: "Unit suite (shared regression + C1 atomic units)"
+        run: PYTHONPATH=. python3 -m unittest discover -s tests -t . 2>&1 | tail -3
+
+      - name: Upload evidence (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c1-release-gate-evidence
+          path: |
+            ci/c1_verdict.txt
+            ci/c1_gate_console.log
+            ci/c1_verifyb1_diff.txt
+          if-no-files-found: warn

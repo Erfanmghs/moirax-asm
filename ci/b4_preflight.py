@@ -1,6 +1,6 @@
-"""B4 PORT-SWEEP preflight gates — run BEFORE the vehicle `recon.sh run`.
+"""B4 PORT-SWEEP preflight gates -- run BEFORE the vehicle `recon.sh run`.
 
-  G-W1  committed portsweep defaults per spec §8 (scope alive_only, duration
+  G-W1  committed portsweep defaults per spec section 8 (scope alive_only, duration
         24h min 1h, profile full, full cap 1000 pps, ramp 100/100/30s, retries
         2, timeout 1000ms, reprobe divisor 4, anomalous threshold 1000, nmap
         toggle OFF with max-rate 300, custom ports "" + cap 1000, concurrency

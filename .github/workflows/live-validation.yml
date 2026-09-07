@@ -1,4 +1,4 @@
-# LIVE VALIDATION VEHICLE — full pipeline vs the OPERATOR-OWNED domain
+# LIVE VALIDATION VEHICLE -- full pipeline vs the OPERATOR-OWNED domain
 # bugdasht.ir. The operator deployed the apex, its subdomains and vhosts
 # themselves and directed the validation against that real estate with the
 # FROZEN 200-record smoke wordlist only (no synthetic test network).
@@ -85,7 +85,7 @@ jobs:
           python3 - <<'PY'
           import pathlib, shutil
 
-          # 1) scope.yaml — operator-owned target, wildcard subdomains included
+          # 1) scope.yaml -- operator-owned target, wildcard subdomains included
           pathlib.Path("scope.yaml").write_text(
               "engagement:\n"
               "  name: bugdasht-live-validation\n"
@@ -137,12 +137,12 @@ jobs:
           # NOTE: the frozen anchor applies to the FORGED output (the project
           # normalizes the raw list), not to the raw local file. The anchor is
           # verified by ci/live_validation_preflight.py via the project's own
-          # forge_custom_subdomains() — the authoritative G-P1 pattern.
+          # forge_custom_subdomains() -- the authoritative G-P1 pattern.
           raw = pathlib.Path("wordlists/local/test-smoke-200.txt").read_text(encoding="utf-8")
           print(f"smoke-200 raw source present: {len(raw.splitlines())} raw lines")
 
           # 4) stale-state reset (REM27b: stale forge caches inflate target sets;
-          # custom-subdomains.txt is unioned into every forge — must start empty)
+          # custom-subdomains.txt is unioned into every forge -- must start empty)
           shutil.rmtree("recon/bugdasht.ir", ignore_errors=True)
           for name in ("custom-subdomains.txt", "effective-FFUF-0.txt",
                        "effective-DNSR-1.txt", "effective-FFUF-2.txt"):

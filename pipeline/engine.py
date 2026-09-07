@@ -1,4 +1,4 @@
-"""WIDE pipeline engine: PASSIVE ∥ ACTIVE, branch budgets, MERGE, history (§7)."""
+"""WIDE pipeline engine: PASSIVE || ACTIVE, branch budgets, MERGE, history (section 7)."""
 
 from __future__ import annotations
 
@@ -48,16 +48,16 @@ def run_pipeline(
     )
     clock = clock or Clock()
     run_started = clock.time()
-    # §9.3 PROXY RULE: set-but-unreachable -> FAIL FAST (never silent direct).
+    # section 9.3 PROXY RULE: set-but-unreachable -> FAIL FAST (never silent direct).
     proxy_ok, proxy_reason = proxy_gate(params)
     if not proxy_ok:
-        print(f"PROXY RULE fail-fast (§9.3): {proxy_reason}")
+        print(f"PROXY RULE fail-fast (section 9.3): {proxy_reason}")
         return _exit_code(params, str(params.require("run_status_failed")))
-    if proxy_reason != "proxy unset — direct connection (§9.3)":
+    if proxy_reason != "proxy unset -- direct connection (section 9.3)":
         print(f"proxy: {proxy_reason}")
     alerts: list[tuple[str, str, str]] = []
 
-    # §12 opt-in supervisor: lazily created ONLY when enabled (§12.1/§12.4 —
+    # section 12 opt-in supervisor: lazily created ONLY when enabled (section 12.1/section 12.4 --
     # event-driven, zero cost and zero LLM calls on healthy runs).
     agent_holder: dict[str, Any] = {}
 
@@ -117,7 +117,7 @@ def run_pipeline(
             partial,
         )
         if not passive_names:
-            msg = "passive branch: no generic passive tools registered (B3 PSV chain handles the branch) — skipped, not an error"
+            msg = "passive branch: no generic passive tools registered (B3 PSV chain handles the branch) -- skipped, not an error"
             _append_note(params, target_dir, "passive", msg)
             print(msg)
             return docs
@@ -194,8 +194,8 @@ def run_pipeline(
             _append_log(params, target_dir, merge_name, merge_name, 1, str(exc))
             state_engine.set_status(params, target_dir, merge_name, "failed")
 
-    # B4 PORT-SWEEP (spec §8, order-4): post-MERGE stage consuming assets.json.
-    # Not a branch member — it runs strictly after MERGE and before the run
+    # B4 PORT-SWEEP (spec section 8, order-4): post-MERGE stage consuming assets.json.
+    # Not a branch member -- it runs strictly after MERGE and before the run
     # status is classified, so its partial markers (window breach / canary
     # pause) shape the final status like every other stage.
     sweep_name = str(params.require("portsweep_module"))
@@ -247,7 +247,7 @@ def run_pipeline(
         f"alerts={notify_ledger.get('alerts')}"
     )
     report_ledger: dict[str, Any] = {"generated": False}
-    # §10.1 "generated on run end": EVERY terminal status gets its report —
+    # section 10.1 "generated on run end": EVERY terminal status gets its report --
     # REM24 (run #36 evidence): an anomaly-terminated run still owns canonical
     # data.json files and the operator needs the report most when it degraded.
     terminal = {
@@ -259,10 +259,10 @@ def run_pipeline(
         try:
             report_ledger = generate_all(params, target_dir, stamp)
             report_ledger["generated"] = True
-        except Exception as exc:  # noqa: BLE001 — reporting must never flip a verdict
+        except Exception as exc:  # noqa: BLE001 -- reporting must never flip a verdict
             report_ledger = {"generated": False, "error": str(exc)}
     print(f"report: generated={report_ledger.get('generated')} dir={target_dir / params.require('report_dirname')} counts={report_ledger.get('counts')}")
-    # Storage hygiene (user directive 2026-09-06): run-end housekeeping —
+    # Storage hygiene (user directive 2026-09-06): run-end housekeeping --
     # history retention + size-capped log rotation + total cap. Never-fail
     # exactly like reporting: a storage error must never flip a verdict.
     storage_ledger: dict[str, Any] = {"applied": False}

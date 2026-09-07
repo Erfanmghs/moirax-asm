@@ -1,4 +1,4 @@
-"""Per-target circuit breaker — master prompt §11.4. Always on."""
+"""Per-target circuit breaker -- master prompt section 11.4. Always on."""
 
 from __future__ import annotations
 
@@ -217,7 +217,7 @@ class CircuitBreaker:
                     window_id,
                     f"latency drift avg={avg:.3f}s baseline={state.baseline_latency:.3f}s",
                 )
-            # §11.4 load signal: latency drift → THROTTLE only. Pause is reserved
+            # section 11.4 load signal: latency drift -> THROTTLE only. Pause is reserved
             # for error-ratio > circuit_breaker_error_ratio across circuit_breaker_bad_windows.
         else:
             state.consecutive_latency_bad = 0

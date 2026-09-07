@@ -1,22 +1,22 @@
-"""PASSIVE-RECON — branch: PASSIVE (master spec §8, sub-steps PSV-0..PSV-8).
+"""PASSIVE-RECON -- branch: PASSIVE (master spec section 8, sub-steps PSV-0..PSV-8).
 
-Order law (§7.2a + append-only): PSV-0 infrastructure FIRST, then the parallel
+Order law (section 7.2a + append-only): PSV-0 infrastructure FIRST, then the parallel
 sweep (PSV-1 dorks, PSV-2 cert-transparency, PSV-3 OSINT agents, PSV-4
 archives, PSV-7 GitHub-OSINT, PSV-8 IP-discovery), then PSV-5 recursion, then
 PSV-6 httpx probe LAST. PSV-7/PSV-8 are appended after PSV-6 in the spec text
 purely to preserve append-only ordering; they execute inside the parallel
-sweep (spec §8 PSV-7/PSV-8 headers).
+sweep (spec section 8 PSV-7/PSV-8 headers).
 
 Purpose: maximize subdomain/host CANDIDATE discovery from third-party + OSINT
-sources; every candidate is scope-gated (§3.3) and source-attributed for
-MERGE (§7.3). Zero packets to the target except PSV-6.
+sources; every candidate is scope-gated (section 3.3) and source-attributed for
+MERGE (section 7.3). Zero packets to the target except PSV-6.
 
 Discipline:
 - every candidate passes gate.enforce BEFORE entering the candidate set;
-  rejections land in logs/out_of_scope.log (§3.3 logged, never enumerated)
-- every skip is an explicit run.log line — never silent
-- per-agent failure -> §4.3 retry (adapter) + degraded-continue; a failed
-  source never blocks the others (branch independence §7.2c)
+  rejections land in logs/out_of_scope.log (section 3.3 logged, never enumerated)
+- every skip is an explicit run.log line -- never silent
+- per-agent failure -> section 4.3 retry (adapter) + degraded-continue; a failed
+  source never blocks the others (branch independence section 7.2c)
 - keyword tags are applied as TAGS on candidates, NEVER as drop filters
 - PSV-8 activates ONLY with CIDR/range/ASN includes; pure-domain targets skip
 - output schema (data.json): {"schema_version":1,"module":"passive-recon",
@@ -78,7 +78,7 @@ def run_passive_recon(
         """Invoke timeout: never exceed the branch deadline, never a floor
         below it (run #22 evidence: remaining()<0 -> 30s floor -> mass 124
         timeouts -> breaker error-ratio pause -> ANOMALY). Returns None when
-        the budget is exhausted — the caller SKIPS, never fires a doomed
+        the budget is exhausted -- the caller SKIPS, never fires a doomed
         container."""
         left = remaining()
         if left <= 0:
@@ -105,7 +105,7 @@ def run_passive_recon(
     skips: list[str] = []
     agent_rows: list[dict[str, Any]] = []
 
-    # ---- PSV-0 SEARCH-FORGE (ordered sub-step 0 — infrastructure first) ----
+    # ---- PSV-0 SEARCH-FORGE (ordered sub-step 0 -- infrastructure first) ----
     note("psv-0: SEARCH-FORGE infrastructure init (engine pool + DORK FORGE)")
     registry = load_registry(params)
     forge = SearchForge(params, registry, clock, note)
@@ -158,22 +158,22 @@ def run_passive_recon(
     recursion = {"depth_used": 0, "seeds_total": 0}
     if remaining() <= 0:
         partial.append("passive_budget")
-        note("psv-5 skipped: branch budget exhausted before recursion — disclosed, never silent")
+        note("psv-5 skipped: branch budget exhausted before recursion -- disclosed, never silent")
     else:
         _psv5_recursion(params, gate, adapter, target_dir, target, extra, planned, forge,
                         cands, source_files, skips, partial, note, remaining, timeout_for,
                         recursion, first_sweep_hosts, sweep)
 
-    # ---- PSV-6 HTTPX-PROBE (final sub-step — liveness TAGGING ONLY) --------
+    # ---- PSV-6 HTTPX-PROBE (final sub-step -- liveness TAGGING ONLY) --------
     alive_map: dict[str, bool] = {}
     if remaining() <= 0:
         partial.append("passive_budget")
-        note("psv-6 skipped: branch budget exhausted — alive stays null, disclosed, never silent")
+        note("psv-6 skipped: branch budget exhausted -- alive stays null, disclosed, never silent")
     else:
         alive_map = _psv6_probe(params, adapter, target_dir, extra, planned, cands,
                                 skips, note, remaining, timeout_for)
 
-    # ---- payload (exact §8 output schema) ----------------------------------
+    # ---- payload (exact section 8 output schema) ----------------------------------
     rows = cands.rows()
     for row in rows:
         if row["host"] in alive_map:
@@ -212,7 +212,7 @@ def run_passive_recon(
         lines.append("github findings (reported, never exploited/downloaded):")
         lines.extend(f"  - {item}" for item in findings[:20])
     if agent_rows:
-        lines.append("agents (§7.2c independence):")
+        lines.append("agents (section 7.2c independence):")
         for row in agent_rows:
             lines.append(f"  - {row['agent']}: {row['state']} rows={row.get('rows', 0)}")
     if partial:
@@ -231,7 +231,7 @@ def run_passive_recon(
 # ---------------------------------------------------------------------------
 def dork_forge(params: Params, target_dir: Path, target: str, registry: dict[str, Any]) -> tuple[list[str], str]:
     """Built-in host-discovery dork templates merged with community dork lists,
-    templated per target + deduped -> dorks/forge/search-dorks.txt (§8 PSV-0)."""
+    templated per target + deduped -> dorks/forge/search-dorks.txt (section 8 PSV-0)."""
     builtin = _template_all(registry.get("builtin_host_dorks") or [], target)
     community: list[str] = []
     for entry in registry.get("community_lists") or []:
@@ -266,7 +266,7 @@ def _psv1_dorks(params, gate, adapter, target_dir, target, extra, planned, forge
         if remaining() <= 0:
             partial_left = len(dorks) - executed - cached
             if partial_left > 0:
-                note(f"psv-1: budget exhausted with {partial_left} dorks unexecuted — disclosed")
+                note(f"psv-1: budget exhausted with {partial_left} dorks unexecuted -- disclosed")
             break
         hit = forge.cache_get(dork)
         if hit is not None:
@@ -291,8 +291,8 @@ def _psv1_dorks(params, gate, adapter, target_dir, target, extra, planned, forge
             for host in hosts:
                 cands.add(host, f"dorks-{via}")
     if pool_exhausted_marked:
-        # engine pool exhausted: dorks are MARKED and retried next run — never
-        # silently dropped (§8 PSV-1).
+        # engine pool exhausted: dorks are MARKED and retried next run -- never
+        # silently dropped (section 8 PSV-1).
         note(
             f"psv-1: {len(pool_exhausted_marked)} dorks marked rerun-next-run "
             f"(engine pool exhausted): {pool_exhausted_marked[:5]}..."
@@ -374,7 +374,7 @@ def _psv2_ct(params, gate, adapter, target_dir, target, extra, planned,
     if not names:
         fallback_tool = str(params.require("ct_fallback_tool"))
         note(
-            f"psv-2: crt.sh exhausted its retries (§4.3) -> registered CT fallback "
+            f"psv-2: crt.sh exhausted its retries (section 4.3) -> registered CT fallback "
             f"{fallback_tool} serves the SAME query to the SAME output contract "
             f"(tools.yaml profile switch, never a pipeline edit)"
         )
@@ -401,7 +401,7 @@ def _psv2_ct(params, gate, adapter, target_dir, target, extra, planned,
     source_files["crtsh" if via == "crtsh" else via] = len(unique)
     note(f"psv-2: via={via} hosts={len(unique)} tagged={tagged} (tags never dropped rows)")
     if not unique:
-        skips.append("psv-2: CT sources returned zero rows (service degraded) — disclosed")
+        skips.append("psv-2: CT sources returned zero rows (service degraded) -- disclosed")
     return {"hosts": len(unique), "via": via, "tagged": tagged}
 
 
@@ -474,15 +474,15 @@ def _psv3_agents(params, gate, adapter, target_dir, target, extra, planned,
         # adapter; candidates get the in-scope subset with attribution.
         for host in hosts:
             if agent == "assetfinder-related":
-                # FULL output: related domains are usually OUT of scope — the
-                # harvest file keeps everything (§3.3 logged), candidates only
+                # FULL output: related domains are usually OUT of scope -- the
+                # harvest file keeps everything (section 3.3 logged), candidates only
                 # take the in-scope subset, never enumerated beyond scope.
                 if gate.validate_candidate(host)[0]:
                     cands.add(host, agent)
             else:
                 cands.add(host, agent)
         if result.exit_code != 0:
-            note(f"psv-3: agent={agent} degraded-continue after §4.3 retries (exit={result.exit_code})")
+            note(f"psv-3: agent={agent} degraded-continue after section 4.3 retries (exit={result.exit_code})")
 
     with ThreadPoolExecutor(max_workers=len(agents)) as pool:
         futs = {}
@@ -517,7 +517,7 @@ def _psv3_agents(params, gate, adapter, target_dir, target, extra, planned,
         + f" resolved={len(resolved)}"
     )
     if results.get("chaos", {}).get("state", "").startswith("skipped"):
-        skips.append("psv-3: chaos skipped — no CHAOS_KEY in .env (disclosed, never silent)")
+        skips.append("psv-3: chaos skipped -- no CHAOS_KEY in .env (disclosed, never silent)")
     return {"agents": {a: m["state"] for a, m in results.items()}, "resolved": len(resolved)}
 
 
@@ -528,7 +528,7 @@ def _psv3_resolve(params, adapter, target_dir, target, extra, planned, subs_host
     atomic_write_text(target_dir / input_rel, "\n".join(subs_hosts) + "\n")
     forge_resolvers = params.root / str(params.require("resolver_forge_output"))
     if not forge_resolvers.is_file():
-        # RESOLVER FORGE is the single resolver source (§8 inputs); when the
+        # RESOLVER FORGE is the single resolver source (section 8 inputs); when the
         # forge output is absent on this host, produce it from the committed
         # seed instead of silently probing with no resolvers.
         from pipeline.resolver_forge import forge_resolvers as run_forge
@@ -559,7 +559,7 @@ def _psv3_resolve(params, adapter, target_dir, target, extra, planned, subs_host
         if hosts:
             note("psv-3: resolve contract served (primary puredns or dnsx fallback)")
         return hosts, ips
-    note("psv-3: puredns resolve failed and fallback produced no rows — degraded, disclosed")
+    note("psv-3: puredns resolve failed and fallback produced no rows -- degraded, disclosed")
     return [], {}
 
 
@@ -576,7 +576,7 @@ def _psv4_archives(params, gate, adapter, target_dir, target, extra, planned,
         if remaining() <= 0:
             failures.append(agent)
             per_tool[agent] = []
-            note(f"psv-4: {agent} skipped — branch budget exhausted (disclosed)")
+            note(f"psv-4: {agent} skipped -- branch budget exhausted (disclosed)")
             continue
         result = _bounded(adapter, agent, agent, {**extra, "skip_parse": True}, planned, 600.0, timeout_for)
         hosts = _hosts_from_lines(result.stdout)
@@ -594,7 +594,7 @@ def _psv4_archives(params, gate, adapter, target_dir, target, extra, planned,
         if status is None or 200 <= status < 300:
             union.update(_hosts_from_lines(body))
         else:
-            skips.append(f"psv-4: CDX fallback also failed (status={status}) — degraded, disclosed")
+            skips.append(f"psv-4: CDX fallback also failed (status={status}) -- degraded, disclosed")
     else:
         for agent in failures:
             note(f"psv-4: {agent} failed -> union continues from the other providers (degraded-continue)")
@@ -622,18 +622,18 @@ def _psv5_recursion(params, gate, adapter, target_dir, target, extra, planned, f
     note(f"psv-5: recursion start depth_cap={depth_cap} seeds_cap={seeds_cap} seeds={len(seeds)}")
     for depth in range(1, depth_cap + 1):
         if not seeds:
-            note(f"psv-5: iteration {depth - 1} yielded zero new in-scope hosts — natural stop")
+            note(f"psv-5: iteration {depth - 1} yielded zero new in-scope hosts -- natural stop")
             return
         if len(seeds) > seeds_cap:
             partial.append("passive_recursion_seeds_cap")
             note(
-                f"psv-5: {len(seeds)} seeds > max_seeds_per_iteration={seeds_cap} — "
-                f"run marked PARTIAL with reason (spec §8 PSV-5)"
+                f"psv-5: {len(seeds)} seeds > max_seeds_per_iteration={seeds_cap} -- "
+                f"run marked PARTIAL with reason (spec section 8 PSV-5)"
             )
             seeds = seeds[:seeds_cap]
         if remaining() <= 0:
             partial.append("passive_budget")
-            note("psv-5: budget exhausted mid-recursion — disclosed, never silent")
+            note("psv-5: budget exhausted mid-recursion -- disclosed, never silent")
             return
         new_hosts: set[str] = set()
         per_dork_timeout = float(params.require("dork_timeout_sec"))
@@ -661,7 +661,7 @@ def _psv5_recursion(params, gate, adapter, target_dir, target, extra, planned, f
             # skip_parse + manual parse: parallel seed workers must not race on
             # the adapter's shared data.json tmp path (run #22 evidence), and
             # 60s caps keep slow third-party sources out of breaker windows.
-            # §8 PSV-5 names `subfinder -d <host>` (NOT -all) for deeper
+            # section 8 PSV-5 names `subfinder -d <host>` (NOT -all) for deeper
             # queries: fewer sources, faster, keeps breaker windows clean
             # (run #23: -all per seed -> 124 timeouts -> error-ratio pause).
             sf = _bounded(adapter, "subfinder-seed", "subfinder-seed",
@@ -702,22 +702,22 @@ def _psv5_recursion(params, gate, adapter, target_dir, target, extra, planned, f
         note(f"psv-5: iteration {depth} seeds={len(seeds)} new={len(new_hosts)}")
         seeds = sorted(new_hosts)
         if not seeds:
-            note(f"psv-5: iteration {depth} yielded zero new in-scope hosts — natural stop")
+            note(f"psv-5: iteration {depth} yielded zero new in-scope hosts -- natural stop")
             return
 
 
 # ---------------------------------------------------------------------------
-# PSV-6 HTTPX-PROBE (final sub-step — liveness TAGGING ONLY)
+# PSV-6 HTTPX-PROBE (final sub-step -- liveness TAGGING ONLY)
 # ---------------------------------------------------------------------------
 def _psv6_probe(params, adapter, target_dir, extra, planned, cands, skips, note,
                 remaining, timeout_for) -> dict[str, bool]:
     if not bool(params.require("passive_httpx_probe")):
-        note("psv-6: passive_httpx_probe is OFF — alive stays null (tagging toggle, dashboard-editable)")
-        skips.append("psv-6: probe toggle off — alive stays null")
+        note("psv-6: passive_httpx_probe is OFF -- alive stays null (tagging toggle, dashboard-editable)")
+        skips.append("psv-6: probe toggle off -- alive stays null")
         return {}
     hosts = cands.host_list()
     if not hosts:
-        note("psv-6: zero candidates — probe skipped (nothing to tag), disclosed")
+        note("psv-6: zero candidates -- probe skipped (nothing to tag), disclosed")
         return {}
     sources_rel = str(params.require("passive_sources_relpath"))
     list_rel = f"{sources_rel}/probe-candidates.txt"
@@ -738,7 +738,7 @@ def _psv6_probe(params, adapter, target_dir, extra, planned, cands, skips, note,
         # -o may have failed while stdout still carries the -json stream; the
         # alive tags are recovered from stdout (never lost, disclosed).
         raw_lines = result.stdout
-        note("psv-6: httpx -o file missing — alive tags recovered from stdout")
+        note("psv-6: httpx -o file missing -- alive tags recovered from stdout")
     for line in raw_lines.splitlines():
         if not line.strip().startswith("{"):
             continue
@@ -750,7 +750,7 @@ def _psv6_probe(params, adapter, target_dir, extra, planned, cands, skips, note,
         if host:
             alive[host] = True
     if not alive:
-        note("psv-6: no alive tags parsed — alive stays null, disclosed")
+        note("psv-6: no alive tags parsed -- alive stays null, disclosed")
     note(f"psv-6: probed={len(hosts)} alive_tagged={len(alive)} (tagging NEVER filters candidates)")
     return alive
 
@@ -763,8 +763,8 @@ def _psv7_github(params, gate, adapter, target_dir, target, extra, planned, forg
                  timeout_for) -> dict[str, Any]:
     tokens = _env_keys(params, "GITHUB_TOKEN")
     if not tokens:
-        note("psv-7 skipped: no GITHUB_TOKEN in .env — sub-step SKIPPED, never silent")
-        skips.append("psv-7: no GITHUB_TOKEN — skipped (never silent)")
+        note("psv-7 skipped: no GITHUB_TOKEN in .env -- sub-step SKIPPED, never silent")
+        skips.append("psv-7: no GITHUB_TOKEN -- skipped (never silent)")
         return {"state": "skipped"}
     rate = float(params.require("github_search_req_per_min"))
     raw_rel = str(params.require("passive_github_raw_dir"))
@@ -778,8 +778,8 @@ def _psv7_github(params, gate, adapter, target_dir, target, extra, planned, forg
     for dork in github_dorks:
         for endpoint in endpoints:
             if remaining() <= 0:
-                note("psv-7: budget exhausted — remaining github dorks marked rerun-next-run, never silent")
-                skips.append("psv-7: budget — some dorks rerun-next-run")
+                note("psv-7: budget exhausted -- remaining github dorks marked rerun-next-run, never silent")
+                skips.append("psv-7: budget -- some dorks rerun-next-run")
                 return {"state": "partial", "archived": archived}
             key = tokens[key_idx % len(tokens)]
             q = dork.replace(" ", "%20").replace('"', "%22").replace("*", "%2A")
@@ -797,10 +797,10 @@ def _psv7_github(params, gate, adapter, target_dir, target, extra, planned, forg
             _h, body = split_headers_body(result.stdout)
             if status in (403, 429, 451):
                 key_idx += 1  # rotate the token pool (SEARCH-FORGE-style rotation)
-                note(f"psv-7: github status={status} on {endpoint} — rotated token pool, dork marked for retry")
+                note(f"psv-7: github status={status} on {endpoint} -- rotated token pool, dork marked for retry")
                 continue
             if not status or status >= 400:
-                note(f"psv-7: github {endpoint} status={status} — degraded-continue")
+                note(f"psv-7: github {endpoint} status={status} -- degraded-continue")
                 continue
             archived += 1
             atomic_write_text(raw_dir / f"{endpoint}-{archived:03d}.json", body[:400000])
@@ -832,10 +832,10 @@ def _psv8_ip(params, gate, adapter, target_dir, target, extra, planned,
     targets = [i for i in includes if "/" in i or _RANGE_RE.match(i) or _ASN_RE.match(i)]
     if not targets:
         note(
-            "psv-8 skipped: no CIDR/range/ASN includes in scope.yaml (pure-domain target) — "
+            "psv-8 skipped: no CIDR/range/ASN includes in scope.yaml (pure-domain target) -- "
             "sub-step skipped per spec, never silent"
         )
-        skips.append("psv-8: pure-domain target — skipped per spec")
+        skips.append("psv-8: pure-domain target -- skipped per spec")
         return {"state": "skipped"}
     sources_rel = str(params.require("passive_sources_relpath"))
     ips: dict[str, set[str]] = {}
@@ -864,9 +864,9 @@ def _psv8_ip(params, gate, adapter, target_dir, target, extra, planned,
                 for host in found_hosts:
                     host_rows.append((host, "censys-cidr"))
             else:
-                skips.append(f"psv-8: censys status={status} — degraded, disclosed")
+                skips.append(f"psv-8: censys status={status} -- degraded, disclosed")
         else:
-            skips.append("psv-8: censys skipped — no CENSYS_API_ID/CENSYS_API_SECRET in .env")
+            skips.append("psv-8: censys skipped -- no CENSYS_API_ID/CENSYS_API_SECRET in .env")
         if shodan_key:
             cmd = (
                 "curl -sS -D - --max-time 60 "
@@ -884,11 +884,11 @@ def _psv8_ip(params, gate, adapter, target_dir, target, extra, planned,
                 for host in found_hosts:
                     host_rows.append((host, "shodan-cidr"))
             else:
-                skips.append(f"psv-8: shodan status={status} — degraded, disclosed")
+                skips.append(f"psv-8: shodan status={status} -- degraded, disclosed")
         else:
-            skips.append("psv-8: shodan skipped — no SHODAN_API_KEY in .env")
+            skips.append("psv-8: shodan skipped -- no SHODAN_API_KEY in .env")
     # IPs stored AS-IS (never hostname-gated) -> sources/cidr-ips.txt; they
-    # feed the host->IP plane (merged into DNSR-3's map inputs, §7.1).
+    # feed the host->IP plane (merged into DNSR-3's map inputs, section 7.1).
     ip_list = sorted(ips)
     _write_lines(target_dir / sources_rel / "cidr-ips.txt", ip_list)
     source_files["cidr-ips"] = len(ip_list)
@@ -931,7 +931,7 @@ def _bounded(adapter, tool, module, extra, planned, cap, timeout_for, **kwargs):
 
 
 class _Candidates:
-    """Scope-gated candidate store with source attribution (§7.3 inputs)."""
+    """Scope-gated candidate store with source attribution (section 7.3 inputs)."""
 
     def __init__(self, gate: ScopeGate, target_dir: Path, params: Params) -> None:
         self.gate = gate
@@ -1032,7 +1032,7 @@ def _write_lines(path: Path, hosts: list[str]) -> None:
 
 
 def _append_lines(path: Path, hosts: list[str]) -> None:
-    """anew-style streaming append per tool file on resume (§8 PSV-3)."""
+    """anew-style streaming append per tool file on resume (section 8 PSV-3)."""
     existing: set[str] = set()
     if path.is_file():
         existing = {line.strip() for line in path.read_text(encoding="utf-8", errors="replace").splitlines()}

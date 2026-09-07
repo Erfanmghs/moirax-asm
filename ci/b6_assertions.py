@@ -1,27 +1,27 @@
-"""B6 DASHBOARD acceptance table — runs AFTER the example.com vehicle.
+"""B6 DASHBOARD acceptance table -- runs AFTER the example.com vehicle.
 
   J1  MANDATORY  Dashboard backend boots: /api/health OK, auth fail-closed
-                 without DASHBOARD_TOKEN (§9.1), 401 on a wrong token
+                 without DASHBOARD_TOKEN (section 9.1), 401 on a wrong token
   J2  MANDATORY  COMPANION ACCEPTANCE: a tools-panel flag-override edit is
                  visible in the NEXT RUN COMMAND (isolated copy + adapter
-                 assemble — the repo's committed tools.yaml is never mutated)
+                 assemble -- the repo's committed tools.yaml is never mutated)
   J3  MANDATORY  COMPANION ACCEPTANCE: URL filter state restores correctly
                  (serialize -> parse round-trip on the frozen service code)
   J4  MANDATORY  Panel d API KEYS: PUT writes .env, GET returns masked value
-                 only, DELETE removes (isolated root — repo .env untouched)
+                 only, DELETE removes (isolated root -- repo .env untouched)
   J5  MANDATORY  Panel e SETTINGS: telegram token masked after save, digest
-                 threshold + alert rules persisted, §4.6 scheduler floor
+                 threshold + alert rules persisted, section 4.6 scheduler floor
                  enforced through the API
   J6  MANDATORY  Results panel contract on the REAL vehicle data: results /
                  diff / coverage endpoints serve the real recon/example.com
                  assets; every views.yaml module fields is a list (REM20)
-  J7  MANDATORY  §9.3 PROXY RULE re-proof: unset -> direct silently;
+  J7  MANDATORY  section 9.3 PROXY RULE re-proof: unset -> direct silently;
                  set-but-unreachable -> fail-fast (never silent direct)
   J8  MANDATORY  COMMITTED content intact (HEAD blobs re-parsed with the
-                 frozen loader — B3 F10 discipline) + verify_b1 diff empty
+                 frozen loader -- B3 F10 discipline) + verify_b1 diff empty
   G1  DISCLOSURE  SOURCE COVERAGE ANALYTICS numbers from the real vehicle run
   G2  DISCLOSURE  SPA stack note: zero-build vanilla SPA behind the clean
-                 §9.1 API contract (spec marks the front-end stack swappable)
+                 section 9.1 API contract (spec marks the front-end stack swappable)
 
 Exit 0 iff all MANDATORY rows PASS.
 """
@@ -81,7 +81,7 @@ def main() -> int:
         wrong = client.get("/api/tools", headers={"Authorization": "Bearer nope"})
     ok1 = health.status_code == 200 and health.json().get("ok") is True and no_token.status_code == 503 and wrong.status_code == 401
     check("J1", "MANDATORY", ok1,
-          f"health={health.status_code} no_token={no_token.status_code} (fail-closed §9.1) wrong_token={wrong.status_code}")
+          f"health={health.status_code} no_token={no_token.status_code} (fail-closed section 9.1) wrong_token={wrong.status_code}")
 
     with mock_params_isolated(appmod) as iparams:
         # ---- J2 tools edit -> next run command ------------------------------------
@@ -177,7 +177,7 @@ def main() -> int:
                 "proxy_check_timeout_sec": 3,
                 "scheduler_min_interval_min": 10,
             }
-            # NOTE: HEAD does not yet carry the B6 commit — the gates above read
+            # NOTE: HEAD does not yet carry the B6 commit -- the gates above read
             # the WORKING tools.yaml through the frozen loader instead when HEAD
             # predates this stage (first B6 run). The next B6 run enforces HEAD.
             violations = {k: s.get(k) for k, v in core.items() if s.get(k) is not None and s.get(k) != v}
@@ -208,7 +208,7 @@ def main() -> int:
     # ---- G2 SPA stack note -------------------------------------------------------------------
     spa_exists = (ROOT / "dashboard" / "static" / "index.html").is_file()
     check("G2", "DISCLOSURE", spa_exists,
-          "SPA = zero-build vanilla JS behind the clean §9.1 API contract (spec marks the front-end stack swappable); React/Vite can be dropped in without backend changes")
+          "SPA = zero-build vanilla JS behind the clean section 9.1 API contract (spec marks the front-end stack swappable); React/Vite can be dropped in without backend changes")
 
     # ---- verdict --------------------------------------------------------------------------------
     table = ["id\tclass\tstatus\tdetail"]

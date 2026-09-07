@@ -1,15 +1,15 @@
-"""B8 SUPERVISOR AGENT preflight gates — run BEFORE the vehicle `recon.sh run`.
+"""B8 SUPERVISOR AGENT preflight gates -- run BEFORE the vehicle `recon.sh run`.
 
-  G-N1  committed §12 defaults: agent_enabled FALSE (§12.1 opt-in), budget 20,
-        autonomy defaults auto-fix(PASSIVE)/suggest(ACTIVE), attempts ≤3,
+  G-N1  committed section 12 defaults: agent_enabled FALSE (section 12.1 opt-in), budget 20,
+        autonomy defaults auto-fix(PASSIVE)/suggest(ACTIVE), attempts <=3,
         journal relpath + remediation filename registered
-  G-N2  playbook: remediation.yaml carries the 5 §12.5 example signatures,
+  G-N2  playbook: remediation.yaml carries the 5 section 12.5 example signatures,
         every action inside ALLOWED_ACTIONS
   G-N3  engine wiring: opt-in lazy supervisor at the module failure sites
-        (passive loop, portsweep, single-module) — zero engagement when off
-  G-N4  §12.2 one-command autonomy: `info-gather` CLI verb + §12.7 scope
+        (passive loop, portsweep, single-module) -- zero engagement when off
+  G-N4  section 12.2 one-command autonomy: `info-gather` CLI verb + section 12.7 scope
         guardrail line
-  G-N5  §12.7 journal: append-only relpath + dashboard live-stream endpoint;
+  G-N5  section 12.7 journal: append-only relpath + dashboard live-stream endpoint;
         SPA carries the agent toggle + journal panel
   G-N6  verify_b1.py has no working-tree diff (frozen since handoff)
   G-N7  vehicle scope: example.com retained
@@ -79,7 +79,7 @@ def main() -> int:
     # ---- G-N4 one-command autonomy -----------------------------------------------------
     cli_text = (ROOT / "pipeline" / "cli.py").read_text(encoding="utf-8")
     cli_ok = "info-gather" in cli_text and "cmd_info_gather" in cli_text and "agent never modifies scope.yaml" in cli_text
-    check("G-N4 info-gather", cli_ok, "§12.2 verb + §12.7 guardrail")
+    check("G-N4 info-gather", cli_ok, "section 12.2 verb + section 12.7 guardrail")
 
     # ---- G-N5 journal + dashboard surface -------------------------------------------------
     app_text = (ROOT / "dashboard" / "app.py").read_text(encoding="utf-8")

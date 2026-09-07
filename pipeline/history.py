@@ -1,4 +1,4 @@
-"""Run history snapshots and diff.json (§6.6)."""
+"""Run history snapshots and diff.json (section 6.6)."""
 
 from __future__ import annotations
 
@@ -108,7 +108,7 @@ def _empty_classes() -> dict[str, list[Any]]:
 
 
 def _empty_maps() -> dict[str, dict[str, Any]]:
-    """Empty per-class key→asset maps used as the first-run baseline (§6.6)."""
+    """Empty per-class key->asset maps used as the first-run baseline (section 6.6)."""
     return {name: {} for name in _CLASSES}
 
 

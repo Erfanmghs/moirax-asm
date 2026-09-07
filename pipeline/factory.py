@@ -1,4 +1,4 @@
-"""recon/<target>/ directory factory (master prompt §6.1)."""
+"""recon/<target>/ directory factory (master prompt section 6.1)."""
 
 from __future__ import annotations
 

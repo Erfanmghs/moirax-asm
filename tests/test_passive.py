@@ -1,4 +1,4 @@
-"""B3 PASSIVE CHAIN unit proof (spec §8 PSV-0..PSV-8) — deterministic, no network."""
+"""B3 PASSIVE CHAIN unit proof (spec section 8 PSV-0..PSV-8) -- deterministic, no network."""
 
 from __future__ import annotations
 
@@ -328,7 +328,7 @@ class OrchestratorTest(unittest.TestCase):
             "httpx-passive": [Completed(0, httpx_body, "")],
         }
         payload, target_dir, partial = self._run(outcomes)
-        # exact §8 output schema
+        # exact section 8 output schema
         self.assertEqual(payload["module"], "passive-recon")
         self.assertIn("candidates", payload)
         self.assertIn("passive_ips", payload)
@@ -353,7 +353,7 @@ class OrchestratorTest(unittest.TestCase):
         self.assertIn("api.example.com", hosts)  # archives union gated into candidates
         # PSV-6 alive tagging from httpx output
         self.assertEqual(hosts["www.example.com"]["alive"], True)
-        # per-source files populated (§8 output contract)
+        # per-source files populated (section 8 output contract)
         sources_dir = target_dir / "10_subdomains" / "passive" / "sources"
         for name in ("crtsh.txt", "subfinder.txt", "amass.txt", "assetfinder.txt",
                      "assetfinder-related.txt", "assetfinder-resolved.txt", "archives.txt"):

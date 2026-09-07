@@ -1,5 +1,5 @@
 schema_version: 1
-# DORK FORGE corpus registry (master spec §8 PSV-0) — same self-growing pattern
+# DORK FORGE corpus registry (master spec section 8 PSV-0) -- same self-growing pattern
 # as FFUF-0's wordlist registry. Built-in host-discovery dork templates are
 # templated per target ({target} placeholder), merged with community dork lists
 # (community_lists entries: dashboard-editable, same {target} placeholder),

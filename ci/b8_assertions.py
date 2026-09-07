@@ -1,18 +1,18 @@
-"""B8 SUPERVISOR AGENT acceptance table — runs AFTER the example.com vehicle.
+"""B8 SUPERVISOR AGENT acceptance table -- runs AFTER the example.com vehicle.
 
-  L1  MANDATORY  §12.1 OPT-IN PROOF on the REAL vehicle: agent disabled by
+  L1  MANDATORY  section 12.1 OPT-IN PROOF on the REAL vehicle: agent disabled by
                  default -> the real run created NO agent journal and printed
                  NO `agent:` verdict lines; pipeline standalone
-  L2  MANDATORY  §12.3+§12.6 supervision loop (frozen code): PASSIVE-branch
+  L2  MANDATORY  section 12.3+section 12.6 supervision loop (frozen code): PASSIVE-branch
                  failure with agent ON -> auto-fix default -> playbook action
                  applied via a fake hook, attempts recorded
-  L3  MANDATORY  §12.6 ACTIVE-branch default `suggest` -> proposes, waits
-  L4  MANDATORY  §12.3 attempt budget: 4th failure on the same module
-                 escalates (≤3 attempts per module per run)
-  L5  MANDATORY  §12.4 frugality: deterministic-only -> ZERO LLM calls;
+  L3  MANDATORY  section 12.6 ACTIVE-branch default `suggest` -> proposes, waits
+  L4  MANDATORY  section 12.3 attempt budget: 4th failure on the same module
+                 escalates (<=3 attempts per module per run)
+  L5  MANDATORY  section 12.4 frugality: deterministic-only -> ZERO LLM calls;
                  same-signature cache replay; budget cap honoured
-  L6  MANDATORY  §12.7 journal: append-only JSONL with ts+event rows
-  L7  MANDATORY  §12.7 guardrails: allow-list is a closed set that contains
+  L6  MANDATORY  section 12.7 journal: append-only JSONL with ts+event rows
+  L7  MANDATORY  section 12.7 guardrails: allow-list is a closed set that contains
                  no scope/breaker/log-deletion actions; scope.yaml sha256
                  unchanged across a supervised session
   L8  MANDATORY  COMMITTED content intact (HEAD blob of tools.yaml re-parsed
@@ -61,7 +61,7 @@ def main() -> int:
     real_journal = ROOT / "recon" / TARGET / "logs" / "agent-journal.jsonl"
     agent_lines = [l for l in console_text.splitlines() if l.startswith("agent: ")]
     check("L1", "MANDATORY", not real_journal.is_file() and not agent_lines,
-          f"agent_journal_created={real_journal.is_file()} agent_console_lines={len(agent_lines)} (§12.1 standalone)")
+          f"agent_journal_created={real_journal.is_file()} agent_console_lines={len(agent_lines)} (section 12.1 standalone)")
 
     # ---- L2 passive default auto-fix -------------------------------------------
     with tempfile.TemporaryDirectory() as tmp:
@@ -95,7 +95,7 @@ def main() -> int:
         v4 = None
         for _ in range(3):
             v4 = s.on_module_failure("subfinder", "passive", "resolver timeout cascade")
-        ok4 = v4 is not None and v4.get("escalated") is True and v4.get("escalation_reason") == "attempt budget exhausted (§12.3 ≤3)"
+        ok4 = v4 is not None and v4.get("escalated") is True and v4.get("escalation_reason") == "attempt budget exhausted (section 12.3 <=3)"
         check("L4", "MANDATORY", ok4, f"4th_verdict={json.dumps(v4)[:140]}")
 
         # ---- L5 frugality -----------------------------------------------------------------

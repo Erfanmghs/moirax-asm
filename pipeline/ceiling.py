@@ -1,4 +1,4 @@
-"""Resource ceiling — master prompt §11.5. Budget is never exceeded."""
+"""Resource ceiling -- master prompt section 11.5. Budget is never exceeded."""
 
 from __future__ import annotations
 

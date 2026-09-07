@@ -1,8 +1,8 @@
-"""SEARCH-FORGE — anti-block search infrastructure (master spec §8 PSV-0).
+"""SEARCH-FORGE -- anti-block search infrastructure (master spec section 8 PSV-0).
 
 The pipeline NEVER raw-scrapes Google/Bing HTML from pipeline IPs. All search
 traffic flows through the registered ENGINE POOL (`search_engines.yaml`) of
-API-routed providers. Keys come from §9.2-d/.env; multiple keys per engine
+API-routed providers. Keys come from section 9.2-d/.env; multiple keys per engine
 (comma-separated env value) -> per-request key rotation with per-key quota
 tracking.
 
@@ -10,12 +10,12 @@ BLOCK HANDLING (PSV-0):
 - HTTP 429/403 or a captcha signal -> engine marked COOLDOWN (exponential
   backoff + jitter), traffic instantly re-routed to the next healthy engine.
 - Engine error-rate > isolate_error_ratio over isolate_window_sec -> ISOLATED
-  (per-engine mirror of the §11.4 breaker).
+  (per-engine mirror of the section 11.4 breaker).
 - Cooldown engines re-probe after the backoff window expires.
 - Per-dork TTL cache -> scheduled re-runs never re-burn quota on unchanged
   dorks.
 
-All HTTP goes through the tools.yaml adapter (curl-fetch spec, containers) —
+All HTTP goes through the tools.yaml adapter (curl-fetch spec, containers) --
 the forge itself performs zero network I/O in-process.
 """
 
@@ -54,7 +54,7 @@ def load_dorks_registry(params: Params) -> dict[str, Any]:
 
 
 def env_keys(params: Params, env_name: str) -> list[str]:
-    """Read a provider key from the §9.2-d .env file. Comma-separated values
+    """Read a provider key from the section 9.2-d .env file. Comma-separated values
     are a key POOL (per-request rotation). Values are never logged."""
     import os
     from pathlib import Path
@@ -101,13 +101,13 @@ class SearchForge:
             keys = [""] if cfg.get("keyless") else env_keys(params, str(cfg.get("key_env") or ""))
             if not cfg.get("keyless") and not keys:
                 note(
-                    f"search-forge: engine={name} disabled — no key in .env "
+                    f"search-forge: engine={name} disabled -- no key in .env "
                     f"({cfg.get('key_env')}); disclosed, never silent"
                 )
                 continue
             if cfg.get("user_env") and not env_keys(params, str(cfg["user_env"])):
                 note(
-                    f"search-forge: engine={name} disabled — no user id in .env "
+                    f"search-forge: engine={name} disabled -- no user id in .env "
                     f"({cfg['user_env']}); disclosed, never silent"
                 )
                 continue
@@ -142,7 +142,7 @@ class SearchForge:
         for engine in self.engines:
             if engine["status"] == "cooldown" and now >= engine["cooldown_until"]:
                 engine["status"] = "active"
-                self._note(f"search-forge: engine={engine['name']} cooldown expired — re-probed")
+                self._note(f"search-forge: engine={engine['name']} cooldown expired -- re-probed")
             if engine["status"] == "active":
                 out.append(engine)
         return out

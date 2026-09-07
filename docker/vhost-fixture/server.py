@@ -3,8 +3,8 @@
 
 P1.1: exact stall names accept TCP and never write an HTTP response.
 R4.1: vhost answers restricted to an allowlist of five prefixed names under app
-(mail, webmail, vpn, dev, staging) → 200 size 9014; all other prefixes → 404;
-mixed-case → 404. Stall rules unchanged (httpx UA + bare app → stall; www always 200).
+(mail, webmail, vpn, dev, staging) -> 200 size 9014; all other prefixes -> 404;
+mixed-case -> 404. Stall rules unchanged (httpx UA + bare app -> stall; www always 200).
 """
 
 from __future__ import annotations

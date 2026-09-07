@@ -1,4 +1,4 @@
-# TEST 3 (REAL-TARGET, T3) — B2 acceptance: host->IP map, one-naabu-per-IP
+# TEST 3 (REAL-TARGET, T3) -- B2 acceptance: host->IP map, one-naabu-per-IP
 # dedup, live-tree freshness fix proof, 4860-row residual dissection.
 #
 # Vehicle: bounded real-target run on example.com (scope restored for this

@@ -1,4 +1,4 @@
-"""RESOLVER FORGE: aggregate, validate, quarantine <80%, ≥100 healthy."""
+"""RESOLVER FORGE: aggregate, validate, quarantine <80%, >=100 healthy."""
 
 from __future__ import annotations
 

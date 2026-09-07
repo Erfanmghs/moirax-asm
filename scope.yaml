@@ -9,7 +9,7 @@ includes:
   - "*.fixture-target.test"
   # E2E fixture host-gateway (local docker bridge gateway = the runner host
   # where the E2E fixture binds its listeners; see docker-compose.e2e-fixture.yml).
-  # Loopback/RFC1918 stay rejected everywhere else — this is the ONLY private
+  # Loopback/RFC1918 stay rejected everywhere else -- this is the ONLY private
   # include, scoped to a single address, and only meaningful on a test runner.
   - 172.17.0.1/32
 excludes:

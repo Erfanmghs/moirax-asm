@@ -1,4 +1,4 @@
-"""TEST 4 (T4) acceptance table — resolver quarantine + selection restore + cleanup.
+"""TEST 4 (T4) acceptance table -- resolver quarantine + selection restore + cleanup.
 
 Reads the committed config, the restore-verification evidence
 (ci/test4_restore_result.json) and the forge-quarantine evidence

@@ -1,4 +1,4 @@
-"""PORT-CHECK — IP-centric naabu top-50 (ACTIVE order 3)."""
+"""PORT-CHECK -- IP-centric naabu top-50 (ACTIVE order 3)."""
 
 from __future__ import annotations
 

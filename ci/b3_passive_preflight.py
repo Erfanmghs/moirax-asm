@@ -1,4 +1,4 @@
-"""B3 PASSIVE-CHAIN preflight gates — run BEFORE `recon.sh run example.com`.
+"""B3 PASSIVE-CHAIN preflight gates -- run BEFORE `recon.sh run example.com`.
 
   G-S1  registries parse with the FROZEN loader: search_engines.yaml (>=1
         keyless enabled engine; every keyed engine names its env) + dorks.yaml

@@ -1,4 +1,4 @@
-# E2E FIXTURE VEHICLE — full pipeline vs a LOCAL test web server with
+# E2E FIXTURE VEHICLE -- full pipeline vs a LOCAL test web server with
 # several vhosts, NESTED subdomains (up to 4 labels under the apex) and
 # multiple open ports (53/udp DNS, 80, 8080, 8443/TLS, 2222, 6379, 9200).
 #
@@ -136,7 +136,7 @@ jobs:
           import pathlib
           import yaml
 
-          # 1) resolver fleet = fixture DNS — HANDCRAFTED in the frozen-loader
+          # 1) resolver fleet = fixture DNS -- HANDCRAFTED in the frozen-loader
           # shape (2-space-indented block items): yaml.safe_dump writes indent-0
           # list items that the frozen yaml_util parser rejects (run #40 evidence).
           p = pathlib.Path("resolvers.yaml")

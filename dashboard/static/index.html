@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Attack Vector Detection Platform · recon-pipeline</title>
+<title>Attack Vector Detection Platform | recon-pipeline</title>
 <link rel="stylesheet" href="/static/theme.css">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="glyph">▚</span> ATTACK VECTOR <span class="accent">DETECTION</span> PLATFORM <span class="sub">recon-pipeline · control center</span></div>
+  <div class="brand"><span class="glyph">##</span> ATTACK VECTOR <span class="accent">DETECTION</span> PLATFORM <span class="sub">recon-pipeline | control center</span></div>
   <nav class="tabs" id="tabs">
     <button data-panel="tools" class="tab">TOOLS</button>
     <button data-panel="results" class="tab">RESULTS</button>
@@ -17,27 +17,27 @@
     <button data-panel="keys" class="tab">API KEYS</button>
     <button data-panel="settings" class="tab">SETTINGS</button>
   </nav>
-  <div class="token-zone"><input id="token" type="password" placeholder="DASHBOARD_TOKEN" autocomplete="off"><button id="token-save">SET</button><span id="conn" class="badge">·</span></div>
+  <div class="token-zone"><input id="token" type="password" placeholder="DASHBOARD_TOKEN" autocomplete="off"><button id="token-save">SET</button><span id="conn" class="badge">|</span></div>
 </header>
 
 <main>
   <!-- a) TOOLS -->
   <section id="panel-tools" class="panel hidden">
-    <h2>TOOLS <span class="hint">tools.yaml — enable/disable + flag overrides (schema-validated writes, §9.2-a)</span></h2>
+    <h2>TOOLS <span class="hint">tools.yaml -- enable/disable + flag overrides (schema-validated writes, section 9.2-a)</span></h2>
     <div class="table-wrap"><table id="tools-table"><thead>
-      <tr><th data-sort="name">TOOL</th><th>BRANCH</th><th>IMAGE</th><th>ENABLED</th><th>PARAM OVERRIDES (named §5.6)</th></tr>
+      <tr><th data-sort="name">TOOL</th><th>BRANCH</th><th>IMAGE</th><th>ENABLED</th><th>PARAM OVERRIDES (named section 5.6)</th></tr>
     </thead><tbody></tbody></table></div>
-    <h2 class="mt">WORDLIST REGISTRY <span class="hint">per-task checkbox selection + SELECT-ALL per group (§8)</span></h2>
+    <h2 class="mt">WORDLIST REGISTRY <span class="hint">per-task checkbox selection + SELECT-ALL per group (section 8)</span></h2>
     <div id="wordlists"></div>
   </section>
 
   <!-- b) RESULTS -->
   <section id="panel-results" class="panel hidden">
-    <h2>RESULTS <span class="hint">read-only from recon/ · views.yaml-driven · diff badges (§9.2-b)</span></h2>
+    <h2>RESULTS <span class="hint">read-only from recon/ | views.yaml-driven | diff badges (section 9.2-b)</span></h2>
     <div class="filters" id="filters">
       <input id="f-q" placeholder="free-text search">
-      <input id="f-source" placeholder="source (subfinder, crtsh…)">
-      <input id="f-tag" placeholder="tag (dev, stage…)">
+      <input id="f-source" placeholder="source (subfinder, crtsh...)">
+      <input id="f-tag" placeholder="tag (dev, stage...)">
       <select id="f-alive"><option value="">alive: any</option><option value="true">alive</option><option value="false">dead</option></select>
       <select id="f-scope"><option value="">scope: all</option><option value="in">scope includes</option><option value="excluded">scope excludes</option></select>
       <input id="f-run" placeholder="run timestamp">
@@ -49,23 +49,23 @@
     <div class="table-wrap"><table id="assets-table"><thead>
       <tr><th data-sort="host">HOST</th><th data-sort="ips">IPS</th><th data-sort="alive">ALIVE</th><th data-sort="sources">SOURCES</th><th data-sort="tags">TAGS</th><th>JSON</th></tr>
     </thead><tbody></tbody></table></div>
-    <h2 class="mt">SOURCE COVERAGE ANALYTICS <span class="hint">per-source contribution · overlap · uniqueness %</span></h2>
+    <h2 class="mt">SOURCE COVERAGE ANALYTICS <span class="hint">per-source contribution | overlap | uniqueness %</span></h2>
     <div class="table-wrap"><table id="coverage-table"><thead>
       <tr><th data-sort="source">SOURCE</th><th data-sort="contribution">CONTRIBUTION</th><th data-sort="unique">UNIQUE ASSETS</th><th data-sort="uniqueness">UNIQUENESS %</th></tr>
     </thead><tbody></tbody></table></div>
     <div id="overlap" class="mono dim"></div>
-    <h2 class="mt">DIFF VIEW <span class="hint">added / removed / changed since previous run (§6.6)</span></h2>
+    <h2 class="mt">DIFF VIEW <span class="hint">added / removed / changed since previous run (section 6.6)</span></h2>
     <pre id="diff-view" class="json-inspector collapsed"></pre>
   </section>
 
   <!-- b2) REPORTS -->
   <section id="panel-reports" class="panel hidden">
-    <h2>REPORTS <span class="hint">B7 bundle generated from canonical data.json only (§10.2) · md / html / csv / json / pdf · tamper-checked</span></h2>
+    <h2>REPORTS <span class="hint">B7 bundle generated from canonical data.json only (section 10.2) | md / html / csv / json / pdf | tamper-checked</span></h2>
     <div class="row">
       <input id="rep-target" placeholder="target (example.com)">
       <button id="rep-check">CHECK BUNDLE</button>
       <button id="rep-generate">GENERATE NOW</button>
-      <span id="rep-status" class="badge">·</span>
+      <span id="rep-status" class="badge">|</span>
     </div>
     <div class="table-wrap"><table id="reports-table"><thead>
       <tr><th>ARTIFACT</th><th>PATH</th><th>SHA256</th><th>OPEN</th></tr>
@@ -75,16 +75,16 @@
 
   <!-- c) RUN CONTROL -->
   <section id="panel-run" class="panel hidden">
-    <h2>RUN CONTROL <span class="hint">start / stop / resume · live status from state.json · live log (§9.2-c)</span></h2>
+    <h2>RUN CONTROL <span class="hint">start / stop / resume | live status from state.json | live log (section 9.2-c)</span></h2>
     <div class="row">
       <input id="run-target" placeholder="target (example.com)">
       <button id="run-start">START</button>
       <button id="run-resume">RESUME</button>
       <button id="run-stop" class="danger">STOP</button>
-      <span id="run-status" class="badge">·</span>
+      <span id="run-status" class="badge">|</span>
     </div>
     <div class="row mono dim" id="run-modules"></div>
-    <h2 class="mt">SCHEDULER <span class="hint">§4.6 — interval ≥ 10 min, state in scheduler.json, editable</span></h2>
+    <h2 class="mt">SCHEDULER <span class="hint">section 4.6 -- interval >= 10 min, state in scheduler.json, editable</span></h2>
     <div class="row">
       <label>interval (min) <input id="sched-interval" type="number" min="10" class="mono"></label>
       <label>enabled <input id="sched-enabled" type="checkbox"></label>
@@ -93,13 +93,13 @@
     </div>
     <h2 class="mt">LIVE LOG <span class="hint">streaming tail of logs/run.log</span></h2>
     <pre id="live-log" class="json-inspector"></pre>
-    <h2 class="mt">AGENT JOURNAL <span class="hint">logs/agent-journal.jsonl — every decision + action (§12.7, append-only)</span></h2>
+    <h2 class="mt">AGENT JOURNAL <span class="hint">logs/agent-journal.jsonl -- every decision + action (section 12.7, append-only)</span></h2>
     <pre id="agent-journal" class="json-inspector"></pre>
   </section>
 
   <!-- d) API KEYS -->
   <section id="panel-keys" class="panel hidden">
-    <h2>API KEYS <span class="hint">.env-backed · masked after save · picked up next run without restart (§9.2-d)</span></h2>
+    <h2>API KEYS <span class="hint">.env-backed | masked after save | picked up next run without restart (section 9.2-d)</span></h2>
     <div class="table-wrap"><table id="keys-table"><thead>
       <tr><th>KEY</th><th>MODULE</th><th>WITHOUT KEY</th><th>STATE</th><th>SET VALUE</th><th></th></tr>
     </thead><tbody></tbody></table></div>
@@ -107,23 +107,23 @@
 
   <!-- e) SETTINGS -->
   <section id="panel-settings" class="panel hidden">
-    <h2>SETTINGS <span class="hint">proxy · Telegram · digest threshold · alert filters · resource budget → dashboard/config.json (§9.2-e)</span></h2>
+    <h2>SETTINGS <span class="hint">proxy | Telegram | digest threshold | alert filters | resource budget -> dashboard/config.json (section 9.2-e)</span></h2>
     <div class="grid">
-      <label>PROXY URL (http/socks5 — set-but-unreachable FAILS FAST §9.3)<input id="s-proxy" class="mono" placeholder=""></label>
+      <label>PROXY URL (http/socks5 -- set-but-unreachable FAILS FAST section 9.3)<input id="s-proxy" class="mono" placeholder=""></label>
       <label>TELEGRAM BOT TOKEN <input id="s-tg-token" type="password" placeholder="masked after save"></label>
       <label>TELEGRAM CHAT / USER ID <input id="s-tg-chat" class="mono" placeholder="chat id that receives alerts"></label>
-      <label>DIGEST THRESHOLD (§4.7)<input id="s-digest" type="number" min="1" class="mono"></label>
+      <label>DIGEST THRESHOLD (section 4.7)<input id="s-digest" type="number" min="1" class="mono"></label>
     </div>
-    <h3 class="mt">ALERT FILTER RULES (§4.7 — which new assets are alert-worthy)</h3>
+    <h3 class="mt">ALERT FILTER RULES (section 4.7 -- which new assets are alert-worthy)</h3>
     <div id="rules-editor"></div>
-    <h3 class="mt">SUPERVISOR AGENT (§12 — opt-in overseer)</h3>
+    <h3 class="mt">SUPERVISOR AGENT (section 12 -- opt-in overseer)</h3>
     <div class="grid">
-      <label>AGENT ENABLED (opt-in; pipeline runs standalone without it §12.1)<select id="s-agent-enabled"><option value="false">off</option><option value="true">on</option></select></label>
-      <label>PASSIVE BRANCH AUTONOMY (§12.6 default auto-fix)<select id="s-agent-passive" class="mono"><option>observe</option><option>suggest</option><option selected>auto-fix</option></select></label>
-      <label>ACTIVE BRANCH AUTONOMY (§12.6 default suggest)<select id="s-agent-active" class="mono"><option>observe</option><option selected>suggest</option><option>auto-fix</option></select></label>
-      <label>MAX LLM CALLS / RUN (§12.4 budget)<input id="s-agent-budget" type="number" min="0" class="mono"></label>
+      <label>AGENT ENABLED (opt-in; pipeline runs standalone without it section 12.1)<select id="s-agent-enabled"><option value="false">off</option><option value="true">on</option></select></label>
+      <label>PASSIVE BRANCH AUTONOMY (section 12.6 default auto-fix)<select id="s-agent-passive" class="mono"><option>observe</option><option>suggest</option><option selected>auto-fix</option></select></label>
+      <label>ACTIVE BRANCH AUTONOMY (section 12.6 default suggest)<select id="s-agent-active" class="mono"><option>observe</option><option selected>suggest</option><option>auto-fix</option></select></label>
+      <label>MAX LLM CALLS / RUN (section 12.4 budget)<input id="s-agent-budget" type="number" min="0" class="mono"></label>
     </div>
-    <h3 class="mt">STORAGE / LOG RETENTION (run-end housekeeping — gzip rotation + history retention + total cap)</h3>
+    <h3 class="mt">STORAGE / LOG RETENTION (run-end housekeeping -- gzip rotation + history retention + total cap)</h3>
     <div class="grid">
       <label>KEEP LAST N RUN SNAPSHOTS<input id="s-ret-runs" type="number" min="1" class="mono"></label>
       <label>RUN LOG ROTATION CAP (MB)<input id="s-ret-log" type="number" min="1" class="mono"></label>
@@ -136,7 +136,7 @@
       <button id="s-save">SAVE SETTINGS</button>
       <span id="s-msg" class="mono dim"></span>
     </div>
-    <h3 class="mt">RESOURCE BUDGET (§11.5)</h3>
+    <h3 class="mt">RESOURCE BUDGET (section 11.5)</h3>
     <div class="grid">
       <label>CPU CORES<input id="s-cpu" type="number" min="1" class="mono"></label>
       <label>RAM MB<input id="s-ram" type="number" min="256" class="mono"></label>

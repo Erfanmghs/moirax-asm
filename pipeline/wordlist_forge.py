@@ -16,7 +16,7 @@ class EmptyWordlistError(ValueError):
 
 
 def selected_keys(params: Params, task: str) -> list[str]:
-    """§8 selection: wordlists.yaml tasks.<task>.selection (operator ticks). No UI."""
+    """section 8 selection: wordlists.yaml tasks.<task>.selection (operator ticks). No UI."""
     registry = WordlistRegistry(params)
     spec = registry.tasks.get(task)
     if not isinstance(spec, dict):
@@ -89,7 +89,7 @@ def materialize_effective(params: Params, task: str) -> Path:
 
 
 def forge_custom_subdomains(params: Params) -> Path:
-    """FFUF-0: union of CONFIG-DEFAULT keys → custom-subdomains.txt."""
+    """FFUF-0: union of CONFIG-DEFAULT keys -> custom-subdomains.txt."""
     effective = materialize_effective(params, "FFUF-0")
     custom = params.root / str(params.require("wordlist_forge_output"))
     custom.parent.mkdir(parents=True, exist_ok=True)
@@ -109,7 +109,7 @@ def forge_custom_subdomains(params: Params) -> Path:
 
 
 def ingest_if_completed(params: Params, gate, target_dir: Path, target: str, status: str) -> None:
-    """§8 FFUF-0: append validated labels only after a completed run (engine finalization)."""
+    """section 8 FFUF-0: append validated labels only after a completed run (engine finalization)."""
     log = params.root / "wordlists" / "forge" / "counts.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     completed = str(params.require("run_status_completed"))

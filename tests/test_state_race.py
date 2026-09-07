@@ -28,7 +28,7 @@ class TestConcurrentSaveState(unittest.TestCase):
                 barrier.wait()
                 for i in range(60):
                     save_state(params, tdir, {"writer": n, "iter": i})
-            except Exception as exc:  # noqa: BLE001 — the race surfaced as OSError
+            except Exception as exc:  # noqa: BLE001 -- the race surfaced as OSError
                 errors.append(exc)
 
         threads = [threading.Thread(target=writer, args=(n,)) for n in range(8)]

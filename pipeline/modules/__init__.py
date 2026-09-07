@@ -1,10 +1,10 @@
 """Pipeline module dispatch.
 
-ACTIVE branch: FFUF → DNS-RESOLVE → FFUF-3 → PORT-CHECK (append-only order).
-PASSIVE branch (B3, spec §8): PASSIVE-RECON — PSV-0..PSV-8 sub-steps inside
+ACTIVE branch: FFUF -> DNS-RESOLVE -> FFUF-3 -> PORT-CHECK (append-only order).
+PASSIVE branch (B3, spec section 8): PASSIVE-RECON -- PSV-0..PSV-8 sub-steps inside
 one orchestrator runner (PSV-0 infrastructure first, parallel sweep, PSV-5
 recursion, PSV-6 probe last); existing module orders are untouched.
-POST-MERGE (B4, spec §8): PORT-SWEEP — order-4 stage consuming assets.json
+POST-MERGE (B4, spec section 8): PORT-SWEEP -- order-4 stage consuming assets.json
 after MERGE; wired through the engine's post-merge hook, NOT into a branch.
 """
 

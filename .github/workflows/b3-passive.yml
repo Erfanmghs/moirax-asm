@@ -1,4 +1,4 @@
-# B3 PASSIVE CHAIN (spec §8 PSV-0..PSV-8) — acceptance vehicle.
+# B3 PASSIVE CHAIN (spec section 8 PSV-0..PSV-8) -- acceptance vehicle.
 #
 # Vehicle: example.com (committed scope; real public passive data: CT logs,
 # archives, OSINT agents). The ACTIVE branch is disabled by a TRANSIENT
@@ -6,14 +6,14 @@
 # the passive chain: PSV-0 infrastructure first, parallel sweep (PSV-1,2,3,4,
 # 7,8), PSV-5 recursion, PSV-6 probe last.
 #
-# Simulated-429 acceptance (§8 PSV-0): a local sink container answers 429; a
+# Simulated-429 acceptance (section 8 PSV-0): a local sink container answers 429; a
 # transient engine `sink429` (priority 1) is inserted into search_engines.yaml
 # (before-copy evidence) so the first dork request hits it -> COOLDOWN +
 # instant reroute visible in run.log (assertion F3).
 #
 # Transient runtime accommodations (NEVER committed; before-copies kept):
 #   - REM5 resolver-fleet refresh from the committed seed (public source URLs
-#     disabled at runtime) — puredns must resolve against a healthy fleet
+#     disabled at runtime) -- puredns must resolve against a healthy fleet
 #   - active_branch_modules: [] (passive-only bounding)
 #   - passive_branch_budget_sec 1200 -> 3000 (amass 20-min cap + recursion fit)
 #   - sink429 engine insertion
@@ -55,7 +55,7 @@ jobs:
       - name: Unit proof (PSV chain regression suite)
         run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
 
-      - name: "Pull passive tool images (soft — per-agent degraded-continue covers gaps)"
+      - name: "Pull passive tool images (soft -- per-agent degraded-continue covers gaps)"
         run: |
           set +e
           : > ci/b3p_pull_report.txt

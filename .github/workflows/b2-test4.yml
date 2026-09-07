@@ -1,13 +1,13 @@
-# TEST 4 (QUARANTINE+RESTORE, T4) — B2 acceptance: resolver quarantine proof,
+# TEST 4 (QUARANTINE+RESTORE, T4) -- B2 acceptance: resolver quarantine proof,
 # wordlist selection restore to the real-run defaults, and REM-era cleanup.
 #
 # Part T4-B (offline): ci/test4_restore_verify.py proves the committed config
-#   is back at production state — no test-mode selection overrides,
+#   is back at production state -- no test-mode selection overrides,
 #   tools.yaml config-defaults = the three real keys, DNSR-1 materialization
 #   reproduces the TEST-1-proven 4860-line wordlist (sha a94ea1d5...),
 #   REM7 threshold restored to 100, REM9 correction stands, verify_b1 clean.
 # Part T4-A (docker): ci/test4_forge_quarantine.py proves the forge quarantine
-#   contract deterministically — three public non-DNS IPs are injected via a
+#   contract deterministically -- three public non-DNS IPs are injected via a
 #   transient manual_add edit (never committed), dnsx-probe validates, and
 #   every injected IP must land in resolvers/forge/quarantine.txt while the
 #   anycast fleet stays healthy.

@@ -1,4 +1,4 @@
-"""B4 PORT-SWEEP unit proof (spec §8 order-4 post-MERGE) — deterministic, no network."""
+"""B4 PORT-SWEEP unit proof (spec section 8 order-4 post-MERGE) -- deterministic, no network."""
 
 from __future__ import annotations
 
@@ -144,7 +144,7 @@ class PortSweepTest(unittest.TestCase):
 
     def test_ip_rejected_hosts_never_enter_guarantee(self):
         # A host whose ONLY IPs were scope-rejected is resolved-but-unscannable
-        # (explicit ledger line) — it must NOT be re-resolved as "no IP".
+        # (explicit ledger line) -- it must NOT be re-resolved as "no IP".
         params = _params({"portsweep_profile": "full", "portsweep_duration_hours": 1})
         gate = _gate(params)
         adapter, _clock = _adapter(params, gate, {"naabu-full": [Completed(0, _NAABU_ROW.format(ip="93.184.215.14", port=443), "")]})
@@ -295,7 +295,7 @@ class PortSweepTest(unittest.TestCase):
 
     def test_out_of_scope_ip_rejected(self):
         # Private ranges stay REJECTED even when attributed to an in-scope
-        # host (REM8 ruling only relaxes public host-IPs) — ledger + exclusion.
+        # host (REM8 ruling only relaxes public host-IPs) -- ledger + exclusion.
         params = _params({"portsweep_profile": "full", "portsweep_duration_hours": 1})
         gate = _gate(params)
         adapter, _clock = _adapter(params, gate, {"naabu-full": []})

@@ -1,4 +1,4 @@
-# B6 DASHBOARD (spec §9.1/§9.2/§9.3/§9.4) — acceptance vehicle.
+# B6 DASHBOARD (spec section 9.1/section 9.2/section 9.3/section 9.4) -- acceptance vehicle.
 #
 # Vehicle: example.com (committed scope), the proven bounding set, PLUS the
 # dashboard acceptance layer executed against the REAL repo + the REAL
@@ -9,10 +9,10 @@
 #   - after the vehicle: assertions J1..J8 boot the FastAPI app and prove the
 #     companion acceptances (parameter edit visible in next run command; URL
 #     filter state restores correctly) + panels a-e contracts on the REAL
-#     recon/example.com data. Panel writes are pointed at an ISOLATED root —
+#     recon/example.com data. Panel writes are pointed at an ISOLATED root --
 #     the committed repo is never mutated by the dashboard under test.
 #
-# Transient runtime accommodations (NEVER committed; before-copies kept) —
+# Transient runtime accommodations (NEVER committed; before-copies kept) --
 # the exact proven B4/B5 set (REM5 fleet refresh, active branch bounded out,
 # passive budget 3000, recursion depth 1, sweep custom 80,443,8080 / 1h).
 #
@@ -54,7 +54,7 @@ jobs:
       - name: Unit proof (full regression suite incl. B6 dashboard)
         run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
 
-      - name: "Pull tool images (soft — passive fleet + sweep)"
+      - name: "Pull tool images (soft -- passive fleet + sweep)"
         run: |
           set +e
           : > ci/b6_pull_report.txt
@@ -184,7 +184,7 @@ jobs:
           print("Vehicle validation: frozen loader parses tools.yaml; bounding set intact.")
           PY
 
-      - name: Run vehicle (example.com — full pipeline under proven bounding)
+      - name: Run vehicle (example.com -- full pipeline under proven bounding)
         run: |
           set +e
           ./recon.sh run example.com 2>&1 | tee ci/b6_run_console.log

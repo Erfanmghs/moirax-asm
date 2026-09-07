@@ -1,14 +1,14 @@
-"""B7 REPORTING preflight gates — run BEFORE the vehicle `recon.sh run`.
+"""B7 REPORTING preflight gates -- run BEFORE the vehicle `recon.sh run`.
 
-  G-R1  committed §10 defaults (report_dirname 90_report, schema_version,
+  G-R1  committed section 10 defaults (report_dirname 90_report, schema_version,
         diff_filename, assets_relpath)
   G-R2  wiring: engine run-end generate_all + never-silent ledger line;
         dashboard on-demand endpoints (/api/report/{target} + /generate)
-  G-R3  precision-contract surface: CSV_CLASSES cover the §6.6 diff classes;
+  G-R3  precision-contract surface: CSV_CLASSES cover the section 6.6 diff classes;
         collect() reads ONLY canonical data.json/assets.json; verify_bundle
         digest tamper check present
   G-R4  reportlab optional-dependency handled honestly (try/except + disclosed
-        skip note — never silent)
+        skip note -- never silent)
   G-R5  verify_b1.py has no working-tree diff (frozen since handoff)
   G-R6  vehicle scope: example.com retained
   G-R7  unit coverage markers in tests/test_reporting.py

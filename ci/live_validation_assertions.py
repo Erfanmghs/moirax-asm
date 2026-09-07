@@ -13,7 +13,7 @@ compare it against the subdomains/vhosts they actually deployed.
       AND the anomaly source is a third-party passive agent (breaker
       degraded-continue; run #36 precedent), otherwise FAIL
   L2  fresh-evidence guard: required artifacts NEWER than run start
-      (a skipped module must never pass on committed stale files — REM6)
+      (a skipped module must never pass on committed stale files -- REM6)
   L3  passive chain produced artifacts (10_subdomains/passive)
   L4  DNS lane produced records (20_dns/dnsx/data.json, non-empty resolved)
   L5  vhost lane produced artifacts (15_vhosts tree non-empty)
@@ -73,7 +73,7 @@ def section(title: str) -> None:
 def main() -> int:
     verdict_lines: list[str] = []
 
-    # L0 exit code (0 = clean; 2 = spec anomaly exit — see L1)
+    # L0 exit code (0 = clean; 2 = spec anomaly exit -- see L1)
     exit_txt = (ROOT / "ci" / "live_run_exit.txt").read_text(encoding="utf-8") \
         if (ROOT / "ci" / "live_run_exit.txt").is_file() else ""
     rc = "".join(c for c in exit_txt.split("=")[-1] if c.isdigit())
@@ -107,7 +107,7 @@ def main() -> int:
         ok1 = True
         detail = (f"status = anomaly BUT breaker degraded-continue per spec: "
                   f"all {len(mod_status)} engine modules done; third-party "
-                  f"passive variance ({src or 'passive agent'}) — run #36 precedent")
+                  f"passive variance ({src or 'passive agent'}) -- run #36 precedent")
     else:
         ok1 = False
         detail = f"status = {status}; source={src!r}; modules={mod_status}"

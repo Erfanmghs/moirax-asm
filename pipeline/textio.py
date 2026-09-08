@@ -9,11 +9,22 @@ from pathlib import Path
 
 def atomic_write_text(path: Path, text: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(path.parent, 0o755)
+    except OSError:
+        pass
     fd, tmp_name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=str(path.parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(text)
         os.replace(tmp_name, path)
+        # mkstemp creates 0600 files; dashboard docker often runs as root, so
+        # the host operator must still be able to read forge outputs (git,
+        # tests, the SPA).
+        try:
+            os.chmod(path, 0o644)
+        except OSError:
+            pass
     except Exception:
         try:
             os.unlink(tmp_name)

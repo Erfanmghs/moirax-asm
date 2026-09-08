@@ -1,6 +1,8 @@
 recon/
 lists/
 dashboard/config.json
+dashboard/.warehouse-hmac
+logs/dashboard-audit.jsonl
 .env
 scope.yaml
 compose.env

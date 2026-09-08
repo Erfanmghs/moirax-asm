@@ -118,13 +118,25 @@ def journey() -> int:
         step("J1", "landing + auth", True, "brand visible, token set, conn badge online")
         page.screenshot(path=str(SCREENS / "J1-landing.png"))
 
-        # J2 TOOLS: toggle + wordlist save
-        page.click('[data-panel="tools"]')
+        # J2 TOOLS + WORDLISTS (original filenames)
+        page.click('[data-panel="engine"]')
         page.wait_for_selector("#tools-table tbody tr")
         rows = page.locator("#tools-table tbody tr").count()
         assert rows > 0, "tools table empty"
+        tools_text = page.locator("#tools-table tbody").inner_text()
+        assert "ffuf" in tools_text.lower(), tools_text[:200]
+        assert "ffuf-vhost" in tools_text.lower(), tools_text[:400]
+        assert "THIS SWITCH CONTROLS" in page.locator("#tools-table thead").inner_text()
         page.locator("#tools-table tbody tr button[data-toggle]").first.click()
         page.wait_for_selector(".toast:not(.hidden)")
+        page.click('[data-panel="tools"]')
+        page.wait_for_selector("#wordlists input[type=checkbox]")
+        names = page.locator("#wordlists tbody td.mono").all_inner_texts()
+        assert any("test-smoke-200.txt" in n for n in names), names[:8]
+        assert any("subdomains-top1million-5000.txt" in n for n in names), names[:8]
+        assert page.locator("#header-start").count() == 0
+        assert page.locator("#run-start").count() == 1
+        assert page.locator("#global-target").count() == 0
         boxes = page.locator("#wordlists input[type=checkbox]")
         assert boxes.count() > 0, "no wordlist checkboxes"
         boxes.first.check()
@@ -168,8 +180,10 @@ def journey() -> int:
              f"members view: {mv[:60]!r}, badge: {badge!r}")
         page.screenshot(path=str(SCREENS / "J5-fleet.png"))
 
-        # J6 RESULTS via global TARGET box
+        # J6 RESULTS via the RESULTS page site picker (not a global header target)
+        page.fill("#results-target", "example.com")
         page.click('[data-panel="results"]')
+        page.click("#results-load")
         page.wait_for_selector("#assets-table tbody tr")
         n_all = page.locator("#assets-table tbody tr").count()
         page.fill("#f-q", "api")
@@ -205,7 +219,10 @@ def journey() -> int:
         page.screenshot(path=str(SCREENS / "J7-reports.png"))
 
         # J8 RUN CONTROL + scheduler
+        page.fill("#run-target", "example.com")
         page.click('[data-panel="run"]')
+        assert page.locator("#run-start").inner_text().strip() == "START SCAN"
+        assert page.locator("#header-start").count() == 0
         page.wait_for_timeout(500)
         st = page.locator("#run-status").inner_text()
         page.fill("#sched-interval", "15")
@@ -251,7 +268,7 @@ def journey() -> int:
         page.screenshot(path=str(SCREENS / "J11-xss.png"))
 
         # J12 unauthorized UX
-        page.evaluate("localStorage.removeItem('recon_dashboard_token')")
+        page.evaluate("sessionStorage.removeItem('recon_dashboard_token'); localStorage.removeItem('recon_dashboard_token')")
         page.reload()
         page.wait_for_selector(".brand")
         page.click('[data-panel="results"]')

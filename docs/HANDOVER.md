@@ -80,11 +80,12 @@ recon-pipeline/
 
 `./recon.sh run <target>` walks a module ladder in two branches:
 
-- ACTIVE: `ffuf` (DNS bruteforce, FFUF-0) -> `dns-resolve` (DNSR-1) ->
-  `ffuf-3` (dead-vhost misconfig lane) -> `port-check`.
-- PASSIVE: `passive-recon` (PSV-0..PSV-8: search forge, crt.sh, subfinder/
-  chaos, GitHub OSINT, alterx permutations, recursive subdomain expansion
-  with depth + seed caps, Censys/Shodan IP discovery).
+- ACTIVE: `dns-resolve` (dnsx brute + IPs + optional httpx length/tech) ->
+  `ffuf` (vhost Host-header enum) -> `ffuf-3` (dead-name vhost) ->
+  `port-check` (optional top-ports preview, default OFF). Full TCP 1-65535
+  runs after MERGE on every resolved IP (`portsweep_scope: all_resolved`).
+- PASSIVE: `passive-recon` (PSV-0..PSV-8 plus keyless HTTP APIs: HackerTarget,
+  Anubis, OTX, urlscan; SecurityTrails/VirusTotal if keys are set).
 
 Each module runs inside its own Docker container (ffuf v2.1.0 image,
 passive-tools image). The orchestrator talks to docker through
@@ -323,7 +324,7 @@ secret manager of your choice, never in the repo (R-1 enforces).
 - Telegram: set your numeric id in SETTINGS (or per-target in TARGETS),
   provision TELEGRAM_BOT_TOKEN in .env, press SEND TEST NOTIFICATION
 - Rotate DASHBOARD_TOKEN: compose env -> restart dashboard; the SPA stores
-  the token in localStorage per browser
+  the token in sessionStorage per browser tab
 
 ## 13. Deferred roadmap (agreed, not built)
 

@@ -4,6 +4,8 @@
 
 This guide explains every feature, how to use it correctly, and shows real
 examples you can follow along with. No programming knowledge is needed.
+Inside the running dashboard, open the **HELP** tab for the same walkthrough
+keyed to every current button (ASCII English, step by step).
 (Developers: the engineering guide is `docs/HANDOVER.md`.)
 
 ---
@@ -156,12 +158,14 @@ exactly what to do next (see section 7).
 website name (`example.com`), press **LOAD**, optionally give it a
 description like "main company site", and press **SAVE PROFILE**.
 
-**Step 3 -- start the check.** Open **RUN CONTROL**, type `example.com`,
-press **START**. The live log shows each step as it happens. A full check
+**Step 3 -- start the check.** Open **SCAN**, type `example.com` in SITE,
+press **START SCAN**. The live log shows each step as it happens. A full check
 takes from a few minutes to about an hour depending on the size of the site.
 
-**Step 4 -- read the results.** Open **RESULTS** and pick your target in the
-top bar. Every discovered address is listed with filters and "new" badges.
+**Step 4 -- read the results.** Open **RESULTS**, pick the site in that
+page's SITE box, press **LOAD RESULTS**. Every discovered address is listed
+with filters and "new" badges. The header does not lock the platform to one
+target.
 
 **Step 5 -- get the report.** Open **REPORTS**, type the target, press
 **GENERATE NOW**, then press **OPEN** next to `report.html` (or download the
@@ -176,6 +180,8 @@ PDF).
 | HOST | A website name that was found, e.g. `api.example.com` |
 | IPS | The server address(es) it resolves to |
 | ALIVE | Did it answer when we knocked? (green = yes) |
+| LENGTH | HTTP response body size in bytes (filled when httpx is ENABLED) |
+| TECH | Web technologies detected on that name (filled when httpx is ENABLED) |
 | SOURCES | Which information sources found it (more than one is normal) |
 | TAGS | Labels like `dev` or `stage` when the name hints at them |
 
@@ -310,7 +316,7 @@ single address carries the whole scan.
 
 ## 11. Automatic checks (scheduler)
 
-In **RUN CONTROL**, set an interval in minutes (10 is the minimum) and tick
+On the **SCAN** page, set an interval in minutes (10 is the minimum) and tick
 **enabled**, then press SAVE. From now on the platform checks the website by
 itself, and if something changed, a Telegram message is waiting for you.
 

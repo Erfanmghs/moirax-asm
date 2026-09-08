@@ -362,6 +362,22 @@ class TestFfuf3(unittest.TestCase):
         bases = _alive_bases(ffuf_doc, dnsr_doc, _Gate(), Path("."), "example.test")
         self.assertEqual([b["host"] for b in bases], ["c.example.test"])
 
+    def test_alive_bases_accept_dnsr_httpx_alive_without_ffuf(self):
+        """DNS-first path: httpx on dnsx-resolved names is enough to bind."""
+        ffuf_doc = {"hosts": []}
+        dnsr_doc = {
+            "resolved": [
+                {
+                    "host": "example.test",
+                    "ips": ["1.1.1.1"],
+                    "resolution_status": "resolved",
+                    "alive": True,
+                }
+            ]
+        }
+        bases = _alive_bases(ffuf_doc, dnsr_doc, _Gate(), Path("."), "example.test")
+        self.assertEqual([b["host"] for b in bases], ["example.test"])
+
 
 if __name__ == "__main__":
     unittest.main()

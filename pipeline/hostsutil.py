@@ -52,7 +52,7 @@ def labels_from_host(host: str, seed: str) -> list[str]:
     return found
 
 
-def wildcard_seeds(gate: ScopeGate) -> list[str]:
+def wildcard_seeds(gate: ScopeGate, target: str | None = None) -> list[str]:
     seeds: list[str] = []
     seen: set[str] = set()
     for item in gate.includes:
@@ -76,7 +76,16 @@ def wildcard_seeds(gate: ScopeGate) -> list[str]:
         if base and base not in seen:
             seen.add(base)
             seeds.append(base)
-    return seeds
+    if not target:
+        return seeds
+    wanted = target.strip().lower().rstrip(".")
+    matched = [seed for seed in seeds if seed == wanted or wanted.endswith("." + seed)]
+    if matched:
+        return matched
+    allowed, _ = gate.validate_candidate(wanted)
+    if allowed and wanted:
+        return [wanted]
+    return []
 
 
 def container_path(params: Any, target: str, rel: str) -> str:

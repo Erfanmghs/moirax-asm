@@ -4,143 +4,362 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Attack Vector Detection Platform | recon-pipeline</title>
-<link rel="stylesheet" href="/static/theme.css">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/theme.css?v=ux20">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="topbar">
-  <div class="brand"><span class="glyph">##</span> ATTACK VECTOR <span class="accent">DETECTION</span> PLATFORM <span class="sub">security watcher for your websites</span></div>
-  <nav class="tabs" id="tabs">
-    <button data-panel="help" class="tab">HELP</button>
-    <button data-panel="tools" class="tab">TOOLS</button>
-    <button data-panel="targets" class="tab">TARGETS</button>
-    <button data-panel="fleet" class="tab">FLEET</button>
-    <button data-panel="results" class="tab">RESULTS</button>
-    <button data-panel="reports" class="tab">REPORTS</button>
-    <button data-panel="run" class="tab">RUN CONTROL</button>
-    <button data-panel="keys" class="tab">API KEYS</button>
-    <button data-panel="settings" class="tab">SETTINGS</button>
+  <div class="hero-banner">
+    <a class="brand" href="#scan" id="brand-home">
+      <img class="logo" src="/static/logo.svg" width="56" height="56" alt="">
+      <span class="brand-copy">
+        <span class="brand-kicker">operator console</span>
+        <span class="brand-title"><span class="glyph">AVDP</span> ATTACK VECTOR <span class="accent">DETECTION</span> PLATFORM</span>
+        <span class="sub">security watcher for your websites</span>
+      </span>
+    </a>
+    <div class="token-zone"><input id="token" type="password" placeholder="DASHBOARD_TOKEN" autocomplete="off" aria-label="Dashboard token"><button id="token-save">SET</button><span id="conn" class="badge">|</span></div>
+  </div>
+  <nav class="tabs" id="tabs" aria-label="Sections">
+    <div class="nav-group">
+      <span class="nav-label">Work</span>
+      <div class="nav-pills">
+        <button data-panel="run" class="tab">SCAN</button>
+        <button data-panel="results" class="tab">RESULTS</button>
+        <button data-panel="reports" class="tab">REPORTS</button>
+        <button data-panel="fleet" class="tab">FLEET</button>
+      </div>
+    </div>
+    <div class="nav-group">
+      <span class="nav-label">Setup</span>
+      <div class="nav-pills">
+        <button data-panel="targets" class="tab">TARGETS</button>
+        <button data-panel="engine" class="tab">TOOLS</button>
+        <button data-panel="tools" class="tab">WORDLISTS</button>
+        <button data-panel="keys" class="tab">API KEYS</button>
+        <button data-panel="settings" class="tab">SETTINGS</button>
+      </div>
+    </div>
+    <div class="nav-group">
+      <span class="nav-label">Guide</span>
+      <div class="nav-pills">
+        <button data-panel="help" class="tab">HELP</button>
+      </div>
+    </div>
   </nav>
-  <div class="tgt-zone"><label class="tgt-label">TARGET <span class="help" tabindex="0" data-help="The website you are working with right now. RESULTS and RUN CONTROL both follow this box. Type a name like example.com.">?</span></label><input id="global-target" class="mono" placeholder="example.com" autocomplete="off"></div>
-  <div class="token-zone"><input id="token" type="password" placeholder="DASHBOARD_TOKEN" autocomplete="off"><button id="token-save">SET</button><span id="conn" class="badge">|</span></div>
 </header>
+<datalist id="known-targets"></datalist>
 
-<main>
-  <!-- HELP: the built-in step-by-step guide -->
+<main id="main">
+  <!-- HELP: in-app operator manual -- every tab, every button (ASCII English) -->
   <section id="panel-help" class="panel hidden">
-    <h2>HELP <span class="hint">how to use this platform, step by step</span></h2>
+    <h2>HELP <span class="hint">step-by-step guide for every tab</span></h2>
     <div class="help-doc">
-      <h3>What does this platform do?</h3>
-      <p>You give it a website you own. It quietly looks at the outside of that
-      website and reports: which website names belong to it, which ones are
-      online, which technical doors (ports) are open -- and it tells you what
-      changed since the last time. It only ever looks at targets you have
-      explicitly allowed.</p>
+      <p>ASCII English only. Button and tab names match the UI above. Only
+      check websites you own or have written permission to test.</p>
+      <ul class="toc">
+        <li><a href="#h-token">1. Sign in</a></li>
+        <li><a href="#h-first">2. First run</a></li>
+        <li><a href="#h-scan">3. SCAN</a></li>
+        <li><a href="#h-tools">4. TOOLS</a></li>
+        <li><a href="#h-wl">5. WORDLISTS</a></li>
+        <li><a href="#h-tgt">6. TARGETS</a></li>
+        <li><a href="#h-fleet">7. FLEET</a></li>
+        <li><a href="#h-res">8. RESULTS</a></li>
+        <li><a href="#h-rep">9. REPORTS</a></li>
+        <li><a href="#h-keys">10. API KEYS</a></li>
+        <li><a href="#h-set">11. SETTINGS</a></li>
+        <li><a href="#h-faq">12. If something fails</a></li>
+      </ul>
 
-      <h3>First time here? Three steps.</h3>
-      <p><b>1.</b> SETTINGS -- type your Telegram username or numeric id where it
-      says TELEGRAM, then press SEND TEST NOTIFICATION. A test message should
-      arrive within seconds.<br>
-      <b>2.</b> TARGETS -- add your website (for example example.com). This is
-      also where each website gets its own Telegram setting.<br>
-      <b>3.</b> RUN CONTROL -- type the website name and press START. Watch the
-      progress live, then open RESULTS and REPORTS.</p>
+      <h3 id="h-token">1. Sign in</h3>
+      <ol>
+        <li>Copy <span class="ui">DASHBOARD_TOKEN</span> from the local <span class="ui">.env</span> file.</li>
+        <li>Paste it in the top-right box and press <span class="ui">SET</span>.</li>
+        <li>The badge must say <span class="ui">online</span>, not <span class="ui">token rejected</span>.</li>
+        <li>If TOOLS or WORDLISTS look empty, an old token is still in the browser: SET again and reopen the tab.</li>
+      </ol>
+      <p class="note">Other tabs do not load data until SET succeeds. There is no global SITE in the header; each tab has its own picker.</p>
 
-      <h3>Reading the results</h3>
-      <p>RESULTS lists every discovered address with filters and
-      "new since last time" badges. REPORTS builds a clean, tamper-checked
-      report (web page, PDF, CSV, JSON) with one press of GENERATE NOW.</p>
+      <h3 id="h-what">What this platform does</h3>
+      <p>You give it a domain you own. It looks from the outside (like a visitor, no login):</p>
+      <ol>
+        <li>Finds names under that domain (for example <span class="ui">api.example.com</span>).</li>
+        <li>Checks which names are alive and which IPs they resolve to.</li>
+        <li>Reports open ports on those servers.</li>
+        <li>Compares with the previous check and marks what is new.</li>
+        <li>Optionally sends Telegram and builds HTML / PDF / CSV / JSON reports.</li>
+      </ol>
 
-      <h3>Telegram alerts</h3>
-      <p>You only ever set <b>your own</b> username (like jackjohns) or numeric
-      id. The bot key itself is provisioned once by the installer in the .env
-      file. Each website can have its own receiver or be muted entirely --
-      see TARGETS. Personal usernames deliver after you open your bot in
-      Telegram and press START once; the platform learns your chat
-      automatically. Public channel handles (@teamname) work immediately.</p>
+      <h3 id="h-first">2. First run (zero to report)</h3>
+      <ol>
+        <li>SET the token (section 1).</li>
+        <li>SETTINGS: enter your Telegram username or numeric id, press <span class="ui">SAVE SETTINGS</span>, then <span class="ui">SEND TEST NOTIFICATION</span>. If you use a personal username, open the bot in Telegram and press Start once first.</li>
+        <li>TARGETS: type the domain on the left (for example <span class="ui">example.com</span>), <span class="ui">ADD / LOAD</span>, then <span class="ui">SAVE PROFILE</span>.</li>
+        <li>TOOLS: leave ENABLED the scanners you want. The change applies on the next check. Same binary can appear on more than one row -- use SWITCH to see which control you are toggling.</li>
+        <li>WORDLISTS: tick lists per step and press <span class="ui">SAVE SELECTION</span>. For a short test keep the smoke list. Million-line lists take much longer.</li>
+        <li>SCAN: add the domain (ADD TARGET) or type it and press <span class="ui">START SCAN</span>. Expand the site on the same page to watch its log. Keep <span class="ui">Authorize this target</span> ticked so missing names are added to scope.</li>
+        <li>Expand a site on SCAN and watch that site's live log until the run finishes.</li>
+        <li>RESULTS: pick the site, press <span class="ui">LOAD RESULTS</span>.</li>
+        <li>REPORTS: pick the site, press <span class="ui">GENERATE NOW</span>, then OPEN next to <span class="ui">report.html</span> or the PDF.</li>
+      </ol>
 
-      <h3>Checking several websites at once</h3>
-      <p>FLEET runs a group of your registered targets in parallel, each in its
-      own isolated workspace with its own settings.</p>
+      <h3 id="h-scan">3. SCAN -- every site, expandable</h3>
+      <p>This tab lists every registered website. Each site has its own workspace. FLEET still runs several at once.</p>
+      <ol>
+        <li>Type a domain in <span class="ui">SITE</span>.</li>
+        <li><span class="ui">ADD TARGET</span> registers it (isolated folder + profile) without starting a check.</li>
+        <li><span class="ui">Authorize this target</span> -- adds the domain to <span class="ui">scope.yaml</span> if missing.</li>
+        <li><span class="ui">START SCAN</span> registers if needed, then starts a check for that site.</li>
+        <li>In the list, press <span class="ui">EXPAND</span> on a site to see its modules, live log, assistant journal, and last runs -- other sites stay collapsed and do not mix logs.</li>
+        <li>START / RESUME / STOP on a row apply only to that site.</li>
+      </ol>
+      <h4>SCHEDULER</h4>
+      <ol>
+        <li>Set <span class="ui">interval (min)</span> -- minimum 10.</li>
+        <li>Tick <span class="ui">enabled</span>.</li>
+        <li>Press <span class="ui">SAVE</span>. The platform checks on its own and can Telegram you when something changed.</li>
+      </ol>
+      <p>Example: 720 minutes is about twice a day.</p>
+      <h4>LIVE LOG and AGENT JOURNAL</h4>
+      <p><span class="ui">LIVE LOG</span> is the diary of the site in the SITE box (and the last row you expanded), streaming live.
+      Use <span class="ui">Readable</span> for a human summary (time, step, what happened) or <span class="ui">Raw</span> for the exact file.
+      <span class="ui">AGENT JOURNAL</span> fills only if the optional assistant is on in SETTINGS. Normal use does not need it.</p>
 
-      <h3>Spreading the load (IP rotation)</h3>
-      <p>SETTINGS accepts a comma-separated PROXY POOL. Every discovery step
-      goes out through the next entry in turn, so one address never carries
-      the whole scan. Each entry is health-checked before the run starts, and
-      the run's log records which proxy each step used.</p>
+      <h3 id="h-tools">4. TOOLS -- enable or disable scanners</h3>
+      <p>The same binary can appear twice (ffuf, dnsx, naabu, httpx) because each row is a different technique. Columns:</p>
+      <ol>
+        <li><span class="ui">BINARY</span> -- original tool name. Duplicates here are expected.</li>
+        <li><span class="ui">SWITCH</span> -- unique id this ENABLED button writes (for example <span class="ui">ffuf</span> vs <span class="ui">ffuf-vhost</span>).</li>
+        <li><span class="ui">TECHNIQUE</span> -- how that row inspects the site.</li>
+        <li><span class="ui">THIS SWITCH CONTROLS</span> -- exactly what you turn on or off for the next scan.</li>
+        <li><span class="ui">BRANCH</span> -- active or passive lane.</li>
+        <li><span class="ui">ENABLED</span> -- applies on the next check, not the run already in progress. Internal echo/fallback tools stay hidden.</li>
+      </ol>
+      <p class="note">Empty table: SET the token. HTTP 401 means the token does not match <span class="ui">.env</span>.</p>
 
-      <h3>Letting it watch for you</h3>
-      <p>RUN CONTROL has a scheduler: set an interval (10 minutes minimum) and
-      the platform checks the website by itself and sends a Telegram message
-      when something changes.</p>
+      <h3 id="h-wl">5. WORDLISTS -- original filenames</h3>
+      <p>Three separate steps. Filenames stay as in SecLists (for example <span class="ui">subdomains-top1million-5000.txt</span>), not internal YAML keys.</p>
+      <ol>
+        <li><span class="ui">DNS brute (dnsx)</span> -- name guesses resolved to IPs (DNSR-1). This is the active subdomain finder.</li>
+        <li><span class="ui">HTTP length + tech (httpx)</span> -- when ENABLED, each resolved name is probed so RESULTS shows response length and technology.</li>
+        <li><span class="ui">Virtual hosts (ffuf)</span> -- Host-header virtual hosts on those IPs (FFUF-2).</li>
+      </ol>
+      <p>For each table:</p>
+      <ol>
+        <li>Tick the lists you want.</li>
+        <li>Optional: filter by filename, or <span class="ui">SELECT-ALL (visible)</span>.</li>
+        <li>Always <span class="ui">SAVE SELECTION</span> -- ticks do nothing until saved.</li>
+      </ol>
+      <p>Bigger lists find more names and take longer. Keep the short list for a smoke test.</p>
 
-      <h3>Safety rules</h3>
-      <p>Only scan websites you own or have written permission to test. The
-      platform refuses anything that is not on its allow-list -- that is there
-      to protect you.</p>
+      <h3 id="h-tgt">6. TARGETS -- per-site profile</h3>
+      <p>The platform is multi-target. Empty fields inherit SETTINGS.</p>
+      <ol>
+        <li>Type the domain on the left, press <span class="ui">ADD / LOAD</span>.</li>
+        <li>Fill the cards on the right, press <span class="ui">SAVE PROFILE</span>.</li>
+        <li>EDIT in the table loads that site. <span class="ui">DELETE PROFILE</span> removes the profile (recon data on disk is not necessarily deleted).</li>
+      </ol>
+      <h4>Fields</h4>
+      <ul>
+        <li><span class="ui">DESCRIPTION</span> -- short ASCII note.</li>
+        <li><span class="ui">TELEGRAM USERNAME OR ID</span> -- jackjohns, @jackjohns, or a number. Empty = global SETTINGS.</li>
+        <li><span class="ui">TELEGRAM NOTIFICATIONS</span> -- on, or MUTED for this site only.</li>
+        <li><span class="ui">WATCHTOWER INSTANT ALERTS</span> -- instant change alerts, or off.</li>
+        <li><span class="ui">DIGEST THRESHOLD</span> -- above this many new findings, one summary message instead of a flood.</li>
+        <li><span class="ui">PROXY POOL</span> -- proxies for this site only; empty = global pool.</li>
+        <li>Budgets -- time/depth caps. Empty = defaults.</li>
+        <li><span class="ui">MODULES</span> -- leave empty for defaults. Advanced operators only.</li>
+        <li><span class="ui">WORDLIST OVERRIDE</span> -- per-site lists, otherwise the WORDLISTS tab.</li>
+      </ul>
 
-      <p class="dim">The full manual with pictures-level detail lives in
-      docs/HELP.md in the project folder.</p>
+      <h3 id="h-fleet">7. FLEET -- several sites at once</h3>
+      <ol>
+        <li>Save each site in TARGETS first.</li>
+        <li>Members: <span class="ui">all</span> or a comma list like <span class="ui">a.com,b.net</span>.</li>
+        <li>Concurrency 1 to 8.</li>
+        <li><span class="ui">RUN FLEET</span>. One failure does not stop the others.</li>
+        <li><span class="ui">REFRESH</span> reloads status and the fleet ledger.</li>
+      </ol>
+
+      <h3 id="h-res">8. RESULTS -- read findings</h3>
+      <p>The SITE picker here does not change SCAN or FLEET.</p>
+      <ol>
+        <li>Pick the site and press <span class="ui">LOAD RESULTS</span>.</li>
+        <li>Filters: free text, source, tag, alive/dead, in/out of scope, run timestamp.</li>
+        <li><span class="ui">APPLY</span> runs the filter. <span class="ui">COPY URL</span> copies a restore link. <span class="ui">CLEAR</span> resets filters.</li>
+      </ol>
+      <h4>Asset table</h4>
+      <ul>
+        <li><span class="ui">HOST</span> -- discovered name.</li>
+        <li><span class="ui">IPS</span> -- server address.</li>
+        <li><span class="ui">OPEN PORTS</span> -- ports found open on that host (from port-check / port-sweep). Same ports are listed again under OPEN PORTS BY HOST.</li>
+        <li><span class="ui">ALIVE</span> -- answered or not.</li>
+        <li><span class="ui">SOURCES</span> -- which source found it (overlap is normal).</li>
+        <li><span class="ui">TAGS</span> -- labels such as dev.</li>
+        <li>JSON -- raw record.</li>
+        <li><span class="ui">FIRST / LAST SEEN</span> -- first and last check that recorded this name (this site only).</li>
+      </ul>
+      <p>Each site has its own warehouse file under <span class="ui">recon/&lt;site&gt;/warehouse.sqlite</span>.
+      Records from one site never mix with another. Use FROM RUN / TO RUN then
+      <span class="ui">COMPARE RUNS</span> to see what changed between any two checks,
+      not only the latest pair. Diff badges such as <span class="ui">+3 hosts</span>
+      mean three new names in that window. SOURCE COVERAGE shows how unique each source is.</p>
+
+      <h3 id="h-rep">9. REPORTS -- shareable output</h3>
+      <ol>
+        <li>Type the domain.</li>
+        <li><span class="ui">CHECK BUNDLE</span> lists files that already exist.</li>
+        <li><span class="ui">GENERATE NOW</span> builds a fresh pack: HTML, PDF, CSV, JSON, Markdown.</li>
+        <li>Press OPEN. Each file has SHA256 so you can prove it was not modified.</li>
+      </ol>
+
+      <h3 id="h-keys">10. API KEYS -- optional</h3>
+      <p>The platform works with zero keys. Some public sources go deeper with a free key. Without a key that source is skipped openly.</p>
+      <ol>
+        <li>Each row: key name, module, and behavior without the key.</li>
+        <li>Paste, press SAVE -- takes effect on the next check; the value is masked after save.</li>
+        <li>DEL removes it from <span class="ui">.env</span>.</li>
+      </ol>
+
+      <h3 id="h-set">11. SETTINGS -- global defaults</h3>
+      <p>Press <span class="ui">SAVE SETTINGS</span> after every change. Empty TARGETS fields inherit from here.</p>
+      <h4>Network</h4>
+      <ol>
+        <li><span class="ui">PROXY URL</span> -- one proxy for every check. If it is unreachable, the check refuses to start (it does not silently go direct).</li>
+        <li><span class="ui">PROXY POOL</span> -- comma-separated proxies, used in turn. Health-checked before a run; the assignment is in the run log.</li>
+      </ol>
+      <h4>Telegram</h4>
+      <ol>
+        <li>Set only your username or id. The bot token usually lives in <span class="ui">.env</span>; leave the token box empty unless you need an advanced override.</li>
+        <li>Press <span class="ui">SEND TEST NOTIFICATION</span>. If nothing arrives: Start the bot in Telegram, or check the installer token.</li>
+        <li><span class="ui">DIGEST THRESHOLD</span> -- when to collapse many findings into one message.</li>
+      </ol>
+      <h4>Alert rules</h4>
+      <p><span class="ui">+ RULE</span> adds a rule. Every diff change (new, removed, changed) for hosts, ports, vhosts, services, and passive IPs is sent to Telegram unless you disable that class. require_new_ip = for new hosts, alert only when the server IP is also new.</p>
+      <h4>Supervisor agent (optional)</h4>
+      <p>Default off. If on, it can suggest or auto-fix common failures. MAX LLM CALLS is the per-run cap. The platform is complete without it.</p>
+      <h4>Log retention and resources</h4>
+      <p>Old snapshots compress/prune so the disk is not filled; result data and reports are not deleted.
+      CPU CORES and RAM MB cap this machine. Save again after filling them.</p>
+
+      <h3>Safety</h3>
+      <ol>
+        <li>Only your assets, or written permission.</li>
+        <li>Out-of-scope domains are refused -- that protects you.</li>
+        <li>The check looks from the outside; it does not fill forms or write to the site.</li>
+      </ol>
+
+      <h3 id="h-faq">12. If something fails</h3>
+      <ul>
+        <li><span class="ui">offline</span> -- the dashboard process is not up.</li>
+        <li><span class="ui">token rejected</span> or empty tables -- SET the token from <span class="ui">.env</span> again.</li>
+        <li>Start refused -- tick Authorize, or register the site in TARGETS first.</li>
+        <li>No Telegram -- Start the bot; a public channel needs the bot as a member.</li>
+        <li>TOOLS / WORDLISTS empty after SET -- click the tab again and read any error row.</li>
+      </ul>
+      <p class="dim">Install-from-zero and engineering notes: <span class="ui">docs/HELP.md</span> in the project folder.</p>
     </div>
   </section>
 
-  <!-- a) TOOLS -->
+  <!-- a) TOOLS (engine switches) -->
+  <section id="panel-engine" class="panel hidden">
+    <h2>TOOLS <span class="help" tabindex="0" data-help="BINARY can repeat (same program, different job). SWITCH is the unique control ENABLED writes. THIS SWITCH CONTROLS explains what that row turns on or off. Applies on the NEXT check.">?</span> <span class="hint">same BINARY may appear twice -- SWITCH is the unique control you enable or disable</span></h2>
+    <p class="lede">Turn scanners on or off. The change applies on the next check, not a run already in progress.</p>
+    <div class="table-wrap data-table"><table id="tools-table"><thead>
+      <tr><th>BINARY</th><th>SWITCH</th><th>TECHNIQUE</th><th>THIS SWITCH CONTROLS</th><th>BRANCH</th><th>ENABLED</th></tr>
+    </thead><tbody><tr><td colspan="6" class="dim">open this tab after SET token -- loading...</td></tr></tbody></table></div>
+  </section>
+
+  <!-- a1) WORDLISTS -- original SecList filenames, registry keys stay in YAML -->
   <section id="panel-tools" class="panel hidden">
-    <h2>TOOLS <span class="hint">switch individual search tools on or off, and fine-tune their speed</span> <span class="help" tabindex="0" data-help="Each row is one tool the platform uses during a check. Disable what you do not need. Speed overrides apply to the NEXT check -- no restart needed.">?</span></h2>
-    <div class="table-wrap"><table id="tools-table"><thead>
-      <tr><th data-sort="name">TOOL</th><th>BRANCH</th><th>IMAGE</th><th>ENABLED</th><th>PARAM OVERRIDES (named section 5.6)</th></tr>
-    </thead><tbody></tbody></table></div>
-    <h2 class="mt">WORDLIST REGISTRY <span class="hint">choose which candidate-name lists each step uses</span> <span class="help" tabindex="0" data-help="Bigger lists find more names but take longer. Tick the lists you want per step, then press SAVE SELECTION. Your choice applies from the next check on.">?</span></h2>
-    <div id="wordlists"></div>
+    <h2>WORDLISTS <span class="help" tabindex="0" data-help="Hover a filename. Twenty random lines from that file appear on the RIGHT, away from the name. Tick lists, then SAVE SELECTION.">?</span> <span class="hint">lists keep their original filenames (subdomains-top1million-5000.txt). Internal keys are not renamed.</span></h2>
+    <div class="wordlists-layout">
+      <div id="wordlists"><p class="dim">open this tab after SET token -- loading...</p></div>
+      <aside id="wl-preview" class="wl-rail">
+        <h3>SAMPLE</h3>
+        <p class="dim" id="wl-preview-label">hover a filename -- names stay visible</p>
+        <ul id="wl-preview-body"></ul>
+      </aside>
+    </div>
   </section>
 
   <!-- a2) TARGETS (per-site settings) -->
   <section id="panel-targets" class="panel hidden">
-    <h2>TARGETS <span class="hint">every website you watch gets its own settings -- alerts, budgets, limits</span> <span class="help" tabindex="0" data-help="Type the website name, press LOAD, adjust what you need, press SAVE PROFILE. Empty fields simply inherit the global values from SETTINGS.">?</span></h2>
-    <div class="row">
-      <input id="t-name" placeholder="target (bugdasht.ir)">
-      <button id="t-load">LOAD</button>
-      <span id="t-status" class="badge">|</span>
+    <h2>TARGETS <span class="help" tabindex="0" data-help="Add a domain on the left, then edit THIS site's settings on the right. Empty fields inherit SETTINGS. FLEET runs any subset in parallel.">?</span> <span class="hint">register every website you watch -- each has its own alerts and limits</span></h2>
+    <div class="targets-layout">
+      <aside class="targets-rail">
+        <h3>SITES</h3>
+        <div class="row targets-add">
+          <input id="t-name" class="mono" placeholder="example.com" list="known-targets" autocomplete="off">
+          <button id="t-load">ADD / LOAD</button>
+        </div>
+        <span id="t-status" class="badge">pick a site</span>
+        <div class="table-wrap targets-table-wrap"><table id="targets-table"><thead>
+          <tr><th>SITE</th><th>TELEGRAM</th><th></th></tr>
+        </thead><tbody></tbody></table></div>
+      </aside>
+      <div class="targets-editor">
+        <section class="tgt-card">
+          <h3>THIS SITE</h3>
+          <div class="form-grid">
+            <label class="span-2">DESCRIPTION<input id="t-desc" maxlength="200" placeholder="short ASCII note"></label>
+          </div>
+        </section>
+        <section class="tgt-card">
+          <h3>ALERTS</h3>
+          <div class="form-grid">
+            <label><span class="lbl">TELEGRAM USERNAME OR ID <span class="help" tabindex="0" data-help="jackjohns, @jackjohns or 123456789. Empty = use SETTINGS.">?</span></span><input id="t-tg" class="mono" placeholder="inherit global"></label>
+            <label>DIGEST THRESHOLD<input id="t-digest" type="number" min="1" class="mono" placeholder="inherit"></label>
+            <label>TELEGRAM NOTIFICATIONS<select id="t-tgen"><option value="">inherit global</option><option value="true">enabled</option><option value="false">MUTED for this target</option></select></label>
+            <label>WATCHTOWER INSTANT ALERTS<select id="t-watch"><option value="">inherit global</option><option value="true">enabled</option><option value="false">disabled</option></select></label>
+          </div>
+        </section>
+        <section class="tgt-card">
+          <h3>NETWORK</h3>
+          <div class="form-grid">
+            <label class="span-2"><span class="lbl">PROXY POOL <span class="help" tabindex="0" data-help="Comma-separated proxies for THIS site only. Empty = global pool.">?</span></span><input id="t-proxy" class="mono" placeholder="inherit global"></label>
+          </div>
+        </section>
+        <section class="tgt-card">
+          <h3>BUDGETS <span class="hint">empty = defaults</span></h3>
+          <div class="form-grid">
+            <label>PASSIVE BUDGET (sec)<input id="t-b-passive" type="number" min="1" class="mono" placeholder="inherit"></label>
+            <label>ACTIVE BUDGET (sec)<input id="t-b-active" type="number" min="1" class="mono" placeholder="inherit"></label>
+            <label>PASSIVE RECURSION DEPTH<input id="t-b-depth" type="number" min="0" class="mono" placeholder="inherit"></label>
+            <label>FFUF-3 MAX DEAD PROBES<input id="t-b-dead" type="number" min="1" class="mono" placeholder="inherit"></label>
+            <label>FFUF-4 MAX PORT JOBS<input id="t-b-ffuf4" type="number" min="1" class="mono" placeholder="inherit"></label>
+          </div>
+        </section>
+        <section class="tgt-card">
+          <h3>MODULES <span class="hint">empty = defaults</span></h3>
+          <div class="form-grid">
+            <label>ACTIVE<input id="t-m-active" class="mono" placeholder="dns-resolve, ffuf, ffuf-3, port-check"></label>
+            <label>PASSIVE<input id="t-m-passive" class="mono" placeholder="passive-recon"></label>
+          </div>
+        </section>
+        <section class="tgt-card">
+          <h3>WORDLIST OVERRIDE <span class="hint">original filenames or keys, comma-separated</span></h3>
+          <div class="form-grid cols-3">
+            <label>DNSR-1 / dnsx brute<input id="t-wl-DNSR-1" class="mono" placeholder="inherit WORDLISTS tab"></label>
+            <label>FFUF-0 / optional HTTP brute<input id="t-wl-FFUF-0" class="mono" placeholder="inherit WORDLISTS tab"></label>
+            <label>FFUF-2 / virtual hosts<input id="t-wl-FFUF-2" class="mono" placeholder="inherit WORDLISTS tab"></label>
+          </div>
+        </section>
+        <div class="targets-actions">
+          <button id="t-save" class="primary">SAVE PROFILE</button>
+          <button id="t-clear" class="danger">DELETE PROFILE</button>
+          <span class="mono dim" id="t-plan"></span>
+        </div>
+      </div>
     </div>
-    <div class="grid">
-      <label>DESCRIPTION (short ASCII)<input id="t-desc" maxlength="200"></label>
-      <label>TELEGRAM USERNAME OR ID (alerts for THIS website only) <span class="help" tabindex="0" data-help="Overrides the global Telegram receiver for this website: jackjohns, @jackjohns or 123456789. Leave empty to use the global one.">?</span><input id="t-tg" class="mono" placeholder="jackjohns, @jackjohns or 123456789"></label>
-      <label>DIGEST THRESHOLD (per-target, empty = inherit)<input id="t-digest" type="number" min="1" class="mono"></label>
-      <label>TELEGRAM NOTIFICATIONS (per-system)<select id="t-tgen"><option value="">inherit global</option><option value="true">enabled</option><option value="false">MUTED for this target</option></select></label>
-      <label>WATCHTOWER INSTANT ALERTS<select id="t-watch"><option value="">inherit global</option><option value="true">enabled</option><option value="false">disabled</option></select></label>
-      <label>PROXY POOL FOR THIS TARGET (IP rotation, empty = global) <span class="help" tabindex="0" data-help="Comma-separated proxies (http://... or socks5://...). This website's checks go out through them in turn. Every entry is health-checked before the run.">?</span><input id="t-proxy" class="mono" placeholder="http://user:pass@host:port, socks5://host2:port"></label>
-    </div>
-    <h3 class="mt">BUDGETS (empty = committed defaults) <span class="help" tabindex="0" data-help="Time and size limits for this website's checks. Leave everything empty unless a website needs special treatment.">?</span></h3>
-    <div class="grid">
-      <label>PASSIVE BRANCH BUDGET (sec)<input id="t-b-passive" type="number" min="1" class="mono"></label>
-      <label>ACTIVE BRANCH BUDGET (sec)<input id="t-b-active" type="number" min="1" class="mono"></label>
-      <label>PASSIVE RECURSION DEPTH<input id="t-b-depth" type="number" min="0" class="mono"></label>
-      <label>FFUF-3 MAX DEAD PROBES<input id="t-b-dead" type="number" min="1" class="mono"></label>
-    </div>
-    <h3 class="mt">MODULES (comma-separated, empty = committed defaults)</h3>
-    <div class="grid">
-      <label>ACTIVE BRANCH MODULES<input id="t-m-active" class="mono" placeholder="ffuf, dns-resolve, ffuf-3, port-check"></label>
-      <label>PASSIVE BRANCH MODULES<input id="t-m-passive" class="mono" placeholder="passive-recon"></label>
-    </div>
-    <h3 class="mt">WORDLIST SELECTION OVERRIDE (task = comma-separated keys, empty = global selection) <span class="help" tabindex="0" data-help="Advanced: pin a specific candidate list per discovery step. FFUF-0 = active name guessing, DNSR-1 = DNS resolution, FFUF-2 = virtual-host probing.">?</span></h3>
-    <div class="grid">
-      <label>FFUF-0<input id="t-wl-FFUF-0" class="mono"></label>
-      <label>DNSR-1<input id="t-wl-DNSR-1" class="mono"></label>
-      <label>FFUF-2<input id="t-wl-FFUF-2" class="mono"></label>
-    </div>
-    <div class="row">
-      <button id="t-save">SAVE PROFILE</button>
-      <button id="t-clear" class="danger">DELETE PROFILE</button>
-      <span class="mono dim" id="t-plan"></span>
-    </div>
-    <h3 class="mt">REGISTERED TARGET PROFILES</h3>
-    <div class="table-wrap"><table id="targets-table"><thead>
-      <tr><th>TARGET</th><th>DESCRIPTION</th><th>TELEGRAM</th><th>SECTIONS</th><th></th></tr>
-    </thead><tbody></tbody></table></div>
   </section>
 
   <!-- a3) FLEET (multi-target execution) -->
   <section id="panel-fleet" class="panel hidden">
-    <h2>FLEET <span class="hint">check several websites at the same time, each in its own isolated workspace</span> <span class="help" tabindex="0" data-help="Type 'all' or a comma-separated list of registered targets, choose how many run in parallel (1-8), and press RUN FLEET. A website that fails never blocks the others.">?</span></h2>
+    <h2>FLEET <span class="help" tabindex="0" data-help="Type all or a comma-separated list of registered targets, choose how many run in parallel (1-8), and press RUN FLEET. A website that fails never blocks the others.">?</span> <span class="hint">check several websites at the same time, each in its own isolated workspace</span></h2>
+    <p class="lede">Save each site in TARGETS first. Then run all of them, or a comma list like a.com,b.net.</p>
     <div class="row">
       <input id="fl-members" placeholder="members: all or a.com,b.net" class="mono">
       <input id="fl-conc" type="number" min="1" max="8" placeholder="concurrency" class="mono w110">
@@ -155,7 +374,14 @@
 
   <!-- b) RESULTS -->
   <section id="panel-results" class="panel hidden">
-    <h2>RESULTS <span class="hint">everything discovered for the selected target -- with what-is-new badges</span> <span class="help" tabindex="0" data-help="Follows the TARGET box in the top bar. Filter, sort, and compare: badges show what appeared or disappeared since the previous check.">?</span></h2>
+    <h2>RESULTS <span class="help" tabindex="0" data-help="Choose the website whose findings you want to read. Other sites keep running independently.">?</span> <span class="hint">pick one of your sites -- this picker does not affect SCAN or FLEET</span></h2>
+    <p class="lede">Each host shows which ports are open on that name. Filter, copy a restore link, then compare any two checks of this site only.</p>
+    <div class="row">
+      <label>SITE <input id="results-target" class="mono" list="known-targets" placeholder="example.com" autocomplete="off"></label>
+      <button id="results-load">LOAD RESULTS</button>
+      <span id="wh-badge" class="badge">warehouse</span>
+    </div>
+    <p id="wh-meta" class="mono dim">each site stores history in its own warehouse -- pick a site and load</p>
     <div class="filters" id="filters">
       <input id="f-q" placeholder="free-text search">
       <input id="f-source" placeholder="source (subfinder, crtsh...)">
@@ -169,22 +395,33 @@
     </div>
     <div id="diff-badges" class="badges"></div>
     <div class="table-wrap"><table id="assets-table"><thead>
-      <tr><th data-sort="host">HOST</th><th data-sort="ips">IPS</th><th data-sort="alive">ALIVE</th><th data-sort="sources">SOURCES</th><th data-sort="tags">TAGS</th><th>JSON</th></tr>
+      <tr><th data-sort="host">HOST</th><th data-sort="ips">IPS</th><th data-sort="open_ports_text">OPEN PORTS</th><th data-sort="alive">ALIVE</th><th data-sort="length">LENGTH</th><th data-sort="tech">TECH</th><th data-sort="sources">SOURCES</th><th data-sort="tags">TAGS</th><th data-sort="first_seen">FIRST SEEN</th><th data-sort="last_seen">LAST SEEN</th><th>JSON</th></tr>
+    </thead><tbody></tbody></table></div>
+    <h2 class="mt">OPEN PORTS BY HOST <span class="hint">port scan joined to each subdomain -- empty means no open ports recorded yet</span></h2>
+    <div class="table-wrap"><table id="ports-by-host"><thead>
+      <tr><th>HOST</th><th>IP</th><th>OPEN PORTS</th></tr>
     </thead><tbody></tbody></table></div>
     <h2 class="mt">SOURCE COVERAGE ANALYTICS <span class="hint">which source found what -- and how much they overlap</span></h2>
     <div class="table-wrap"><table id="coverage-table"><thead>
       <tr><th data-sort="source">SOURCE</th><th data-sort="contribution">CONTRIBUTION</th><th data-sort="unique">UNIQUE ASSETS</th><th data-sort="uniqueness">UNIQUENESS %</th></tr>
     </thead><tbody></tbody></table></div>
     <div id="overlap" class="mono dim"></div>
-    <h2 class="mt">DIFF VIEW <span class="hint">added / removed / changed since the previous check</span></h2>
+    <h2 class="mt">DIFF VIEW <span class="hint">compare any two checks of THIS site only</span></h2>
+    <div class="row">
+      <label>FROM RUN <select id="diff-from" class="mono"></select></label>
+      <label>TO RUN <select id="diff-to" class="mono"></select></label>
+      <button id="diff-compare">COMPARE RUNS</button>
+      <button id="wh-rebuild">REBUILD WAREHOUSE</button>
+    </div>
     <pre id="diff-view" class="json-inspector collapsed"></pre>
   </section>
 
   <!-- b2) REPORTS -->
   <section id="panel-reports" class="panel hidden">
-    <h2>REPORTS <span class="hint">one-click, tamper-checked reports: web page, PDF, CSV, JSON</span> <span class="help" tabindex="0" data-help="CHECK BUNDLE shows what already exists; GENERATE NOW builds a fresh report from the latest data. Every file carries a checksum so you can prove it was not modified.">?</span></h2>
+    <h2>REPORTS <span class="help" tabindex="0" data-help="CHECK BUNDLE shows what already exists; GENERATE NOW builds a fresh report from the latest data. Every file carries a checksum so you can prove it was not modified.">?</span> <span class="hint">one-click, tamper-checked reports: web page, PDF, CSV, JSON</span></h2>
+    <p class="lede">Build a shareable pack. OPEN each file; SHA256 proves it was not modified after generate.</p>
     <div class="row">
-      <input id="rep-target" placeholder="target (example.com)">
+      <input id="rep-target" class="mono" list="known-targets" placeholder="example.com" autocomplete="off">
       <button id="rep-check">CHECK BUNDLE</button>
       <button id="rep-generate">GENERATE NOW</button>
       <span id="rep-status" class="badge">|</span>
@@ -195,33 +432,68 @@
     <pre id="rep-manifest" class="json-inspector collapsed" title="report_manifest.json"></pre>
   </section>
 
-  <!-- c) RUN CONTROL -->
-  <section id="panel-run" class="panel hidden">
-    <h2>RUN CONTROL <span class="hint">start, resume or stop a check -- and watch it live</span> <span class="help" tabindex="0" data-help="Type the website name and press START. The first check takes minutes to about an hour depending on the site. RESUME continues an interrupted check.">?</span></h2>
-    <div class="row">
-      <input id="run-target" placeholder="target (example.com)">
-      <button id="run-start">START</button>
-      <button id="run-resume">RESUME</button>
-      <button id="run-stop" class="danger">STOP</button>
-      <span id="run-status" class="badge">|</span>
+  <!-- c) RUN CONTROL -- multi-target board -->
+  <section id="panel-run" class="panel">
+    <h2>SCAN <span class="help" tabindex="0" data-help="Add every website you watch. Each row is one isolated target. EXPAND that row to see its log, modules, and last runs.">?</span> <span class="hint">add and manage every site here -- expand one row to watch its log</span></h2>
+    <div class="howto">
+      <ol>
+        <li>Set DASHBOARD_TOKEN (top right) if the badge is not ready.</li>
+        <li>Type a domain, optionally ADD TARGET, then START SCAN. Authorize adds it to the allow-list.</li>
+        <li>Expand a site in the list to see that site's log. Other sites keep their own data.</li>
+      </ol>
     </div>
-    <div class="row mono dim" id="run-modules"></div>
-    <h2 class="mt">SCHEDULER <span class="hint">automatic checks on a schedule -- minimum every 10 minutes</span> <span class="help" tabindex="0" data-help="Set an interval and tick enabled: the platform checks the website by itself and sends a Telegram message when something changed.">?</span></h2>
-    <div class="row">
-      <label>interval (min) <input id="sched-interval" type="number" min="10" class="mono"></label>
-      <label>enabled <input id="sched-enabled" type="checkbox"></label>
-      <button id="sched-save">SAVE</button>
-      <span class="mono dim" id="sched-last"></span>
+    <div class="deck">
+      <div class="deck-card">
+        <h3>ADD OR START A SITE</h3>
+        <div class="row">
+          <label>SITE <input id="run-target" class="mono" list="known-targets" placeholder="example.com" autocomplete="off"></label>
+          <label class="check"><input id="run-authorize" type="checkbox" checked> Authorize this target (adds it to scope.yaml if missing)</label>
+        </div>
+        <div class="row">
+          <button id="scan-add">ADD TARGET</button>
+          <button id="run-start" class="primary">START SCAN</button>
+          <button id="run-resume">RESUME</button>
+          <button id="run-stop" class="danger">STOP</button>
+          <span id="run-status" class="badge"></span>
+        </div>
+        <div class="row" id="run-modules"></div>
+      </div>
+      <div class="deck-card">
+        <h3>SCHEDULER <span class="help" tabindex="0" data-help="Set an interval and tick enabled: the platform checks websites by itself and sends a Telegram message when something changed.">?</span></h3>
+        <p class="hint">automatic checks -- minimum every 10 minutes</p>
+        <div class="row">
+          <label>interval (min) <input id="sched-interval" type="number" min="10" class="mono"></label>
+          <label>enabled <input id="sched-enabled" type="checkbox"></label>
+          <button id="sched-save">SAVE</button>
+        </div>
+        <span class="mono dim" id="sched-last"></span>
+      </div>
     </div>
-    <h2 class="mt">LIVE LOG <span class="hint">the check's diary, streaming live</span></h2>
-    <pre id="live-log" class="json-inspector"></pre>
+    <h2 class="mt">YOUR SITES <span class="hint">expand a row -- logs and modules stay on that site only</span></h2>
+    <div id="scan-board" class="scan-board"><p class="dim">set the token, then sites you add appear here</p></div>
+    <h2 class="mt">LIVE LOG <span class="hint">Readable for humans, or Raw for the exact file</span></h2>
+    <div class="term" id="live-term">
+      <div class="term-bar">
+        <i></i><i></i><i></i>
+        <span class="term-title">live output</span>
+        <span class="log-mode" role="group" aria-label="Log view">
+          <button type="button" id="log-mode-pretty" class="log-mode-btn active">Readable</button>
+          <button type="button" id="log-mode-raw" class="log-mode-btn">Raw</button>
+        </span>
+      </div>
+      <div id="live-log-pretty" class="log-pretty" aria-live="polite"></div>
+      <pre id="live-log" class="json-inspector hidden"></pre>
+    </div>
     <h2 class="mt">AGENT JOURNAL <span class="hint">record of the optional assistant's automatic fixes</span></h2>
-    <pre id="agent-journal" class="json-inspector"></pre>
+    <div class="term">
+      <div class="term-bar"><i></i><i></i><i></i> assistant</div>
+      <pre id="agent-journal" class="json-inspector"></pre>
+    </div>
   </section>
 
   <!-- d) API KEYS -->
   <section id="panel-keys" class="panel hidden">
-    <h2>API KEYS <span class="hint">optional keys for extra information sources -- the platform works without them</span> <span class="help" tabindex="0" data-help="Each row explains what the platform does WITHOUT the key: it degrades honestly and says so in the results. Paste a key, press SET -- it takes effect on the next check and is masked after saving.">?</span></h2>
+    <h2>API KEYS <span class="help" tabindex="0" data-help="Each row explains what the platform does WITHOUT the key: it degrades honestly and says so in the results. Paste a key, press SET -- it takes effect on the next check and is masked after saving.">?</span> <span class="hint">optional keys for extra information sources -- the platform works without them</span></h2>
     <div class="table-wrap"><table id="keys-table"><thead>
       <tr><th>KEY</th><th>MODULE</th><th>WITHOUT KEY</th><th>STATE</th><th>SET VALUE</th><th></th></tr>
     </thead><tbody></tbody></table></div>
@@ -230,28 +502,38 @@
   <!-- e) SETTINGS -->
   <section id="panel-settings" class="panel hidden">
     <h2>SETTINGS <span class="hint">where alerts go, how checks go out, and how much resource the platform may use</span></h2>
+    <div class="settings-stack">
+    <div class="set-card">
+    <h3>NETWORK AND TELEGRAM</h3>
     <div class="grid">
-      <label>PROXY URL (single, http/socks5) <span class="help" tabindex="0" data-help="Route every check through one proxy. If it is unreachable, a check refuses to start instead of silently going direct. Leave empty for a direct connection.">?</span><input id="s-proxy" class="mono" placeholder="http://user:pass@host:port"></label>
-      <label>PROXY POOL (IP rotation, comma-separated) <span class="help" tabindex="0" data-help="The smarter option: list several proxies and every discovery step goes out through the NEXT one in turn, so no single address carries the whole scan. Entries are health-checked before the run; a per-step report lands in the run's logs/proxy-rotation.json.">?</span><input id="s-proxy-pool" class="mono" placeholder="http://user:pass@host:port, socks5://host2:1080"></label>
-      <label>TELEGRAM USERNAME OR ID (where alerts arrive) <span class="help" tabindex="0" data-help="Just your own handle: jackjohns, @jackjohns or 123456789. Personal usernames deliver after you press START on your bot once; public channel handles (@teamname) work immediately.">?</span><input id="s-tg-chat" class="mono" placeholder="jackjohns, @jackjohns or 123456789"></label>
-      <label>TELEGRAM BOT TOKEN (installer provisioning -- normally leave empty) <span class="help" tabindex="0" data-help="The key that lets the platform talk to Telegram. The installer pastes it once into the .env file. Backup tokens go into .env separated by commas: if one stops working, the platform switches to the next one AUTOMATICALLY.">?</span><input id="s-tg-token" type="password" placeholder="advanced: override .env"></label>
-      <label>DIGEST THRESHOLD <span class="help" tabindex="0" data-help="When a single check finds more new things than this number, they are grouped into one summary message instead of one message each.">?</span><input id="s-digest" type="number" min="1" class="mono"></label>
+      <label><span class="lbl">PROXY URL (single, http/socks5) <span class="help" tabindex="0" data-help="Route every check through one proxy. If it is unreachable, a check refuses to start instead of silently going direct. Leave empty for a direct connection.">?</span></span><input id="s-proxy" class="mono" placeholder="http://user:pass@host:port"></label>
+      <label><span class="lbl">PROXY POOL (IP rotation, comma-separated) <span class="help" tabindex="0" data-help="The smarter option: list several proxies and every discovery step goes out through the NEXT one in turn, so no single address carries the whole scan. Entries are health-checked before the run; a per-step report lands in the run's logs/proxy-rotation.json.">?</span></span><input id="s-proxy-pool" class="mono" placeholder="http://user:pass@host:port, socks5://host2:1080"></label>
+      <label><span class="lbl">TELEGRAM USERNAME OR ID (where alerts arrive) <span class="help" tabindex="0" data-help="Just your own handle: jackjohns, @jackjohns or 123456789. Personal usernames deliver after you press START on your bot once; public channel handles (@teamname) work immediately.">?</span></span><input id="s-tg-chat" class="mono" placeholder="jackjohns, @jackjohns or 123456789"></label>
+      <label><span class="lbl">TELEGRAM BOT TOKEN (installer provisioning -- normally leave empty) <span class="help" tabindex="0" data-help="The key that lets the platform talk to Telegram. The installer pastes it once into the .env file. Backup tokens go into .env separated by commas: if one stops working, the platform switches to the next one AUTOMATICALLY.">?</span></span><input id="s-tg-token" type="password" placeholder="advanced: override .env"></label>
+      <label><span class="lbl">DIGEST THRESHOLD <span class="help" tabindex="0" data-help="When a single check finds more new things than this number, they are grouped into one summary message instead of one message each.">?</span></span><input id="s-digest" type="number" min="1" class="mono"></label>
     </div>
     <div class="row">
       <button id="s-test">SEND TEST NOTIFICATION</button>
       <span id="s-test-result" class="badge">|</span>
     </div>
     <div id="s-test-hint" class="hint-line"></div>
-    <h3 class="mt">ALERT FILTER RULES <span class="help" tabindex="0" data-help="Decide which discoveries are worth a Telegram message: hosts (new website names) and/or ports (newly opened doors). require_new_ip = only alert when the address also resolves to a NEW server.">?</span></h3>
+    </div>
+    <div class="set-card">
+    <h3>ALERT FILTER RULES <span class="help" tabindex="0" data-help="Decide which discoveries are worth a Telegram message: hosts (new website names) and/or ports (newly opened doors). require_new_ip = only alert when the address also resolves to a NEW server.">?</span></h3>
     <div id="rules-editor"></div>
-    <h3 class="mt">SUPERVISOR AGENT (optional automatic assistant)</h3>
+    <div class="row"><button id="s-add-rule">+ RULE</button></div>
+    </div>
+    <div class="set-card">
+    <h3>SUPERVISOR AGENT (optional automatic assistant)</h3>
     <div class="grid">
-      <label>AGENT ENABLED <span class="help" tabindex="0" data-help="An optional assistant that watches checks and can automatically retry or fix common failures. The platform runs perfectly well without it (default: off).">?</span><select id="s-agent-enabled"><option value="false">off</option><option value="true">on</option></select></label>
+      <label><span class="lbl">AGENT ENABLED <span class="help" tabindex="0" data-help="An optional assistant that watches checks and can automatically retry or fix common failures. The platform runs perfectly well without it (default: off).">?</span></span><select id="s-agent-enabled"><option value="false">off</option><option value="true">on</option></select></label>
       <label>PASSIVE BRANCH AUTONOMY<select id="s-agent-passive" class="mono"><option>observe</option><option>suggest</option><option selected>auto-fix</option></select></label>
       <label>ACTIVE BRANCH AUTONOMY<select id="s-agent-active" class="mono"><option>observe</option><option selected>suggest</option><option>auto-fix</option></select></label>
       <label>MAX LLM CALLS / RUN<input id="s-agent-budget" type="number" min="0" class="mono"></label>
     </div>
-    <h3 class="mt">STORAGE / LOG RETENTION <span class="help" tabindex="0" data-help="Old logs are compressed and the oldest snapshots pruned automatically -- the platform never fills your disk. Your result data and reports are never touched.">?</span></h3>
+    </div>
+    <div class="set-card">
+    <h3>STORAGE / LOG RETENTION <span class="help" tabindex="0" data-help="Old logs are compressed and the oldest snapshots pruned automatically -- the platform never fills your disk. Your result data and reports are never touched.">?</span></h3>
     <div class="grid">
       <label>KEEP LAST N RUN SNAPSHOTS<input id="s-ret-runs" type="number" min="1" class="mono"></label>
       <label>RUN LOG ROTATION CAP (MB)<input id="s-ret-log" type="number" min="1" class="mono"></label>
@@ -260,19 +542,21 @@
       <label>TOTAL SIZE CAP PER TARGET (MB)<input id="s-ret-total" type="number" min="1" class="mono"></label>
     </div>
     <div class="row">
-      <button id="s-add-rule">+ RULE</button>
-      <button id="s-save">SAVE SETTINGS</button>
+      <button id="s-save" class="primary">SAVE SETTINGS</button>
       <span id="s-msg" class="mono dim"></span>
     </div>
-    <h3 class="mt">RESOURCE BUDGET <span class="help" tabindex="0" data-help="The maximum CPU cores and RAM the platform may use, so it never starves everything else on this machine.">?</span></h3>
+    <h3>RESOURCE BUDGET <span class="help" tabindex="0" data-help="The maximum CPU cores and RAM the platform may use, so it never starves everything else on this machine.">?</span></h3>
     <div class="grid">
       <label>CPU CORES<input id="s-cpu" type="number" min="1" class="mono"></label>
       <label>RAM MB<input id="s-ram" type="number" min="256" class="mono"></label>
     </div>
+    </div>
+    </div>
   </section>
 </main>
+<p class="page-foot">Attack Vector Detection Platform -- only scan assets you own or have written permission to test.</p>
 
 <div id="toast" class="toast hidden"></div>
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=ux20"></script>
 </body>
 </html>

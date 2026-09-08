@@ -73,7 +73,7 @@ class TestRunSummary(unittest.TestCase):
 
 
 class TestInstantAlerts(unittest.TestCase):
-    """section 4.6 watchtower: NEW SUBDOMAIN + NEWLY OPENED PORT instant alerts."""
+    """Watchtower: every diff class and every side (added/removed/changed) is Telegram-visible."""
 
     def test_new_subdomain_instant(self):
         sink: list[str] = []
@@ -92,21 +92,60 @@ class TestInstantAlerts(unittest.TestCase):
         self.assertEqual(ledger["instant_sent"], 1)
 
     def test_closed_port_only_diff_is_silent(self):
-        """Acceptance: a closed-port-only diff -> NO Telegram alert (dashboard view only)."""
+        """Renamed law: closed-port-only diffs MUST Telegram-alert (operator: nothing missed)."""
         sink: list[str] = []
         doc = _diff_doc({}, removed={"ports": [{"host": "a", "ip": "1.1.1.1", "port": 80, "proto": "tcp"}]})
         ledger = evaluate_diff_alerts(_params(), doc, sender=sink.append)
-        self.assertEqual(sink, [])
-        self.assertEqual(ledger["alertable"], 0)
-        self.assertEqual(ledger["skipped_reason"], "no_added_assets")
+        self.assertEqual(len(sink), 1)
+        self.assertIn("CLOSED PORT: a:80/tcp", sink[0])
+        self.assertEqual(ledger["alertable"], 1)
+        self.assertEqual(ledger["instant_sent"], 1)
 
     def test_services_class_never_alerts(self):
+        """Historical name kept for CI markers; services now alert like every other class."""
         sink: list[str] = []
         doc = _diff_doc({"services": [{"ip": "1.1.1.1", "port": 22, "proto": "tcp", "service": "ssh"}]})
         ledger = evaluate_diff_alerts(_params(), doc, sender=sink.append)
+        self.assertEqual(len(sink), 1)
+        self.assertIn("NEW SERVICE: 1.1.1.1:22/tcp ssh", sink[0])
+        self.assertEqual(ledger["alertable"], 1)
+        self.assertEqual(ledger["non_alert_class_assets"], 0)
+
+    def test_vhost_and_passive_ip_alert(self):
+        sink: list[str] = []
+        doc = _diff_doc({
+            "vhosts": [{"vhost": "www.example.com", "base_host": "example.com"}],
+            "passive_ips": [{"ip": "9.9.9.9"}],
+        })
+        ledger = evaluate_diff_alerts(_params(), doc, sender=sink.append)
+        self.assertEqual(ledger["instant_sent"], 2)
+        joined = "\n".join(sink)
+        self.assertIn("NEW VHOST: www.example.com", joined)
+        self.assertIn("NEW PASSIVE IP: 9.9.9.9", joined)
+
+    def test_changed_host_includes_field_hint(self):
+        sink: list[str] = []
+        doc = _diff_doc(
+            {},
+            changed={"hosts": [{
+                "before": {"host": "api.example.com", "ip": "1.1.1.1", "tech": ["nginx"]},
+                "after": {"host": "api.example.com", "ip": "2.2.2.2", "tech": ["nginx", "php"]},
+            }]},
+        )
+        ledger = evaluate_diff_alerts(_params(), doc, sender=sink.append)
+        self.assertEqual(ledger["instant_sent"], 1)
+        self.assertIn("CHANGED HOST: api.example.com", sink[0])
+        self.assertIn("ip=", sink[0])
+        self.assertIn("tech=", sink[0])
+
+    def test_first_run_baseline_is_not_a_change(self):
+        sink: list[str] = []
+        doc = _diff_doc({"hosts": [{"host": "a.example.com"}]})
+        doc["from_run"] = None
+        doc["baseline"] = "none"
+        ledger = evaluate_diff_alerts(_params(), doc, sender=sink.append)
         self.assertEqual(sink, [])
-        self.assertEqual(ledger["alertable"], 0)
-        self.assertEqual(ledger["non_alert_class_assets"], 1, "services stay dashboard-only by design")
+        self.assertEqual(ledger["skipped_reason"], "first_run_baseline")
 
 
 class TestDigest(unittest.TestCase):
@@ -120,7 +159,7 @@ class TestDigest(unittest.TestCase):
         doc = _diff_doc(self._flood(12))
         ledger = evaluate_diff_alerts(_params(), doc, sender=sink.append)
         self.assertEqual(len(sink), 1, "flood must collapse to ONE digest message")
-        self.assertIn("DIGEST: 12 new findings (threshold=10)", sink[0])
+        self.assertIn("DIGEST: 12 findings (threshold=10)", sink[0])
         self.assertTrue(ledger["digest_sent"])
         self.assertEqual(ledger["instant_sent"], 0)
 
@@ -134,9 +173,12 @@ class TestDigest(unittest.TestCase):
     def test_digest_listing_cap(self):
         sink: list[str] = []
         doc = _diff_doc(self._flood(25))
-        evaluate_diff_alerts(_params(), doc, sender=sink.append)
-        self.assertEqual(len(sink), 1)
-        self.assertIn("... and 5 more", sink[0])
+        ledger = evaluate_diff_alerts(_params(), doc, sender=sink.append)
+        self.assertEqual(len(sink), 2, "overflow splits into continuation messages; no row dropped")
+        listed = sum(1 for msg in sink for line in msg.splitlines() if line.startswith("NEW SUBDOMAIN:"))
+        self.assertEqual(listed, 25)
+        self.assertIn("(cont.)", sink[1])
+        self.assertEqual(ledger["digest_messages"], 2)
 
     def test_threshold_dashboard_override(self):
         sink: list[str] = []
@@ -171,6 +213,8 @@ class TestAlertFilters(unittest.TestCase):
     def test_default_rules_alert_both_classes(self):
         self.assertTrue(alert_worthy(DEFAULT_ALERT_RULES, "hosts", {"host": "x"}, {"ips": set()}))
         self.assertTrue(alert_worthy(DEFAULT_ALERT_RULES, "ports", {"port": 1}, {"ips": set()}))
+        self.assertTrue(alert_worthy(DEFAULT_ALERT_RULES, "services", {"port": 22}, {"ips": set()}))
+        self.assertTrue(alert_worthy([], "vhosts", {"vhost": "x"}, {"ips": set()}))
 
     def test_require_new_ip_known_ip_not_alerted(self):
         """section 4.7 example: new subdomain resolving to a NEW IP only."""
@@ -191,8 +235,10 @@ class TestAlertFilters(unittest.TestCase):
         params.settings["dashboard_config_relpath"] = str(cfg)
         sink: list[str] = []
         ledger = evaluate_diff_alerts(params, doc, sender=sink.append)
-        self.assertEqual(sink, [], "host on a previously-seen IP must not alert under require_new_ip")
+        self.assertFalse(any("NEW SUBDOMAIN" in t for t in sink), "host on a previously-seen IP must not alert under require_new_ip")
         self.assertEqual(ledger["suppressed_by_rules"], 1)
+        self.assertTrue(any("REMOVED SUBDOMAIN" in t for t in sink))
+        self.assertTrue(any("CHANGED HOST" in t for t in sink))
 
 
 class TestCredentials(unittest.TestCase):

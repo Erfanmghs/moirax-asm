@@ -10,7 +10,8 @@ from typing import Any
 from pipeline.jsonio import read_json, write_json
 from pipeline.params import Params
 
-_CLASSES = ("hosts", "vhosts", "ports", "services", "passive_ips")
+FACT_CLASSES = ("hosts", "vhosts", "ports", "services", "passive_ips")
+_CLASSES = FACT_CLASSES
 
 
 def utc_stamp() -> str:
@@ -62,22 +63,39 @@ def previous_timestamp(params: Params, target_dir: Path, current: str) -> str | 
 def write_diff(params: Params, target_dir: Path, from_ts: str | None, to_ts: str) -> Path:
     hist = target_dir / str(params.require("history_dirname"))
     # First run / empty baseline: compare against empty MAPS (not list buckets).
-    older = _extract_classes(params, hist / from_ts) if from_ts else _empty_maps()
-    newer = _extract_classes(params, hist / to_ts)
+    older = extract_classes(params, hist / from_ts) if from_ts else empty_maps()
+    newer = extract_classes(params, hist / to_ts)
+    payload = diff_maps(older, newer, int(params.require("schema_version")), from_ts, to_ts)
+    dest = target_dir / str(params.require("diff_filename"))
+    write_json(dest, payload)
+    if to_ts:
+        hist_dest = hist / to_ts / str(params.require("diff_filename"))
+        write_json(hist_dest, payload)
+    return dest
+
+
+def diff_maps(
+    older: dict[str, dict[str, Any]],
+    newer: dict[str, dict[str, Any]],
+    schema_version: int,
+    from_ts: str | None,
+    to_ts: str | None,
+) -> dict[str, Any]:
+    """Compare two class-maps. Shared by JSON diff.json and the per-target warehouse."""
     payload: dict[str, Any] = {
-        "schema_version": int(params.require("schema_version")),
+        "schema_version": schema_version,
         "from_run": from_ts,
         "to_run": to_ts,
-        "added": _empty_classes(),
-        "removed": _empty_classes(),
-        "changed": _empty_classes(),
+        "added": empty_classes(),
+        "removed": empty_classes(),
+        "changed": empty_classes(),
     }
     if from_ts is None:
         payload["baseline"] = "none"
         payload["run_timestamp"] = to_ts
-    for cls in _CLASSES:
-        old_map = older[cls]
-        new_map = newer[cls]
+    for cls in FACT_CLASSES:
+        old_map = older.get(cls) or {}
+        new_map = newer.get(cls) or {}
         for key, val in new_map.items():
             if key not in old_map:
                 payload["added"][cls].append(val)
@@ -86,12 +104,7 @@ def write_diff(params: Params, target_dir: Path, from_ts: str | None, to_ts: str
         for key, val in old_map.items():
             if key not in new_map:
                 payload["removed"][cls].append(val)
-    dest = target_dir / str(params.require("diff_filename"))
-    write_json(dest, payload)
-    if to_ts:
-        hist_dest = hist / to_ts / str(params.require("diff_filename"))
-        write_json(hist_dest, payload)
-    return dest
+    return payload
 
 
 def _under_history(path: Path, target_dir: Path, params: Params) -> bool:
@@ -103,16 +116,20 @@ def _under_history(path: Path, target_dir: Path, params: Params) -> bool:
         return False
 
 
-def _empty_classes() -> dict[str, list[Any]]:
-    return {name: [] for name in _CLASSES}
+def empty_classes() -> dict[str, list[Any]]:
+    return {name: [] for name in FACT_CLASSES}
 
 
-def _empty_maps() -> dict[str, dict[str, Any]]:
+def empty_maps() -> dict[str, dict[str, Any]]:
     """Empty per-class key->asset maps used as the first-run baseline (section 6.6)."""
-    return {name: {} for name in _CLASSES}
+    return {name: {} for name in FACT_CLASSES}
 
 
-def _extract_classes(params: Params, snap: Path) -> dict[str, dict[str, Any]]:
+_empty_classes = empty_classes
+_empty_maps = empty_maps
+
+
+def extract_classes(params: Params, snap: Path) -> dict[str, dict[str, Any]]:
     buckets = {name: {} for name in _CLASSES}
     if not snap.is_dir():
         return buckets
@@ -133,7 +150,7 @@ def _extract_classes(params: Params, snap: Path) -> dict[str, dict[str, Any]]:
             continue
         for row in doc.get("vhosts") or []:
             if isinstance(row, dict) and row.get("vhost"):
-                key = f"{row.get('base_host','')}|{row['vhost']}"
+                key = f"{row.get('base_host','')}|{row['vhost']}|{row.get('ip','')}|{row.get('port','')}|{row.get('scheme','')}"
                 buckets["vhosts"][key] = row
         for row in doc.get("results") or []:
             if not isinstance(row, dict):
@@ -160,3 +177,6 @@ def _extract_classes(params: Params, snap: Path) -> dict[str, dict[str, Any]]:
             if isinstance(row, dict) and row.get("ip"):
                 buckets["passive_ips"][str(row["ip"])] = row
     return buckets
+
+
+_extract_classes = extract_classes

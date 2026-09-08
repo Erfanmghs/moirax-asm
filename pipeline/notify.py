@@ -23,6 +23,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
+from pipeline.history import FACT_CLASSES
 from pipeline.jsonio import read_json
 from pipeline.params import Params
 
@@ -164,6 +165,10 @@ def _persist_receiver_map(params: Params, merged: dict[str, str]) -> None:
         tmp = path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(doc, indent=2), encoding="utf-8")
         tmp.replace(path)
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
     except OSError:
         pass
 
@@ -348,19 +353,37 @@ def send_test_notification(params: Params, target: str | None = None,
             hint = "Telegram is rate-limiting this bot. Wait a moment and press SEND TEST again."
     return {"sent": ok, "reason": detail, "hint": hint, "source": source}
 
-# section 4.6 instant-alert classes: NEW SUBDOMAIN (hosts) + NEWLY OPENED PORT (ports).
-# Every other diff class (services / tech / removed / closed ports) -> dashboard
-# diff view only, never Telegram (section 4.6, section 8 PORT-SWEEP watchtower wiring).
-ALERT_CLASSES = ("hosts", "ports")
+# Operator law: every diff.json change (added / removed / changed) on every
+# fact class is Telegram-visible. Dashboard alert_rules may DISABLE a class;
+# a class with no matching rule is still alerted so nothing is silently dropped.
+# First-run baseline (no previous snapshot) is not a change -- run summary only.
+ALERT_CLASSES = FACT_CLASSES
+DIFF_SIDES = ("added", "removed", "changed")
 
-# Default section 4.7 alert-filter rules when the dashboard has not configured any:
-# both section 4.6 classes are alert-worthy, no extra condition.
 DEFAULT_ALERT_RULES: list[dict[str, Any]] = [
-    {"class": "hosts", "enabled": True, "require_new_ip": False},
-    {"class": "ports", "enabled": True, "require_new_ip": False},
+    {"class": cls, "enabled": True, "require_new_ip": False} for cls in FACT_CLASSES
 ]
 
 DIGEST_LIST_CAP = 20
+TELEGRAM_TEXT_CAP = 3900
+
+_EVENT_LABELS: dict[tuple[str, str], str] = {
+    ("added", "hosts"): "NEW SUBDOMAIN",
+    ("removed", "hosts"): "REMOVED SUBDOMAIN",
+    ("changed", "hosts"): "CHANGED HOST",
+    ("added", "ports"): "NEW PORT",
+    ("removed", "ports"): "CLOSED PORT",
+    ("changed", "ports"): "CHANGED PORT",
+    ("added", "vhosts"): "NEW VHOST",
+    ("removed", "vhosts"): "REMOVED VHOST",
+    ("changed", "vhosts"): "CHANGED VHOST",
+    ("added", "services"): "NEW SERVICE",
+    ("removed", "services"): "REMOVED SERVICE",
+    ("changed", "services"): "CHANGED SERVICE",
+    ("added", "passive_ips"): "NEW PASSIVE IP",
+    ("removed", "passive_ips"): "REMOVED PASSIVE IP",
+    ("changed", "passive_ips"): "CHANGED PASSIVE IP",
+}
 
 
 def load_dotenv(root: Path, filename: str) -> None:
@@ -467,29 +490,31 @@ def alert_worthy(
     cls: str,
     asset: dict[str, Any],
     prev_index: dict[str, set[str]],
+    side: str = "added",
 ) -> bool:
-    """section 4.7 alert-filter rules -- decide whether one new asset is alert-worthy.
+    """section 4.7 alert-filter rules -- decide whether one diff row is alert-worthy.
 
     Rule schema (dashboard-editable, section 9.2-e):
-      {"class": "hosts"|"ports", "enabled": bool, "require_new_ip": bool}
-    require_new_ip: host must resolve to an IP never seen in the previous run
-    (the "new subdomain resolving to a NEW IP" example in section 4.7).
+      {"class": <fact class>, "enabled": bool, "require_new_ip": bool}
+    require_new_ip: added host must resolve to an IP never seen in the previous run.
+    A class with no matching rule still alerts (nothing silently dropped).
     """
+    body = _row_body(asset, side)
     for rule in rules:
         if not isinstance(rule, dict) or str(rule.get("class")) != cls:
             continue
         if not rule.get("enabled", True):
             return False
-        if rule.get("require_new_ip"):
+        if rule.get("require_new_ip") and side == "added" and cls == "hosts":
             seen = prev_index.get("ips", set())
             candidates: list[str] = []
-            if asset.get("ip"):
-                candidates.append(str(asset["ip"]))
-            for ip in asset.get("ips") or []:
+            if body.get("ip"):
+                candidates.append(str(body["ip"]))
+            for ip in body.get("ips") or []:
                 candidates.append(str(ip))
             return any(ip in seen for ip in candidates) is False and bool(candidates)
         return True
-    return False
+    return True
 
 
 def _prev_index_from_diff(diff_doc: dict[str, Any]) -> dict[str, set[str]]:
@@ -517,19 +542,48 @@ def _prev_index_from_diff(diff_doc: dict[str, Any]) -> dict[str, set[str]]:
     return {"ips": seen}
 
 
+def _row_body(asset: dict[str, Any], side: str) -> dict[str, Any]:
+    if side == "changed":
+        after = asset.get("after")
+        if isinstance(after, dict):
+            return after
+    return asset
+
+
+def _event_label(side: str, cls: str) -> str:
+    return _EVENT_LABELS.get((side, cls), f"{side.upper()} {cls.upper()}")
+
+
+def _iter_diff_rows(diff_doc: dict[str, Any]):
+    for side in DIFF_SIDES:
+        bucket = diff_doc.get(side) or {}
+        if not isinstance(bucket, dict):
+            continue
+        extra = [c for c in bucket if c not in FACT_CLASSES]
+        for cls in list(FACT_CLASSES) + extra:
+            for asset in bucket.get(cls) or []:
+                if isinstance(asset, dict):
+                    yield side, str(cls), asset
+
+
+def _diff_has_rows(diff_doc: dict[str, Any]) -> bool:
+    for _side, _cls, _asset in _iter_diff_rows(diff_doc):
+        return True
+    return False
+
+
 def evaluate_diff_alerts(
     params: Params,
     diff_doc: dict[str, Any],
     sender: SendFn | None = None,
     target: str | None = None,
 ) -> dict[str, Any]:
-    """section 4.6 watchtower + section 4.7 digest threshold, driven by diff.json (section 6.6).
+    """Watchtower over the full diff.json (added / removed / changed, every class).
 
-    NEW SUBDOMAIN (added hosts) and NEWLY OPENED PORT (added ports) are the
-    instant-alert classes; closed ports / removed hosts are never alerted;
-    other classes surface in the dashboard diff view only.
-    Digest: instant per asset while alert-worthy count < threshold (default 10,
-    dashboard-editable); at/above -> ONE grouped digest message.
+    Digest: instant per row while alert-worthy count < threshold (default 10);
+    at/above -> grouped digest message(s). Every alertable row is listed;
+    overflow is split across continuation messages, never dropped.
+    First-run baseline is skipped (not a change vs a previous run).
     """
     config = load_dashboard_config(params)
     notif = load_target_notifications(params, target)
@@ -548,70 +602,127 @@ def evaluate_diff_alerts(
         threshold = int(params.require("digest_threshold"))
 
     prev_index = _prev_index_from_diff(diff_doc)
-    alertable: dict[str, list[dict[str, Any]]] = {"hosts": [], "ports": []}
+    events: list[tuple[str, str, dict[str, Any]]] = []
     suppressed = 0
-    non_alert_class = 0
-    added = diff_doc.get("added") or {}
-    for cls in ALERT_CLASSES:
-        for asset in added.get(cls) or []:
-            if isinstance(asset, dict) and alert_worthy(rules, cls, asset, prev_index):
-                alertable[cls].append(asset)
-            else:
-                suppressed += 1
-    for cls, rows in added.items():
-        if cls not in ALERT_CLASSES:
-            non_alert_class += len([r for r in rows or [] if isinstance(r, dict)])
+    for side, cls, asset in _iter_diff_rows(diff_doc):
+        if alert_worthy(rules, cls, asset, prev_index, side=side):
+            events.append((side, cls, asset))
+        else:
+            suppressed += 1
 
-    total = len(alertable["hosts"]) + len(alertable["ports"])
+    total = len(events)
     ledger: dict[str, Any] = {
         "alertable": total,
         "suppressed_by_rules": suppressed,
-        "non_alert_class_assets": non_alert_class,
+        "non_alert_class_assets": 0,
         "digest_threshold": threshold,
         "digest_sent": False,
+        "digest_messages": 0,
         "instant_sent": 0,
         "delivered": False,
     }
+    if diff_doc.get("baseline") == "none" or diff_doc.get("from_run") in (None, ""):
+        ledger["skipped_reason"] = "first_run_baseline"
+        ledger["alertable"] = 0
+        return ledger
     if total == 0:
-        ledger["skipped_reason"] = "no_alertable_assets" if added else "no_added_assets"
+        ledger["skipped_reason"] = "no_alertable_assets" if _diff_has_rows(diff_doc) else "no_diff_assets"
         return ledger
     if not rules:
         ledger["skipped_reason"] = "watchtower disabled (target profile)"
         return ledger
 
     run_ts = str(diff_doc.get("to_run") or "unknown")
+    scope = f" target={target}" if target else ""
+    lines = [f"{_event_label(side, cls)}: {_asset_label(cls, asset, side)}" for side, cls, asset in events]
     if total >= threshold:
-        lines = [f"DIGEST: {total} new findings (threshold={threshold}) run={run_ts}"]
-        listed = 0
-        for cls, label in (("hosts", "NEW SUBDOMAIN"), ("ports", "NEW PORT")):
-            for asset in alertable[cls]:
-                if listed >= DIGEST_LIST_CAP:
-                    lines.append(f"... and {total - listed} more")
-                    break
-                lines.append(f"{label}: {_asset_label(cls, asset)}")
-                listed += 1
+        header = f"DIGEST: {total} findings (threshold={threshold}){scope} run={run_ts}"
+        chunks = _chunk_digest(header, lines)
         ledger["digest_sent"] = True
-        ledger["delivered"] = _deliver(params, "\n".join(lines), sender, target=target)
+        ledger["digest_messages"] = len(chunks)
+        for chunk in chunks:
+            if _deliver(params, chunk, sender, target=target):
+                ledger["delivered"] = True
         return ledger
 
-    for cls, label in (("hosts", "NEW SUBDOMAIN"), ("ports", "NEW PORT")):
-        for asset in alertable[cls]:
-            text = f"{label}: {_asset_label(cls, asset)} (run={run_ts})"
-            if _deliver(params, text, sender, target=target):
-                ledger["instant_sent"] += 1
-                ledger["delivered"] = True
+    for side, cls, asset in events:
+        text = f"{_event_label(side, cls)}: {_asset_label(cls, asset, side)}{scope} (run={run_ts})"
+        if _deliver(params, text, sender, target=target):
+            ledger["instant_sent"] += 1
+            ledger["delivered"] = True
     return ledger
 
 
-def _asset_label(cls: str, asset: dict[str, Any]) -> str:
+def _chunk_digest(header: str, lines: list[str]) -> list[str]:
+    """Split a digest so every finding is listed (Telegram size + line cap)."""
+    chunks: list[str] = []
+    prefix = header
+    current: list[str] = [prefix]
+    size = len(prefix)
+    listed_in_chunk = 0
+    for line in lines:
+        extra = 1 + len(line)
+        overflow = (
+            size + extra > TELEGRAM_TEXT_CAP
+            or listed_in_chunk >= DIGEST_LIST_CAP
+        )
+        if overflow and listed_in_chunk:
+            chunks.append("\n".join(current))
+            prefix = header + " (cont.)"
+            current = [prefix]
+            size = len(prefix)
+            listed_in_chunk = 0
+        current.append(line)
+        size += extra
+        listed_in_chunk += 1
+    if listed_in_chunk:
+        chunks.append("\n".join(current))
+    return chunks or [header]
+
+
+def _asset_label(cls: str, asset: dict[str, Any], side: str = "added") -> str:
+    if side == "changed":
+        before = asset.get("before") if isinstance(asset.get("before"), dict) else {}
+        after = asset.get("after") if isinstance(asset.get("after"), dict) else {}
+        body = after or before or asset
+        hint = _change_hint(before or {}, after or {})
+        base = _asset_label(cls, body, side="added")
+        return f"{base} ({hint})" if hint else base
     if cls == "hosts":
         parts = [str(asset.get("host") or "?")]
         if asset.get("ip"):
             parts.append(f"ip={asset['ip']}")
         elif asset.get("ips"):
             parts.append(f"ip={asset['ips'][0]}")
+        if asset.get("tech"):
+            parts.append("tech=" + ",".join(str(t) for t in asset["tech"][:6]))
         return " ".join(parts)
+    if cls == "vhosts":
+        return f"{asset.get('vhost') or '?'} base={asset.get('base_host') or '-'}"
+    if cls == "services":
+        svc = asset.get("service") or asset.get("name") or ""
+        extra = f" {svc}" if svc else ""
+        return f"{asset.get('ip') or '?'}:{asset.get('port')}/{asset.get('proto', '')}{extra}"
+    if cls == "passive_ips":
+        return str(asset.get("ip") or "?")
     return f"{asset.get('host') or asset.get('ip') or '?'}:{asset.get('port')}/{asset.get('proto', '')}"
+
+
+def _change_hint(before: dict[str, Any], after: dict[str, Any]) -> str:
+    keys = sorted(set(before) | set(after))
+    hints: list[str] = []
+    for key in keys:
+        if before.get(key) == after.get(key):
+            continue
+        hints.append(f"{key}:{_short(before.get(key))}->{_short(after.get(key))}")
+        if len(hints) >= 6:
+            break
+    return ", ".join(hints)
+
+
+def _short(val: Any) -> str:
+    text = str(val)
+    return text if len(text) <= 48 else text[:45] + "..."
 
 
 def run_end_notifications(

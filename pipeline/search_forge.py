@@ -55,9 +55,16 @@ def load_dorks_registry(params: Params) -> dict[str, Any]:
 
 def env_keys(params: Params, env_name: str) -> list[str]:
     """Read a provider key from the section 9.2-d .env file. Comma-separated values
-    are a key POOL (per-request rotation). Values are never logged."""
+    are a key POOL (per-request rotation). Values are never logged.
+
+    An empty assignment in .env (KEY=) is treated as unset so process
+    environment and unit-test overrides still win -- placeholder lines in
+    .env.example must never shadow a real key.
+    """
     import os
-    from pathlib import Path
+
+    def _split_pool(value: str) -> list[str]:
+        return [part.strip() for part in value.strip().strip('"').split(",") if part.strip()]
 
     env_file = params.root / str(params.require("env_filename"))
     if env_file.is_file():
@@ -67,10 +74,13 @@ def env_keys(params: Params, env_name: str) -> list[str]:
                 continue
             k, _, v = line.partition("=")
             if k.strip() == env_name:
-                return [part.strip() for part in v.strip().strip('"').split(",") if part.strip()]
+                parts = _split_pool(v)
+                if parts:
+                    return parts
+                break
     value = os.environ.get(env_name, "").strip()
     if value:
-        return [part.strip() for part in value.split(",") if part.strip()]
+        return _split_pool(value)
     return []
 
 

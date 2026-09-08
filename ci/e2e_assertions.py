@@ -134,6 +134,8 @@ def main() -> int:
     # --- E6 vhost lane ran ------------------------------------------------------
     ffuf3 = _read_json(TARGET_DIR / "15_vhosts" / "ffuf-3" / "data.json")
     check("E6 ffuf3-vhost-lane", isinstance(ffuf3, dict) and "schema_version" in ffuf3, "ffuf-3 data.json present + schema-stamped")
+    ffuf4 = _read_json(TARGET_DIR / "15_vhosts" / "ffuf-4" / "data.json")
+    check("E6b ffuf4-port-vhost", isinstance(ffuf4, dict) and ffuf4.get("module") == "ffuf-4", "ffuf-4 data.json present after PORT-SWEEP")
 
     # --- E7 report bundle + tamper check --------------------------------------
     from pipeline.reporting import verify_bundle

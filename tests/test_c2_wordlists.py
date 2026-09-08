@@ -271,9 +271,13 @@ class PlatformLearning(unittest.TestCase):
 
     def test_ingest_adds_labels_once(self):
         self._seed(
-            passive=[{"host": "api.example.com"}, {"host": "dev.example.com"}, {"host": "evil.org"}],
-            dnsr=[{"host": "www.example.com"}, {"host": "example.com"}],
-            ffuf=[{"fqdn": "x.dev.example.com"}],
+            passive=[
+                {"host": "api.example.com", "alive": True},
+                {"host": "dev.example.com", "alive": True},
+                {"host": "evil.org"},
+            ],
+            dnsr=[{"host": "www.example.com", "resolution_status": "resolved", "ips": ["1.1.1.1"]}, {"host": "example.com", "ips": ["1.1.1.1"], "resolution_status": "resolved"}],
+            ffuf=[{"fqdn": "x.dev.example.com", "alive": True}],
         )
         ledger = ingest_learned_labels(self.params, self.tdir, "example.com")
         self.assertEqual(ledger["added"], 4)
@@ -284,8 +288,13 @@ class PlatformLearning(unittest.TestCase):
         self.assertEqual(ledger2["added"], 0)
         self.assertEqual(ledger2["total"], 4)
 
+    def test_unvalidated_passive_is_not_learned(self):
+        self._seed(passive=[{"host": "guess.example.com", "alive": None}])
+        ledger = ingest_learned_labels(self.params, self.tdir, "example.com")
+        self.assertEqual(ledger["added"], 0)
+
     def test_scope_law_blocks_foreign(self):
-        self._seed(passive=[{"host": "other.example.com.evil.io"}])
+        self._seed(passive=[{"host": "other.example.com.evil.io", "alive": True}])
         ledger = ingest_learned_labels(self.params, self.tdir, "example.com")
         self.assertEqual(ledger["added"], 0)
 
@@ -296,6 +305,31 @@ class PlatformLearning(unittest.TestCase):
         self.assertIn("platform_learned", doc["lists"])
         reg = WordlistRegistry(self.params)
         self.assertIn("platform_learned", reg.allowed_keys("FFUF-0"))
+
+
+class SecListsRootResolution(unittest.TestCase):
+    def test_falls_back_to_container_mount_when_tilde_home_is_wrong(self):
+        from pipeline.wordlist_forge import seclists_host_root
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            missing = tmp / "no-seclists-here"
+            mounted = tmp / "usr-share-seclists"
+            mounted.mkdir()
+            root = tmp / "root"
+            root.mkdir()
+            (root / "wordlists" / "custom").mkdir(parents=True)
+            (root / "wordlists.yaml").write_text(WORDLISTS_YAML, encoding="utf-8")
+            (root / "tools.yaml").write_text(
+                "settings:\n"
+                "  wordlists_registry: wordlists.yaml\n"
+                f"  seclists_host_path: {missing}\n"
+                f"  seclists_container_path: {mounted}\n"
+                "  wordlists_generated_index: wordlists/seclists-index.yaml\n"
+                "  wordlists_custom_index: wordlists/custom/index.yaml\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(seclists_host_root(Params(root)), mounted)
 
 
 if __name__ == "__main__":

@@ -109,6 +109,21 @@ class SearchForgeTest(unittest.TestCase):
         finally:
             del os.environ["SERPER_API_KEY"]
 
+    def test_empty_env_file_does_not_shadow_process_env(self):
+        """Placeholder KEY= lines in .env must not hide os.environ keys."""
+        import os
+        from pipeline.search_forge import env_keys
+
+        params = _params()
+        with tempfile.TemporaryDirectory() as tmp:
+            params.root = Path(tmp)
+            (Path(tmp) / ".env").write_text("SERPER_API_KEY=\n", encoding="utf-8")
+            os.environ["SERPER_API_KEY"] = "k1,k2"
+            try:
+                self.assertEqual(env_keys(params, "SERPER_API_KEY"), ["k1", "k2"])
+            finally:
+                del os.environ["SERPER_API_KEY"]
+
     def test_429_marks_cooldown_and_reroutes(self):
         params = _params()
         registry = {

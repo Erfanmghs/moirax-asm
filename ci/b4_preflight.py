@@ -1,6 +1,6 @@
 """B4 PORT-SWEEP preflight gates -- run BEFORE the vehicle `recon.sh run`.
 
-  G-W1  committed portsweep defaults per spec section 8 (scope alive_only, duration
+  G-W1  committed portsweep defaults (scope all_resolved, duration
         24h min 1h, profile full, full cap 1000 pps, ramp 100/100/30s, retries
         2, timeout 1000ms, reprobe divisor 4, anomalous threshold 1000, nmap
         toggle OFF with max-rate 300, custom ports "" + cap 1000, concurrency
@@ -51,7 +51,7 @@ def main() -> int:
 
     # ---- G-W1 committed defaults -------------------------------------------
     defaults = {
-        "portsweep_scope": "alive_only",
+        "portsweep_scope": "all_resolved",
         "portsweep_duration_hours": 24,
         "portsweep_duration_hours_min": 1,
         "portsweep_profile": "full",
@@ -80,13 +80,17 @@ def main() -> int:
 
     # ---- G-W2 wiring ---------------------------------------------------------
     engine_text = (ROOT / "pipeline" / "engine.py").read_text(encoding="utf-8")
-    hook_present = "portsweep_module" in engine_text and "post-MERGE" in engine_text
-    runners_ok = "port-sweep" in RUNNERS
+    hook_present = (
+        "portsweep_module" in engine_text
+        and "post-MERGE" in engine_text
+        and "ffuf4_module" in engine_text
+    )
+    runners_ok = "port-sweep" in RUNNERS and "ffuf-4" in RUNNERS
     active_order = params.require("active_branch_modules")
-    not_in_branch = "port-sweep" not in active_order
+    not_in_branch = "port-sweep" not in active_order and "ffuf-4" not in active_order
     pipeline_modules = params.require("pipeline_modules")
-    declared = "port-sweep" in pipeline_modules and pipeline_modules[-1] == "port-sweep"
-    order_ok = active_order == ["ffuf", "dns-resolve", "ffuf-3", "port-check"]
+    declared = "port-sweep" in pipeline_modules and "ffuf-4" in pipeline_modules
+    order_ok = active_order == ["dns-resolve", "ffuf", "ffuf-3", "port-check"]
     check(
         "G-W2 wiring",
         hook_present and runners_ok and not_in_branch and declared and order_ok,

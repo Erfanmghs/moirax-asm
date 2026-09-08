@@ -11,9 +11,32 @@ modules:
       - alive
       - http_status
       - length
+      - tech
+      - title
     vhost_fields:
       - base_host
       - vhost
+      - alive
+      - http_status
+      - length
+      - misconfig_suspect
+  ffuf-4:
+    fields:
+      - base_host
+      - vhost
+      - ip
+      - port
+      - scheme
+      - alive
+      - http_status
+      - length
+      - misconfig_suspect
+    vhost_fields:
+      - base_host
+      - vhost
+      - ip
+      - port
+      - scheme
       - alive
       - http_status
       - length
@@ -28,6 +51,11 @@ modules:
       - txt
       - asn
       - source
+      - alive
+      - http_status
+      - length
+      - tech
+      - title
   port-check:
     fields:
       - host
@@ -55,3 +83,7 @@ modules:
       - attribution
       - sources
       - tags
+      - http_status
+      - length
+      - tech
+      - title

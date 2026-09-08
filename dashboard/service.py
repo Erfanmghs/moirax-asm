@@ -6,11 +6,15 @@ Secrets are NEVER logged and NEVER echoed back unmasked (section 9.2-d/e).
 
 from __future__ import annotations
 
+import copy
 import fnmatch
 import json
+import os
+import random
 import re
 import socket
 import urllib.parse
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +34,8 @@ KEYS_REGISTRY: list[dict[str, str]] = [
     {"name": "CENSYS_API_ID", "module": "PSV-8 IP discovery", "fallback": "CIDR source skipped, never silent"},
     {"name": "CENSYS_API_SECRET", "module": "PSV-8 IP discovery", "fallback": "required with CENSYS_API_ID"},
     {"name": "SHODAN_API_KEY", "module": "PSV-8 IP discovery", "fallback": "CIDR source skipped, never silent"},
+    {"name": "SECURITYTRAILS_API_KEY", "module": "PSV-3b subdomain API", "fallback": "source skipped; keyless APIs still run"},
+    {"name": "VIRUSTOTAL_API_KEY", "module": "PSV-3b subdomain API", "fallback": "source skipped; keyless APIs still run"},
     {"name": "TELEGRAM_BOT_TOKEN", "module": "Notifications (platform provisioning)", "fallback": "operator sets ONLY their user id; without the bot token notifications skip honestly"},
     {"name": "TELEGRAM_CHAT_ID", "module": "Notifications (deployment fallback only)", "fallback": "D-protocol: per-user id lives in Settings or the target profile"},
 ]
@@ -51,6 +57,23 @@ def mask_secret(value: str) -> str:
     return f"{value[:3]}****{value[-2:]}"
 
 
+def append_audit(root: Path, action: str, fields: dict[str, Any] | None = None) -> None:
+    """Append-only operator audit. Never stores secrets or token values."""
+    row = {
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "action": str(action)[:80],
+        **{k: v for k, v in (fields or {}).items() if k not in {"token", "value", "authorization", "bot_token"}},
+    }
+    path = root / "logs" / "dashboard-audit.jsonl"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row, default=str) + "\n")
+        _chmod_private(path)
+    except OSError:
+        return
+
+
 # ---------------------------------------------------------------- .env keys
 
 def _read_env_map(path: Path) -> dict[str, str]:
@@ -66,9 +89,40 @@ def _read_env_map(path: Path) -> dict[str, str]:
     return env
 
 
+def _chmod_private(path: Path) -> None:
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
 def _write_env_map(path: Path, env: dict[str, str]) -> None:
-    lines = [f"{k}={v}" for k, v in env.items()]
-    path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+    """Rewrite .env without dropping comments or keys outside the current map.
+
+    Keys present in the previous file but absent from `env` are deleted
+    (used by delete_key). Comments and blank lines are preserved.
+    """
+    old_lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in old_lines:
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            out.append(raw)
+            continue
+        key = stripped.split("=", 1)[0].strip()
+        if key in env:
+            out.append(f"{key}={env[key]}")
+            seen.add(key)
+    for key, value in env.items():
+        if key not in seen:
+            out.append(f"{key}={value}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = "\n".join(out)
+    if text:
+        text += "\n"
+    path.write_text(text, encoding="utf-8")
+    _chmod_private(path)
 
 
 def list_keys(params: Params) -> list[dict[str, Any]]:
@@ -108,7 +162,7 @@ def delete_key(params: Params, name: str) -> None:
 _SETTINGS_RULES_KEYS = ("class", "enabled")
 
 
-def load_settings(params: Params) -> dict[str, Any]:
+def _read_settings_doc(params: Params) -> dict[str, Any]:
     path = params.root / str(params.require("dashboard_config_relpath"))
     if not path.is_file():
         return {}
@@ -116,11 +170,29 @@ def load_settings(params: Params) -> dict[str, Any]:
         doc = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, ValueError):
         return {}
-    if not isinstance(doc, dict):
-        return {}
-    if isinstance(doc.get("telegram"), dict) and doc["telegram"].get("bot_token"):
-        doc["telegram"] = {**doc["telegram"], "bot_token": mask_secret(str(doc["telegram"]["bot_token"]))}
-    return doc
+    return doc if isinstance(doc, dict) else {}
+
+
+def _mask_settings(doc: dict[str, Any]) -> dict[str, Any]:
+    out = copy.deepcopy(doc)
+    if isinstance(out.get("telegram"), dict) and out["telegram"].get("bot_token"):
+        out["telegram"] = {
+            **out["telegram"],
+            "bot_token": mask_secret(str(out["telegram"]["bot_token"])),
+        }
+    return out
+
+
+def load_settings(params: Params) -> dict[str, Any]:
+    return _mask_settings(_read_settings_doc(params))
+
+
+_TELEGRAM_WRITE_KEYS = frozenset({"bot_token", "chat_id"})
+_RESOURCE_WRITE_KEYS = frozenset({"cpu_cores", "ram_mb"})
+_AGENT_WRITE_KEYS = frozenset({"enabled", "autonomy_passive", "autonomy_active", "max_llm_calls"})
+_RETENTION_WRITE_KEYS = frozenset(
+    ("keep_runs", "log_max_mb", "journal_max_mb", "log_keep_gz", "max_total_mb")
+)
 
 
 def validate_settings(patch: dict[str, Any]) -> list[str]:
@@ -171,13 +243,20 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
         tg = patch.get("telegram")
         if not isinstance(tg, dict):
             errors.append("telegram must be an object")
-        elif "bot_token" in tg and not isinstance(tg["bot_token"], str):
-            errors.append("telegram.bot_token must be a string")
+        else:
+            extra = set(tg) - _TELEGRAM_WRITE_KEYS
+            if extra:
+                errors.append(f"telegram keys not allowed: {sorted(extra)} (closed allow-list)")
+            elif "bot_token" in tg and not isinstance(tg["bot_token"], str):
+                errors.append("telegram.bot_token must be a string")
     if "resource_budget" in patch:
         budget = patch.get("resource_budget")
         if not isinstance(budget, dict):
             errors.append("resource_budget must be an object (section 11.5)")
         else:
+            extra = set(budget) - _RESOURCE_WRITE_KEYS
+            if extra:
+                errors.append(f"resource_budget keys not allowed: {sorted(extra)} (closed allow-list)")
             for key in ("cpu_cores", "ram_mb"):
                 if key in budget and (not isinstance(budget[key], int) or isinstance(budget[key], bool) or budget[key] <= 0):
                     errors.append(f"resource_budget.{key} must be a positive integer (section 11.5)")
@@ -186,6 +265,11 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
         if not isinstance(agent, dict):
             errors.append("agent must be an object (section 12.6)")
         else:
+            extra = set(agent) - _AGENT_WRITE_KEYS
+            if extra:
+                errors.append(f"agent keys not allowed: {sorted(extra)} (closed allow-list)")
+            if "enabled" in agent and not isinstance(agent["enabled"], bool):
+                errors.append("agent.enabled must be a boolean")
             for key in ("autonomy_passive", "autonomy_active"):
                 if key in agent and agent[key] not in ("observe", "suggest", "auto-fix"):
                     errors.append(f"agent.{key} must be observe|suggest|auto-fix (section 12.6)")
@@ -196,10 +280,35 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
         if not isinstance(retention, dict):
             errors.append("retention must be an object (storage management)")
         else:
+            extra = set(retention) - _RETENTION_WRITE_KEYS
+            if extra:
+                errors.append(f"retention keys not allowed: {sorted(extra)} (closed allow-list)")
             for key in ("keep_runs", "log_max_mb", "journal_max_mb", "log_keep_gz", "max_total_mb"):
                 if key in retention and (not isinstance(retention[key], int) or isinstance(retention[key], bool) or retention[key] < 1):
                     errors.append(f"retention.{key} must be a positive integer (storage management)")
     return errors
+
+
+def _merge_settings(current: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    """Deep-merge nested objects so a chat_id-only save cannot wipe bot_token.
+
+    Masked token values (containing ****) are ignored so a GET-then-PUT
+    round-trip never persists the masked display string as the secret.
+    """
+    nested = ("telegram", "resource_budget", "agent", "retention")
+    merged = dict(current)
+    for key, value in patch.items():
+        if key in nested and isinstance(value, dict):
+            base = dict(merged[key]) if isinstance(merged.get(key), dict) else {}
+            incoming = dict(value)
+            if key == "telegram":
+                tok = incoming.get("bot_token")
+                if isinstance(tok, str) and ("****" in tok or not tok.strip()):
+                    incoming.pop("bot_token", None)
+            merged[key] = {**base, **incoming}
+        else:
+            merged[key] = value
+    return merged
 
 
 def save_settings(params: Params, patch: dict[str, Any]) -> dict[str, Any]:
@@ -207,16 +316,18 @@ def save_settings(params: Params, patch: dict[str, Any]) -> dict[str, Any]:
     if errors:
         raise DashboardError("; ".join(errors))
     path = params.root / str(params.require("dashboard_config_relpath"))
-    current = load_settings(params)
-    current = {**current, **patch}
+    current = _read_settings_doc(params)
+    merged = _merge_settings(current, patch)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
-    return load_settings(params)
+    path.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
+    _chmod_private(path)
+    return _mask_settings(merged)
 
 
 # ---------------------------------------------------------------- tools (a)
 
 _TOOLS_EDIT_KEYS = {"enabled", "flag_overrides"}
+_COVERAGE_LOCKED_TOOLS = {"naabu-full"}
 
 
 def validate_tools_edit(tools_doc: dict[str, Any], tool: str, patch: dict[str, Any]) -> dict[str, Any]:
@@ -231,6 +342,10 @@ def validate_tools_edit(tools_doc: dict[str, Any], tool: str, patch: dict[str, A
     if "enabled" in patch:
         if not isinstance(patch["enabled"], bool):
             raise DashboardError("enabled must be a boolean")
+        if tool in _COVERAGE_LOCKED_TOOLS and patch["enabled"] is False:
+            raise DashboardError(
+                f"{tool} is required for full TCP port coverage and cannot be disabled"
+            )
         clean["enabled"] = patch["enabled"]
     if "flag_overrides" in patch:
         overrides = patch["flag_overrides"]
@@ -328,11 +443,143 @@ def _upsert_subkey(block: list[str], header: str, key: str, value: Any) -> list[
 
 # --------------------------------------------------------------- targets (C3)
 
+# switch_id, binary, technique, controls (what ENABLED/DISABLED applies to)
+OPERATOR_TOOL_CATALOG: tuple[tuple[str, str, str, str], ...] = (
+    ("ffuf", "ffuf", "Optional HTTP label brute", "Enables or disables the optional HTTP FUZZ.domain loop (OFF by default; dnsx is the active subdomain brute)"),
+    ("ffuf-vhost", "ffuf", "Virtual-host probe", "Enables or disables virtual-host Host-header probes (FFUF-2 / FFUF-3 / FFUF-4); not the DNS brute row"),
+    ("httpx", "httpx", "HTTP length + technology", "Enables HTTP probing of dnsx-resolved names: status, response length, and technology shown on RESULTS"),
+    ("dnsx", "dnsx", "DNS subdomain brute + IP resolve", "Enables dnsx wordlist brute (DNSR-1): discovers subdomains and their IPs"),
+    ("dnsx-list", "dnsx", "DNS list resolve", "Enables or disables resolving a prepared host list"),
+    ("dnsx-resolve", "dnsx", "Bulk DNS resolve", "Enables or disables bulk DNS resolve of collected names"),
+    ("massdns", "massdns", "Mass DNS resolve", "Enables or disables high-volume DNS resolve"),
+    ("alterx", "alterx", "Name permutation", "Enables or disables generating extra name guesses from known hosts"),
+    ("naabu", "naabu", "Optional top-ports preview", "OPTIONAL fast top-ports check only; default OFF. Full TCP coverage is the always-on port sweep"),
+    ("naabu-full", "naabu", "All TCP ports (required)", "Always-on full TCP 1-65535 sweep after MERGE; this switch cannot be turned off"),
+    ("naabu-sweep", "naabu", "Port sweep (B4)", "Enables or disables the B4 port sweep; not the other naabu rows"),
+    ("nmap-sv", "nmap", "Service fingerprint", "Enables or disables service fingerprinting (-sV) on open ports"),
+    ("subfinder", "subfinder", "Passive subdomain OSINT", "Enables or disables subfinder as a passive name source"),
+    ("amass", "amass", "Passive subdomain OSINT", "Enables or disables amass as a passive name source"),
+    ("assetfinder", "assetfinder", "Related-name OSINT", "Enables or disables assetfinder related-name lookup"),
+    ("findomain", "findomain", "Passive subdomain OSINT", "Enables or disables findomain as a passive name source"),
+    ("chaos", "chaos", "ProjectDiscovery Chaos", "Enables or disables the Chaos dataset lookup"),
+    ("crtsh", "crt.sh", "Certificate Transparency", "Enables or disables crt.sh certificate-transparency lookup"),
+    ("certspotter", "certspotter", "Certificate Transparency", "Enables or disables Cert Spotter CT lookup"),
+    ("waybackurls", "waybackurls", "Web archive URLs", "Enables or disables Wayback URL collection"),
+    ("gau", "gau", "GetAllURLs archives", "Enables or disables gau archive URL collection"),
+    ("httpx-passive", "httpx", "Passive HTTP probe", "Enables or disables HTTP probing inside the passive branch; not the active httpx row"),
+)
+
+
+def list_operator_tools(params: Params) -> list[dict[str, Any]]:
+    """Operator-facing tool rows: original binary, unique switch id, and
+    what ENABLED/DISABLED controls. Internal echo/fallback tools stay hidden."""
+    doc = load_yaml_file(str(params.root / "tools.yaml")) or {}
+    tools = doc.get("tools") or {}
+    out: list[dict[str, Any]] = []
+    for key, title, technique, controls in OPERATOR_TOOL_CATALOG:
+        spec = tools.get(key)
+        if not isinstance(spec, dict):
+            continue
+        out.append({
+            "id": key,
+            "name": title,
+            "technique": technique,
+            "controls": controls,
+            "enabled": bool(spec.get("enabled", False)),
+            "locked": key in _COVERAGE_LOCKED_TOOLS,
+            "branch": spec.get("branch") or "",
+            "binary": spec.get("binary") or title,
+            "image_ref": spec.get("image_ref") or "",
+        })
+    return out
+
+
+def known_target_names(params: Params) -> list[str]:
+    """Registered profiles plus recon/<name>/ workspaces -- fleet is multi-target."""
+    from pipeline.target_profiles import TARGET_NAME_RE, load_registry
+
+    names = set(load_registry(params) or {})
+    recon = params.root / "recon"
+    if recon.is_dir():
+        for child in recon.iterdir():
+            if child.is_dir() and TARGET_NAME_RE.match(child.name):
+                names.add(child.name)
+    return sorted(names)
+
+
 def targets_view(params: Params) -> dict[str, Any]:
     """C3: every per-target profile in the registry."""
     from pipeline.target_profiles import load_registry
 
-    return {"targets": load_registry(params)}
+    return {"targets": load_registry(params), "known": known_target_names(params)}
+
+
+def _read_json_silent(path: Path) -> dict[str, Any]:
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def scan_target_row(params: Params, target: str) -> dict[str, Any]:
+    """One SCAN-board row: status, modules, last run -- THIS target only."""
+    from pipeline.factory import target_root
+    from pipeline.target_profiles import get_profile
+
+    target_dir = target_root(params, target)
+    state = _read_json_silent(target_dir / str(params.require("state_filename")))
+    run = state.get("run") if isinstance(state.get("run"), dict) else {}
+    runs_doc = _read_json_silent(target_dir / str(params.require("runs_filename")))
+    runs = [r for r in (runs_doc.get("runs") or []) if isinstance(r, dict)]
+    last = runs[-1] if runs else {}
+    logs_dir = target_dir / "logs"
+    has_logs = any((logs_dir / name).is_file() for name in ("run.log", "dashboard-spawn.log"))
+    profile = get_profile(params, target) or {}
+    modules = state.get("modules") if isinstance(state.get("modules"), dict) else {}
+    running_n = sum(1 for row in modules.values() if isinstance(row, dict) and row.get("status") == "running")
+    return {
+        "target": target,
+        "registered": bool(profile),
+        "description": str(profile.get("description") or ""),
+        "workspace": target_dir.is_dir(),
+        "run_status": run.get("status"),
+        "reason": run.get("reason"),
+        "failing_module": run.get("failing_module"),
+        "modules": modules,
+        "modules_running": running_n,
+        "updated_at": state.get("updated_at"),
+        "last_run": last.get("timestamp"),
+        "last_counts": last.get("counts") if isinstance(last.get("counts"), dict) else {},
+        "run_count": len(runs),
+        "has_logs": has_logs,
+    }
+
+
+def scan_board_view(params: Params) -> dict[str, Any]:
+    """All known targets for the SCAN accordion -- never mixes per-target rows."""
+    rows = [scan_target_row(params, name) for name in known_target_names(params)]
+    return {"targets": rows, "count": len(rows)}
+
+
+def scan_add_target(params: Params, target: str, description: str = "") -> dict[str, Any]:
+    """Register + create the isolated recon/<target>/ workspace from SCAN."""
+    from pipeline.factory import ensure_layout
+    from pipeline.target_profiles import ProfileError, get_profile, set_profile
+
+    try:
+        ensure_layout(params, target)
+    except ValueError as exc:
+        raise DashboardError(str(exc)) from exc
+    if not get_profile(params, target):
+        note = (description or "added from SCAN").strip()
+        if not note.isascii() or len(note) > 200:
+            raise DashboardError("description must be short ASCII text")
+        try:
+            set_profile(params, target, {"description": note})
+        except ProfileError as exc:
+            raise DashboardError(str(exc)) from exc
+    return scan_target_row(params, target)
 
 
 def target_profile_view(params: Params, target: str) -> dict[str, Any]:
@@ -375,12 +622,170 @@ def apply_wordlists_edit(params: Params, patch: dict[str, Any]) -> dict[str, Any
 
     path = params.root / "wordlists.yaml"
     doc = load_yaml_file(str(path))
-    clean = validate_wordlists_edit(doc, patch)
+    clean = validate_wordlists_edit(doc, patch, params)
     text = path.read_text(encoding="utf-8")
     for task, keys in clean.items():
         text = _patch_task_selection(text, task, keys, doc, params)
     atomic_write_text(path, text)
     return {"applied": clean}
+
+
+def wordlists_catalog(params: Params) -> dict[str, Any]:
+    """Curated registry + custom index + live SecLists filenames (original
+    .txt names). Does not line-count multi-million lists on GET."""
+    from pipeline.seclists_sync import slug_for
+    from pipeline.wordlist_forge import seclists_host_root
+    from pipeline.wordlists import WordlistRegistry
+
+    registry = WordlistRegistry(params)
+    lists: dict[str, Any] = {}
+
+    def _row(key: str, entry: dict[str, Any]) -> dict[str, Any]:
+        rel = str(entry.get("path") or "").replace("\\", "/")
+        return {
+            **entry,
+            "key": key,
+            "name": Path(rel).name or key,
+            "path": rel,
+        }
+
+    for key, entry in registry.lists.items():
+        if isinstance(entry, dict):
+            lists[str(key)] = _row(str(key), entry)
+    try:
+        root = seclists_host_root(params)
+    except Exception:  # noqa: BLE001 -- missing SecLists is a disclosed empty extra
+        root = Path("/nonexistent")
+    dns = root / "Discovery" / "DNS"
+    if dns.is_dir():
+        for path in sorted(dns.glob("*.txt")):
+            if not path.is_file() or path.name.startswith("."):
+                continue
+            rel = path.relative_to(root)
+            key = slug_for(rel)
+            rel_s = str(rel).replace("\\", "/")
+            if key in lists:
+                lists[key]["name"] = path.name
+                lists[key]["path"] = rel_s
+                continue
+            lists[key] = {
+                "key": key,
+                "name": path.name,
+                "path": rel_s,
+                "shape": "hostname",
+                "origin": "seclists",
+            }
+    doc = load_yaml_file(str(params.root / "wordlists.yaml")) or {}
+    return {
+        "schema_version": doc.get("schema_version"),
+        "lists": lists,
+        "tasks": doc.get("tasks") or {},
+    }
+
+
+_WL_KEY_RE = re.compile(r"^[A-Za-z0-9._-]{1,160}$")
+
+
+def wordlist_preview(params: Params, key: str, n: int = 20) -> dict[str, Any]:
+    """Random sample of n lines from a registered list. Seeks large files;
+    never line-counts a multi-million list."""
+    from pipeline.wordlist_forge import host_list_path
+    from pipeline.wordlists import WordlistError, WordlistRegistry
+
+    raw = str(key or "").strip()
+    if not _WL_KEY_RE.match(raw):
+        raise DashboardError("illegal wordlist key")
+    n = 20
+    catalog = wordlists_catalog(params).get("lists") or {}
+    entry = catalog.get(raw)
+    if not isinstance(entry, dict):
+        raise DashboardError(f"unknown wordlist key {raw!r}")
+    rel = str(entry.get("path") or "").replace("\\", "/").lstrip("/")
+    path: Path | None = None
+    try:
+        registry = WordlistRegistry(params)
+        if raw in registry.lists:
+            path = host_list_path(params, registry, raw)
+    except (WordlistError, KeyError, OSError):
+        path = None
+    if path is None or not path.is_file():
+        from pipeline.wordlist_forge import seclists_host_root
+
+        try:
+            seclists = seclists_host_root(params)
+        except Exception:  # noqa: BLE001
+            seclists = Path("/nonexistent")
+        for candidate in (params.root / rel, seclists / rel):
+            if candidate.is_file():
+                path = candidate
+                break
+    if path is None or not path.is_file():
+        return {
+            "key": raw,
+            "name": entry.get("name") or raw,
+            "path": rel,
+            "samples": [],
+            "count": 0,
+            "reason": "file not on disk",
+        }
+    samples = _sample_wordlist_lines(path, n)
+    return {
+        "key": raw,
+        "name": entry.get("name") or Path(rel).name or raw,
+        "path": rel,
+        "samples": samples,
+        "count": len(samples),
+    }
+
+
+def _sample_wordlist_lines(path: Path, n: int) -> list[str]:
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return []
+    if size <= 0:
+        return []
+
+    def _clean(line: str) -> str | None:
+        text = line.strip()
+        if not text or text.startswith("#"):
+            return None
+        if len(text) > 180:
+            text = text[:180]
+        if any(ord(ch) > 127 for ch in text):
+            return None
+        return text
+
+    if size < 400_000:
+        try:
+            raw = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return []
+        lines = [c for ln in raw.splitlines() if (c := _clean(ln))]
+        if len(lines) <= n:
+            return lines
+        return random.sample(lines, n)
+    out: list[str] = []
+    seen: set[str] = set()
+    try:
+        with path.open("rb") as fh:
+            for _ in range(n * 8):
+                if len(out) >= n:
+                    break
+                pos = random.randrange(0, max(size - 1, 1))
+                fh.seek(pos)
+                fh.readline()
+                chunk = fh.readline()
+                if not chunk:
+                    continue
+                line = _clean(chunk.decode("utf-8", "replace"))
+                if line is None or line in seen:
+                    continue
+                seen.add(line)
+                out.append(line)
+    except OSError:
+        return out
+    return out
 
 
 def _registered_keys(doc: dict[str, Any], task: str, params: Params | None = None) -> list[str]:
@@ -405,6 +810,13 @@ def _registered_keys(doc: dict[str, Any], task: str, params: Params | None = Non
             for k in (idx or {}).get("lists") or {}:
                 if k not in keys:
                     keys.append(k)
+        if params is not None:
+            try:
+                for k in (wordlists_catalog(params).get("lists") or {}):
+                    if k not in keys:
+                        keys.append(k)
+            except Exception:  # noqa: BLE001 -- live SecLists miss never blocks SAVE of curated keys
+                pass
     return keys
 
 
@@ -607,3 +1019,211 @@ def scheduler_save(params: Params, doc: dict[str, Any]) -> dict[str, Any]:
         raise DashboardError("; ".join(errors))
     save_schedule(params, doc)
     return doc
+
+
+# ----------------------------------------------------------- warehouse (b)
+
+def _target_dir(params: Params, target: str) -> Path:
+    from pipeline.factory import target_root
+
+    return target_root(params, target)
+
+
+def warehouse_status_view(params: Params, target: str) -> dict[str, Any]:
+    from pipeline.warehouse import WarehouseError, ensure_ingested, status
+
+    target_dir = _target_dir(params, target)
+    try:
+        ensure_ingested(params, target_dir, target)
+        return status(params, target_dir, target)
+    except WarehouseError as exc:
+        raise DashboardError(str(exc)) from exc
+
+
+def warehouse_runs_view(params: Params, target: str) -> dict[str, Any]:
+    from pipeline.warehouse import WarehouseError, ensure_ingested, list_runs
+
+    target_dir = _target_dir(params, target)
+    try:
+        ensure_ingested(params, target_dir, target)
+        runs = list_runs(params, target_dir, target)
+    except WarehouseError as exc:
+        raise DashboardError(str(exc)) from exc
+    return {"target": target, "runs": runs, "count": len(runs)}
+
+
+def warehouse_diff_view(params: Params, target: str, from_ts: str, to_ts: str) -> dict[str, Any]:
+    from pipeline.warehouse import WarehouseError, compare_runs, ensure_ingested, list_runs
+
+    target_dir = _target_dir(params, target)
+    try:
+        ensure_ingested(params, target_dir, target)
+        if not to_ts:
+            runs = list_runs(params, target_dir, target)
+            if not runs:
+                return {"exists": False, "target": target, "reason": "no ingested runs"}
+            to_ts = str(runs[-1]["timestamp"])
+            from_ts = str(runs[-2]["timestamp"]) if len(runs) > 1 else ""
+        return compare_runs(params, target_dir, target, from_ts or None, to_ts)
+    except WarehouseError as exc:
+        raise DashboardError(str(exc)) from exc
+
+
+def warehouse_rebuild_view(params: Params, target: str) -> dict[str, Any]:
+    from pipeline.warehouse import WarehouseError, rebuild_from_history
+
+    target_dir = _target_dir(params, target)
+    if not target_dir.is_dir():
+        raise DashboardError(f"no recon data for {target}")
+    try:
+        return rebuild_from_history(params, target_dir, target)
+    except WarehouseError as exc:
+        raise DashboardError(str(exc)) from exc
+
+
+def results_rows_for(params: Params, target: str, run_stamp: str = "") -> list[dict[str, Any]]:
+    """Latest assets.json, or a historical warehouse snapshot when run= is set."""
+    from pipeline.warehouse import facts_as_assets, ensure_ingested
+
+    target_dir = _target_dir(params, target)
+    if run_stamp:
+        try:
+            ensure_ingested(params, target_dir, target)
+            rows = facts_as_assets(params, target_dir, target, run_stamp)
+            if rows:
+                return rows
+        except Exception:  # noqa: BLE001 -- fall back to latest canonical index
+            pass
+    path = target_dir / str(params.require("assets_relpath"))
+    if not path.is_file():
+        return []
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return []
+    rows = doc.get("assets") or []
+    return [r for r in rows if isinstance(r, dict)]
+
+
+def _port_entry(port: Any, ip: str, service: str = "") -> dict[str, Any] | None:
+    if isinstance(port, dict):
+        raw = port.get("port")
+        proto = str(port.get("proto") or port.get("protocol") or "tcp").lower()
+        state = str(port.get("state") or "open")
+        svc = str(port.get("service") or port.get("product") or service or "")
+    elif isinstance(port, int):
+        raw, proto, state, svc = port, "tcp", "open", service
+    else:
+        return None
+    try:
+        num = int(raw)
+    except (TypeError, ValueError):
+        return None
+    label = f"{num}/{proto}"
+    if svc:
+        label = f"{label} {svc}"
+    return {"port": num, "proto": proto, "state": state, "service": svc, "ip": ip, "label": label}
+
+
+def _read_port_json(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def _collect_open_ports(params: Params, target: str) -> tuple[dict[str, dict[tuple[int, str], dict[str, Any]]], dict[str, dict[tuple[int, str], dict[str, Any]]]]:
+    """host -> {(port, proto): entry}, ip -> same. Sweep wins over light check."""
+    by_host: dict[str, dict[tuple[int, str], dict[str, Any]]] = {}
+    by_ip: dict[str, dict[tuple[int, str], dict[str, Any]]] = {}
+    target_dir = _target_dir(params, target)
+    services: dict[tuple[str, int, str], str] = {}
+
+    def _put(bucket: dict[str, dict[tuple[int, str], dict[str, Any]]], key: str, entry: dict[str, Any]) -> None:
+        if not key:
+            return
+        slot = bucket.setdefault(key, {})
+        slot[(int(entry["port"]), str(entry["proto"]))] = entry
+
+    for param_key in ("portcheck_data_json", "portsweep_data_json"):
+        try:
+            rel = str(params.require(param_key))
+        except (KeyError, ValueError, TypeError):
+            continue
+        doc = _read_port_json(target_dir / rel)
+        for svc in doc.get("services") or []:
+            if not isinstance(svc, dict) or svc.get("port") is None:
+                continue
+            try:
+                pnum = int(svc["port"])
+            except (TypeError, ValueError):
+                continue
+            ip = str(svc.get("ip") or "")
+            proto = str(svc.get("proto") or "tcp").lower()
+            product = " ".join(x for x in (str(svc.get("product") or ""), str(svc.get("version") or "")) if x).strip()
+            if ip and product:
+                services[(ip, pnum, proto)] = product
+        rows = doc.get("scans") or doc.get("results") or []
+        for scan in rows:
+            if not isinstance(scan, dict):
+                continue
+            ip = str(scan.get("ip") or "")
+            hosts = [str(h) for h in (scan.get("hosts") or []) if h]
+            if scan.get("host") and not hosts:
+                hosts = [str(scan["host"])]
+            for port in scan.get("ports") or []:
+                svc_name = ""
+                if isinstance(port, dict):
+                    try:
+                        pnum = int(port.get("port"))
+                    except (TypeError, ValueError):
+                        continue
+                    proto = str(port.get("proto") or port.get("protocol") or "tcp").lower()
+                    svc_name = services.get((ip, pnum, proto), "")
+                entry = _port_entry(port, ip, svc_name)
+                if not entry:
+                    continue
+                _put(by_ip, ip, entry)
+                for host in hosts:
+                    _put(by_host, host.lower(), entry)
+    return by_host, by_ip
+
+
+def attach_open_ports(params: Params, target: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Join naabu light/full open ports onto each RESULTS host (no warehouse schema change)."""
+    try:
+        by_host, by_ip = _collect_open_ports(params, target)
+    except Exception:  # noqa: BLE001 -- ports are additive, never fail RESULTS
+        return rows
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        host = str(row.get("host") or "").lower()
+        ips = [str(x) for x in (row.get("ips") or ([row.get("ip")] if row.get("ip") else [])) if x]
+        merged: dict[tuple[int, str], dict[str, Any]] = {}
+        merged.update(by_host.get(host) or {})
+        for ip in ips:
+            merged.update(by_ip.get(ip) or {})
+        ports = sorted(merged.values(), key=lambda p: (int(p["port"]), str(p["proto"])))
+        out.append({
+            **row,
+            "open_ports": ports,
+            "open_ports_text": ", ".join(str(p["label"]) for p in ports),
+        })
+    return out
+
+
+def enrich_results_rows(params: Params, target: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    from pipeline.warehouse import enrich_assets, ensure_ingested
+
+    target_dir = _target_dir(params, target)
+    enriched = rows
+    try:
+        ensure_ingested(params, target_dir, target)
+        enriched = enrich_assets(params, target_dir, target, rows)
+    except Exception:  # noqa: BLE001 -- timeline is additive, never fail the panel
+        enriched = rows
+    return attach_open_ports(params, target, enriched)
+

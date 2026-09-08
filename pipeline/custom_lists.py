@@ -188,39 +188,95 @@ def _label_of(host: str, target: str) -> str | None:
     return prefix
 
 
-def ingest_learned_labels(params: Params, target_dir: Path, target: str, gate=None) -> dict[str, Any]:
-    """Run-end feed: in-scope discovered hosts -> platform-learned labels.
-    Sources: passive candidates, dns-resolve records, active fuzz records.
-    Scope law: every host must equal the target or end with .target; if a
-    scope gate is supplied, candidates must additionally pass it."""
+def valid_discovered_hosts(params: Params, target_dir: Path) -> list[str]:
+    """Hosts proven this run: DNS-resolved with IPs, HTTP-alive, or prior assets with IPs.
+
+    Always-on: there is no operator toggle. Labels from these hosts are reused
+    on every later target via platform-learned + the forge custom list.
+    """
     import json
 
-    hosts: list[str] = []
+    valid: list[str] = []
+    seen: set[str] = set()
 
-    def _rows(rel: str, container_key: str, host_keys: tuple[str, ...]) -> None:
-        p = target_dir / rel
-        if not p.is_file():
-            return
+    def _add(host: str) -> None:
+        token = str(host or "").strip().lower().rstrip(".")
+        if token and token not in seen:
+            seen.add(token)
+            valid.append(token)
+
+    def _load(rel: str) -> dict:
+        path = target_dir / rel
+        if not path.is_file():
+            return {}
         try:
-            doc = json.loads(p.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001 -- a malformed lane never breaks the ingest
-            return
-        rows = doc.get(container_key) or []
-        for row in rows:
-            if isinstance(row, dict):
-                for hk in host_keys:
-                    val = row.get(hk)
-                    if isinstance(val, str) and val.strip():
-                        hosts.append(val.strip().lower())
-                    elif isinstance(val, dict):
-                        inner = val.get("FUZZ") or val.get("name")
-                        if isinstance(inner, str) and inner.strip():
-                            hosts.append(inner.strip().lower())
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            return {}
+        return doc if isinstance(doc, dict) else {}
 
-    _rows("10_subdomains/passive/data.json", "candidates", ("host",))
-    _rows("20_dns/dnsx/data.json", "resolved", ("host",))
-    _rows("10_subdomains/ffuf/data.json", "hosts", ("fqdn", "host"))
-    _rows("10_subdomains/ffuf/data.json", "vhosts", ("vhost", "host"))
+    def _rel(key: str, default: str) -> str:
+        try:
+            return str(params.require(key))
+        except Exception:  # noqa: BLE001 -- tests and older settings stubs
+            return default
+
+    dnsr = _load(_rel("dnsr_data_json", "20_dns/dnsx/data.json"))
+    resolved_ok: set[str] = set()
+    for row in dnsr.get("resolved") or []:
+        if not isinstance(row, dict):
+            continue
+        host = str(row.get("host") or "").strip().lower()
+        ips = row.get("ips") or []
+        if host and ips and str(row.get("resolution_status") or "resolved") != "unresolved":
+            resolved_ok.add(host)
+            _add(host)
+
+    passive = _load(_rel("passive_data_json", "10_subdomains/passive/data.json"))
+    for row in passive.get("candidates") or []:
+        if not isinstance(row, dict):
+            continue
+        host = str(row.get("host") or "").strip().lower()
+        if not host:
+            continue
+        if row.get("alive") is True or host in resolved_ok:
+            _add(host)
+
+    ffuf = _load(_rel("ffuf_data_json", "10_subdomains/ffuf/data.json"))
+    for row in ffuf.get("hosts") or []:
+        if not isinstance(row, dict):
+            continue
+        host = str(row.get("fqdn") or row.get("host") or "").strip().lower()
+        if host and (row.get("alive") is True or host in resolved_ok):
+            _add(host)
+    for row in ffuf.get("vhosts") or []:
+        if not isinstance(row, dict):
+            continue
+        host = str(row.get("vhost") or "").strip().lower()
+        if host and (row.get("alive") is True or row.get("misconfig_suspect") is True or host in resolved_ok):
+            _add(host)
+
+    ffuf4 = _load(_rel("ffuf4_data_json", "15_vhosts/ffuf-4/data.json"))
+    for row in ffuf4.get("vhosts") or []:
+        if not isinstance(row, dict):
+            continue
+        host = str(row.get("vhost") or "").strip().lower()
+        if host and (row.get("alive") is True or row.get("misconfig_suspect") is True or host in resolved_ok):
+            _add(host)
+
+    assets = _load(_rel("assets_relpath", "00_assets/assets.json"))
+    for row in assets.get("assets") or []:
+        if not isinstance(row, dict):
+            continue
+        host = str(row.get("host") or "").strip().lower()
+        if host and (row.get("ips") or row.get("alive") is True):
+            _add(host)
+    return valid
+
+
+def ingest_learned_labels(params: Params, target_dir: Path, target: str, gate=None) -> dict[str, Any]:
+    """Run-end feed: VALID in-scope hosts -> platform-learned labels (always on)."""
+    hosts = valid_discovered_hosts(params, target_dir)
 
     labels: list[str] = []
     seen: set[str] = set()

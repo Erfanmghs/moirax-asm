@@ -23,7 +23,7 @@ from pipeline.yaml_util import load_yaml_file
 # Flat per-class CSV columns (section 10.1: flat export.csv per asset class).
 CSV_CLASSES: dict[str, tuple[str, ...]] = {
     "hosts": ("host", "ips", "alive", "sources", "tags"),
-    "vhosts": ("base_host", "vhost", "alive", "http_status", "misconfig_suspect"),
+    "vhosts": ("base_host", "vhost", "ip", "port", "scheme", "alive", "http_status", "misconfig_suspect"),
     "ports": ("host", "ip", "port", "proto"),
     "services": ("ip", "port", "proto", "service", "product", "version"),
     "passive_ips": ("ip", "sources"),

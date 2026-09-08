@@ -43,7 +43,9 @@ artifact fetch, push).
 ### DASHBOARD_TOKEN
 1. Generate a high-entropy value (`openssl rand -hex 24`).
 2. Update compose/.env and restart the dashboard container.
-3. Re-enter the token in the SPA (top-right SET; stored in localStorage).
+3. Re-enter the token in the SPA (top-right SET; stored in sessionStorage
+   for the tab, not localStorage). Minimum length is 8 characters; prefer
+   `openssl rand -hex 24`.
 
 ### TELEGRAM_BOT_TOKEN
 1. Revoke via @BotFather (/revoke), get the new token.

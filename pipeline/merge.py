@@ -30,6 +30,58 @@ def merge_branches(
     for doc in active_docs:
         _ingest(buckets, doc, _ATTR_ACTIVE)
 
+    return _flush_merged(params, gate, target_dir, target, buckets, wildcard_ips)
+
+
+def append_active_doc(
+    params: Params,
+    gate: ScopeGate,
+    target_dir: Path,
+    target: str,
+    doc: dict[str, Any],
+) -> Path:
+    """Re-merge one extra ACTIVE doc into the existing assets.json (post-MERGE finds)."""
+    assets_path = target_dir / str(params.require("assets_relpath"))
+    existing = load_tool_doc(assets_path)
+    buckets: dict[str, dict[str, Any]] = {}
+    if existing:
+        _seed_from_assets(buckets, existing)
+        wildcard_ips = _wildcard_ips([existing, doc])
+    else:
+        wildcard_ips = _wildcard_ips([doc])
+    _ingest(buckets, doc, _ATTR_ACTIVE)
+    return _flush_merged(params, gate, target_dir, target, buckets, wildcard_ips)
+
+
+def _seed_from_assets(buckets: dict[str, dict[str, Any]], existing: dict[str, Any]) -> None:
+    for asset in existing.get("assets") or []:
+        if not isinstance(asset, dict):
+            continue
+        host = _norm_host(asset.get("host"))
+        if not host:
+            continue
+        buckets[host] = {
+            "attribution": str(asset.get("attribution") or _ATTR_ACTIVE),
+            "sources": set(str(s) for s in (asset.get("sources") or [])),
+            "ips": [str(ip) for ip in (asset.get("ips") or []) if ip],
+            "alive": asset.get("alive"),
+            "tags": set(str(t) for t in (asset.get("tags") or [])),
+            "misconfig_suspect": bool(asset.get("misconfig_suspect")),
+            "http_status": asset.get("http_status"),
+            "length": asset.get("length"),
+            "tech": [str(t) for t in (asset.get("tech") or []) if t],
+            "title": asset.get("title"),
+        }
+
+
+def _flush_merged(
+    params: Params,
+    gate: ScopeGate,
+    target_dir: Path,
+    target: str,
+    buckets: dict[str, dict[str, Any]],
+    wildcard_ips: set[str],
+) -> Path:
     assets: list[dict[str, Any]] = []
     quarantine: list[dict[str, Any]] = []
     log_rel = Path(str(params.require("out_of_scope_log")))
@@ -71,6 +123,14 @@ def merge_branches(
             asset["tags"] = sorted(row["tags"])
         if row.get("misconfig_suspect"):
             asset["misconfig_suspect"] = True
+        if row.get("http_status") is not None:
+            asset["http_status"] = row["http_status"]
+        if row.get("length") is not None:
+            asset["length"] = row["length"]
+        if row.get("tech"):
+            asset["tech"] = list(row["tech"])
+        if row.get("title"):
+            asset["title"] = row["title"]
         assets.append(asset)
 
     payload = {
@@ -80,6 +140,7 @@ def merge_branches(
         "quarantine": quarantine,
     }
     assets_path = target_dir / str(params.require("assets_relpath"))
+    assets_path.parent.mkdir(parents=True, exist_ok=True)
     write_json(assets_path, payload)
     # TEST 3 (T3-1, disclosed): composition disclosure line -- attribution split
     # and host->IP map shape of the merged tree, so the acceptance report can
@@ -132,6 +193,10 @@ def _ingest(buckets: dict[str, dict[str, Any]], doc: dict[str, Any], branch: str
                 "alive": None,
                 "tags": set(),
                 "misconfig_suspect": False,
+                "http_status": None,
+                "length": None,
+                "tech": [],
+                "title": None,
             }
             buckets[host] = row
         else:
@@ -153,6 +218,16 @@ def _ingest(buckets: dict[str, dict[str, Any]], doc: dict[str, Any], branch: str
             row["tags"].add(str(tag))
         if meta.get("misconfig_suspect") is True:
             row["misconfig_suspect"] = True
+        if meta.get("http_status") is not None:
+            row["http_status"] = meta.get("http_status")
+        if meta.get("length") is not None:
+            row["length"] = meta.get("length")
+        for item in meta.get("tech") or []:
+            text = str(item).strip()
+            if text and text not in row["tech"]:
+                row["tech"].append(text)
+        if meta.get("title") and not row.get("title"):
+            row["title"] = str(meta.get("title"))
 
 
 def _iter_assets(doc: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:

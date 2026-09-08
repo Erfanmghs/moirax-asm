@@ -139,6 +139,8 @@ def run_passive_recon(
                                  cands, source_files, skips, note, remaining, timeout_for),
         "psv3": lambda: _psv3_agents(params, gate, adapter, target_dir, target, extra, planned,
                                      cands, source_files, skips, note, remaining, timeout_for, agent_rows),
+        "psv3b": lambda: _psv3_public_apis(params, gate, adapter, target_dir, target, extra, planned,
+                                           cands, source_files, skips, note, remaining, timeout_for),
         "psv4": lambda: _psv4_archives(params, gate, adapter, target_dir, target, extra, planned,
                                        cands, source_files, skips, note, remaining, timeout_for),
         "psv7": lambda: _psv7_github(params, gate, adapter, target_dir, target, extra, planned,
@@ -521,23 +523,94 @@ def _psv3_agents(params, gate, adapter, target_dir, target, extra, planned,
     return {"agents": {a: m["state"] for a, m in results.items()}, "resolved": len(resolved)}
 
 
+def _psv3_public_apis(params, gate, adapter, target_dir, target, extra, planned,
+                      cands, source_files, skips, note, remaining, timeout_for) -> dict[str, Any]:
+    """Keyless OSINT HTTP APIs + optional SecurityTrails/VirusTotal if keys exist."""
+    from pipeline.public_apis import hosts_from_api_body
+
+    apex = str(target).strip().lower().rstrip(".")
+    sources_rel = str(params.require("passive_sources_relpath"))
+    jobs: list[tuple[str, str]] = [
+        ("hackertarget", "curl -sS -D - --max-time 45 " + _q(f"https://api.hackertarget.com/hostsearch/?q={apex}")),
+        ("anubis", "curl -sS -D - --max-time 45 " + _q(f"https://jldc.me/anubis/subdomains/{apex}")),
+        ("otx", "curl -sS -D - --max-time 45 " + _q(f"https://otx.alienvault.com/api/v1/indicators/domain/{apex}/passive_dns")),
+        ("urlscan", "curl -sS -D - --max-time 45 " + _q(f"https://urlscan.io/api/v1/search/?q=domain:{apex}")),
+    ]
+    st_keys = _env_keys(params, "SECURITYTRAILS_API_KEY")
+    if st_keys:
+        jobs.append((
+            "securitytrails",
+            "curl -sS -D - --max-time 45 -H " + _q(f"APIKEY: {st_keys[0]}")
+            + " " + _q(f"https://api.securitytrails.com/v1/domain/{apex}/subdomains"),
+        ))
+    else:
+        skips.append("psv-3b: securitytrails skipped -- no SECURITYTRAILS_API_KEY (keyless sources still run)")
+    vt_keys = _env_keys(params, "VIRUSTOTAL_API_KEY")
+    if vt_keys:
+        jobs.append((
+            "virustotal",
+            "curl -sS -D - --max-time 45 -H " + _q(f"x-apikey: {vt_keys[0]}")
+            + " " + _q(f"https://www.virustotal.com/api/v3/domains/{apex}/subdomains?limit=40"),
+        ))
+    else:
+        skips.append("psv-3b: virustotal skipped -- no VIRUSTOTAL_API_KEY (keyless sources still run)")
+
+    added = 0
+    for name, cmd in jobs:
+        if remaining() <= 0:
+            skips.append("psv-3b: budget exhausted -- remaining public APIs skipped, never silent")
+            break
+        result = _bounded(
+            adapter, "curl-fetch", "curl-fetch",
+            {**extra, "fetch_cmd": cmd, "fetch_max_time": "45", "skip_parse": True},
+            planned, 45.0, timeout_for, allow_fallback=False,
+        )
+        status = extract_http_status(result.stdout)
+        _hdr, body = split_headers_body(result.stdout)
+        hosts: list[str] = []
+        if status and 200 <= int(status) < 300:
+            hosts = hosts_from_api_body(name, body, apex)
+        else:
+            skips.append(f"psv-3b: {name} status={status} -- degraded, disclosed")
+        kept: list[str] = []
+        for host in hosts:
+            if cands.add(host, name):
+                kept.append(host)
+                added += 1
+        _write_lines(target_dir / sources_rel / f"{name}.txt", sorted(set(kept)))
+        source_files[name] = len(set(kept))
+        note(f"psv-3b: source={name} kept={len(set(kept))} status={status}")
+    return {"state": "ok", "added": added}
+
+
 def _psv3_resolve(params, adapter, target_dir, target, extra, planned, subs_hosts,
                   note, remaining, timeout_for) -> tuple[list[str], dict[str, list[str]]]:
     sources_rel = str(params.require("passive_sources_relpath"))
     input_rel = f"{sources_rel}/puredns-input.txt"
     atomic_write_text(target_dir / input_rel, "\n".join(subs_hosts) + "\n")
     forge_resolvers = params.root / str(params.require("resolver_forge_output"))
-    if not forge_resolvers.is_file():
+    resolvers_rel = str(params.require("passive_resolvers_target_rel"))
+    forge_body = ""
+    if forge_resolvers.is_file():
+        try:
+            forge_body = forge_resolvers.read_text(encoding="utf-8")
+        except OSError:
+            forge_body = ""
+    if not forge_body.strip():
         # RESOLVER FORGE is the single resolver source (section 8 inputs); when the
-        # forge output is absent on this host, produce it from the committed
-        # seed instead of silently probing with no resolvers.
+        # forge output is absent or unreadable on this host, produce it from the
+        # committed seed instead of silently probing with no resolvers.
         from pipeline.resolver_forge import forge_resolvers as run_forge
 
-        note("psv-3: forge output missing -> running RESOLVER FORGE from committed seed")
+        note("psv-3: forge output missing/unreadable -> running RESOLVER FORGE from committed seed")
         run_forge(params, adapter, target_dir, target)
-    resolvers_rel = str(params.require("passive_resolvers_target_rel"))
-    if forge_resolvers.is_file():
-        atomic_write_text(target_dir / resolvers_rel, forge_resolvers.read_text(encoding="utf-8"))
+        if forge_resolvers.is_file():
+            try:
+                forge_body = forge_resolvers.read_text(encoding="utf-8")
+            except OSError:
+                forge_body = ""
+    if forge_body:
+        atomic_write_text(target_dir / resolvers_rel, forge_body)
     result = _bounded(adapter, "assetfinder-resolved", "assetfinder-resolved",
                       {**extra,
                        "puredns_input": container_path(params, target, input_rel),

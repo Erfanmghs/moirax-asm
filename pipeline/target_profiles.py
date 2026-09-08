@@ -13,7 +13,7 @@ committed registry targets.yaml (frozen-loader dialect):
         budgets:
           passive_branch_budget_sec: 3000
         modules:
-          active_branch_modules: [ffuf, dns-resolve, ffuf-3, port-check]
+          active_branch_modules: [dns-resolve, ffuf, ffuf-3, port-check]
           passive_branch_modules: [passive-recon]
         notifications:
           telegram_chat: "123456"
@@ -58,6 +58,7 @@ BUDGET_KEYS_ALLOW = {
     "active_branch_budget_sec",
     "passive_recursion_depth",
     "ffuf3_max_dead_probes",
+    "ffuf4_max_jobs",
 }
 
 NOTIFY_KEYS_ALLOW = {

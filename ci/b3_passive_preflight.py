@@ -10,8 +10,8 @@
   G-S4  tools.lock pins an image for every passive image_ref
   G-S5  committed passive defaults intact (recursion 2, seeds 100, amass 20min,
         dork 60s, crtsh 120s/x3, httpx threads 200, probe on, github 30 rpm,
-        ct_fallback_tool=certspotter) and ACTIVE branch order untouched
-        (append-only law: [ffuf, dns-resolve, ffuf-3, port-check])
+        ct_fallback_tool=certspotter) and ACTIVE branch order
+        [dns-resolve, ffuf, ffuf-3, port-check]
   G-S6  verify_b1.py has no working-tree diff (frozen since handoff)
   G-S7  vehicle scope: example.com retained (passive acceptance target)
   G-S8  unit suite covers the chain: tests/test_passive.py present with
@@ -152,7 +152,7 @@ def main() -> int:
     bad = {k: params.require(k) for k, v in defaults.items() if params.require(k) != v}
     probe_on = bool(params.require("passive_httpx_probe"))
     active_order = params.require("active_branch_modules")
-    order_ok = active_order == ["ffuf", "dns-resolve", "ffuf-3", "port-check"]
+    order_ok = active_order == ["dns-resolve", "ffuf", "ffuf-3", "port-check"]
     check(
         "G-S5 committed-defaults",
         not bad and probe_on and order_ok,

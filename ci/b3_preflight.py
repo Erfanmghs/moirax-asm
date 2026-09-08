@@ -4,7 +4,7 @@
         reproduces the TEST-1-proven anchor byte-exact (4860 lines,
         sha256 a94ea1d5...1695) -- post-T4 restore discipline
   G-B2  FFUF-3 wiring (spec v1.9 section 8): RUNNERS registry + active_branch_modules
-        order [ffuf, dns-resolve, ffuf-3, port-check] + params + layout dir
+        order [dns-resolve, ffuf, ffuf-3, port-check] + params + layout dir
   G-B3  DNSR-2 refinement (v1.9 item 3): max_permutations_aggregate param
         present; _cap_perms aggregate enforcement; seed-exclusion helpers
   G-B4  verify_b1.py has no working-tree diff
@@ -62,7 +62,7 @@ def main() -> int:
     registry_ok = '"ffuf-3": run_ffuf3' in modules_pkg
     tools_txt = (ROOT / "tools.yaml").read_text(encoding="utf-8")
     order_ok = bool(
-        re.search(r"active_branch_modules:\s*\n\s*- ffuf\s*\n\s*- dns-resolve\s*\n(?:\s*#[^\n]*\n)*\s*- ffuf-3\s*\n\s*- port-check", tools_txt, re.M)
+        re.search(r"active_branch_modules:\s*\n\s*- dns-resolve\s*\n\s*- ffuf\s*\n(?:\s*#[^\n]*\n)*\s*- ffuf-3\s*\n\s*- port-check", tools_txt, re.M)
     )
     params_ok = (
         "ffuf3_data_json: 15_vhosts/ffuf-3/data.json" in tools_txt

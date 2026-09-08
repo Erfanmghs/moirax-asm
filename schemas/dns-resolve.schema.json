@@ -24,7 +24,12 @@
           "asn": { "type": ["string", "integer", "null"] },
           "source": { "type": "string", "enum": ["brute", "perm", "known"] },
           "resolution_status": { "type": "string", "enum": ["resolved", "unresolved"] },
-          "resolution_reason": { "type": ["string", "null"] }
+          "resolution_reason": { "type": ["string", "null"] },
+          "alive": { "type": ["boolean", "null"] },
+          "http_status": { "type": ["integer", "null"] },
+          "length": { "type": ["integer", "null"] },
+          "tech": { "type": "array", "items": { "type": "string" } },
+          "title": { "type": ["string", "null"] }
         }
       }
     },

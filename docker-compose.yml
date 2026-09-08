@@ -5,23 +5,28 @@ services:
     build:
       context: .
       dockerfile: docker/dashboard/Dockerfile
-    # local tag: compose builds it if missing; the ready-made registry image
-    # can be tagged with this same name to skip the build (README 4.5 option A)
     image: recon-pipeline-dashboard
     command: ["uvicorn", "dashboard.app:app", "--host", "0.0.0.0", "--port", "8080"]
+    working_dir: /app
+    # Run as the host operator so forge files are not 0600-root (git/tests/UI).
+    # DOCKER_GID must match the host docker socket group for nested docker run.
+    user: "${RECON_HOST_UID:-1000}:${RECON_HOST_GID:-1000}"
+    group_add:
+      - "${DOCKER_GID:-0}"
     ports:
       - "${DASHBOARD_BIND_HOST:-127.0.0.1}:${DASHBOARD_BIND_PORT:-8080}:8080"
+    env_file:
+      - path: .env
+        required: false
     volumes:
-      - ${RECON_VOLUME:-./recon}:/app/recon
+      - .:/app
       - ${SECLISTS_HOST_PATH:-${HOME}/seclists}:${SECLISTS_CONTAINER_PATH:-/usr/share/seclists}:ro
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./.env:/app/.env
-      - ./tools.yaml:/app/tools.yaml
-      - ./wordlists.yaml:/app/wordlists.yaml
-      - ./scheduler.json:/app/scheduler.json
-      - ./dashboard/config.json:/app/dashboard/config.json
     environment:
       DASHBOARD_TOKEN: ${DASHBOARD_TOKEN:-}
+      PYTHONPATH: /app
+      # Nested `docker run -v` from inside this container must bind HOST paths.
+      RECON_HOST_ROOT: ${RECON_HOST_ROOT:-${PWD}}
     restart: unless-stopped
     profiles:
       - dashboard

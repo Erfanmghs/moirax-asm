@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import signal
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -22,6 +25,10 @@ from pipeline.reporting import generate_all
 from pipeline.scope import ScopeGate
 from pipeline.wordlist_forge import EmptyWordlistError, ingest_if_completed
 from pipeline import state as state_engine
+
+
+class OperatorStop(Exception):
+    """Operator requested stop; branches must not start the next module."""
 
 
 def _tuned_budgets(params: Params, target_dir: Path) -> tuple[float, float, str]:
@@ -54,6 +61,8 @@ def run_pipeline(
     resume: bool = False,
 ) -> int:
     target_dir = ensure_layout(params, target)
+    # PID first so an overlapping STOP can signal this process even before state.json exists.
+    state_engine.write_run_pid(target_dir, os.getpid())
     if resume:
         state_engine.init_state(params, target_dir, target)
     else:
@@ -65,9 +74,12 @@ def run_pipeline(
         str(params.require("run_status_running")),
         reason=None,
         failing_module=None,
+        overwrite_stopped=resume,
     )
     clock = clock or Clock()
     run_started = clock.time()
+    if state_engine.operator_stopped(params, target_dir, target):
+        return _finalize_stopped(params, gate, target_dir, target, clock, run_started, None)
     # section 9.3 PROXY RULE + C5 IP ROTATION: a configured pool is gated
     # entry-by-entry (fail-fast, credentials masked) and rotated per module;
     # no pool -> the legacy single-proxy law, byte for byte.
@@ -201,23 +213,31 @@ def run_pipeline(
         )
         return docs + tool_docs
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        fut_p = pool.submit(_guard, passive_branch, partial, "passive")
-        fut_a = pool.submit(_guard, active_branch, partial, "active")
-        p_docs = fut_p.result()
-        a_docs = fut_a.result()
-        if isinstance(p_docs, list):
-            passive_docs = p_docs
-        else:
-            failed = True
-        if isinstance(a_docs, list):
-            active_docs = a_docs
-        else:
-            failed = True
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            fut_p = pool.submit(_guard, passive_branch, partial, "passive")
+            fut_a = pool.submit(_guard, active_branch, partial, "active")
+            p_docs = fut_p.result()
+            a_docs = fut_a.result()
+            if isinstance(p_docs, list):
+                passive_docs = p_docs
+            else:
+                failed = True
+            if isinstance(a_docs, list):
+                active_docs = a_docs
+            else:
+                failed = True
+    except OperatorStop:
+        print("stop: operator stop -- skipping remaining modules")
+
+    if state_engine.operator_stopped(params, target_dir, target):
+        return _finalize_stopped(params, gate, target_dir, target, clock, run_started, assigner)
 
     merge_name = str(params.require("merge_module"))
     st = state_engine.load_state(params, target_dir, target)
     if not state_engine.skip_done(st, merge_name):
+        if state_engine.operator_stopped(params, target_dir, target):
+            return _finalize_stopped(params, gate, target_dir, target, clock, run_started, assigner)
         state_engine.set_status(params, target_dir, merge_name, "running")
         try:
             merge_branches(params, gate, target_dir, target, passive_docs, active_docs)
@@ -234,6 +254,8 @@ def run_pipeline(
     # pause) shape the final status like every other stage.
     sweep_name = str(params.require("portsweep_module"))
     if sweep_name in RUNNERS:
+        if state_engine.operator_stopped(params, target_dir, target):
+            return _finalize_stopped(params, gate, target_dir, target, clock, run_started, assigner)
         st = state_engine.load_state(params, target_dir, target)
         if state_engine.skip_done(st, sweep_name):
             print(f"skip: module={sweep_name} reason=already done (resume)")
@@ -255,11 +277,40 @@ def run_pipeline(
                 _engage_agent(sweep_name, "active", str(exc))
                 traceback.print_exc()
 
+    # FFUF-4: vhost enum on HTTP-like ports found by PORT-SWEEP (ip:port + Host).
+    # After the sweep, before OWASP-PASSIVE. Not a branch member.
+    ffuf4_name = str(params.require("ffuf4_module"))
+    if ffuf4_name in RUNNERS:
+        if state_engine.operator_stopped(params, target_dir, target):
+            return _finalize_stopped(params, gate, target_dir, target, clock, run_started, assigner)
+        st = state_engine.load_state(params, target_dir, target)
+        if state_engine.skip_done(st, ffuf4_name):
+            print(f"skip: module={ffuf4_name} reason=already done (resume)")
+        elif not adapter.breaker.allow(ffuf4_name):
+            reason = adapter.breaker.pause_reason(ffuf4_name) or "circuit breaker paused this module"
+            _append_log(params, target_dir, ffuf4_name, ffuf4_name, 0, f"skip: {reason}")
+            print(f"skip: module={ffuf4_name} reason={reason}")
+        else:
+            state_engine.set_status(params, target_dir, ffuf4_name, "running")
+            try:
+                RUNNERS[ffuf4_name](
+                    params, gate, adapter, target_dir, target, extra, planned, None, partial
+                )
+                state_engine.set_status(params, target_dir, ffuf4_name, "done")
+            except Exception as exc:
+                state_engine.set_status(params, target_dir, ffuf4_name, "failed")
+                partial.append(f"ffuf4:{exc}")
+                _append_log(params, target_dir, ffuf4_name, ffuf4_name, 1, str(exc))
+                _engage_agent(ffuf4_name, "post-merge", str(exc))
+                traceback.print_exc()
+
     # C6 OWASP-PASSIVE (operator roadmap): post-MERGE zero-packet artifact
     # analyzer, mirroring the PORT-SWEEP hook law exactly -- resume-aware,
     # breaker-aware, partial markers shape the final verdict like any stage.
     owasp_name = str(params.require("owasp_module"))
     if owasp_name in RUNNERS:
+        if state_engine.operator_stopped(params, target_dir, target):
+            return _finalize_stopped(params, gate, target_dir, target, clock, run_started, assigner)
         st = state_engine.load_state(params, target_dir, target)
         if state_engine.skip_done(st, owasp_name):
             print(f"skip: module={owasp_name} reason=already done (resume)")
@@ -292,15 +343,35 @@ def run_pipeline(
         for line in assigner.pool.health_lines():
             print(line)
 
+    if state_engine.operator_stopped(params, target_dir, target):
+        return _finalize_stopped(params, gate, target_dir, target, clock, run_started, assigner)
+
     stamp = utc_stamp()
     counts = _counts(params, target_dir, passive_docs, active_docs)
     status, reason, failing_module = _classify_status(params, breaker, alerts, partial, failed, passive_docs, active_docs)
+    if state_engine.operator_stopped(params, target_dir, target):
+        return _finalize_stopped(params, gate, target_dir, target, clock, run_started, assigner)
     state_engine.set_run_status(params, target_dir, target, status, reason=reason, failing_module=failing_module)
+    if state_engine.operator_stopped(params, target_dir, target):
+        return _finalize_stopped(params, gate, target_dir, target, clock, run_started, assigner)
     ingest_if_completed(params, gate, target_dir, target, status)
     snapshot(params, target_dir, stamp)
     prev = previous_timestamp(params, target_dir, stamp)
     append_run(params, target_dir, stamp, status, counts)
     write_diff(params, target_dir, prev, stamp)
+    try:
+        from pipeline.warehouse import ingest_run_end
+
+        warehouse_ledger = ingest_run_end(params, target_dir, target, stamp, status, counts)
+    except Exception as exc:  # noqa: BLE001 -- warehouse is derived; never flip the run verdict
+        warehouse_ledger = {"ok": False, "reason": f"disclosed ingest failure: {exc}"}
+    print(
+        "warehouse: "
+        f"ok={warehouse_ledger.get('ok')} "
+        f"target={target} "
+        f"facts={warehouse_ledger.get('facts')} "
+        f"isolated={warehouse_ledger.get('isolated', False)}"
+    )
     notify_ledger = run_end_notifications(
         params,
         target_dir,
@@ -362,7 +433,7 @@ def run_pipeline(
         learned_ledger = {"added": 0, "total": 0, "error": str(exc)}
     print(
         f"learned: target={target} added={learned_ledger.get('added')} "
-        f"total={learned_ledger.get('total')} selectable=platform_learned"
+        f"total={learned_ledger.get('total')} always_on=platform_learned"
     )
     # C7 SELFTUNE end-of-run hook: observe this run's budget markers, update
     # the NEXT run's multipliers (never-fail exactly like reporting/storage).
@@ -460,26 +531,142 @@ def stop_target(params: Params, target_dir: Path) -> list[str]:
     from pipeline.dockerbin import docker_prefix
     import subprocess
 
+    target = target_dir.name
+    target_dir.mkdir(parents=True, exist_ok=True)
+    # Persist STOP even when state.json is missing so a late engine start
+    # cannot clobber the request, and a live engine refuses the next module.
+    state_engine.set_run_status(
+        params,
+        target_dir,
+        target,
+        str(params.require("run_status_stopped")),
+        reason="operator stop",
+        failing_module=None,
+    )
+    state_engine.fail_running_modules(params, target_dir, target)
+
     prefix = docker_prefix(params)
     label = str(params.require("docker_label_target"))
     listed = subprocess.run(
-        [*prefix, "ps", "-q", "--filter", f"label={label}={target_dir.name}"],
+        [*prefix, "ps", "-q", "--filter", f"label={label}={target}"],
         capture_output=True,
         text=True,
         check=False,
     )
     ids = [line.strip() for line in listed.stdout.splitlines() if line.strip()]
     for cid in ids:
-        subprocess.run([*prefix, "stop", cid], capture_output=True, text=True, check=False)
-    state_engine.set_run_status(
-        params,
-        target_dir,
-        target_dir.name,
-        str(params.require("run_status_stopped")),
-        reason="operator stop",
-        failing_module=None,
-    )
+        subprocess.run([*prefix, "stop", "-t", "2", cid], capture_output=True, text=True, check=False)
+
+    recorded = state_engine.read_run_pid(target_dir)
+    killed = _kill_run_processes(target, recorded)
+    state_engine.clear_run_pid(target_dir)
+    print(f"stop: killed_pids={killed} containers={len(ids)}")
     return ids
+
+
+def _kill_run_processes(target: str, recorded: int | None) -> list[int]:
+    pids = []
+    if recorded and recorded != os.getpid():
+        pids.append(recorded)
+    for pid in _pids_for_cli_run(target):
+        if pid not in pids and pid != os.getpid():
+            pids.append(pid)
+    killed: list[int] = []
+    for pid in pids:
+        if _terminate_pid(pid):
+            killed.append(pid)
+    return killed
+
+
+def _pids_for_cli_run(target: str) -> list[int]:
+    found: list[int] = []
+    proc = Path("/proc")
+    if not proc.is_dir():
+        return found
+    needles = (
+        f"pipeline.cli run {target}".encode(),
+        f"pipeline.cli resume {target}".encode(),
+    )
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            cmd = (entry / "cmdline").read_bytes()
+        except OSError:
+            continue
+        flat = cmd.replace(b"\x00", b" ")
+        if any(n in flat for n in needles):
+            found.append(int(entry.name))
+    return found
+
+
+def _terminate_pid(pid: int) -> bool:
+    if pid <= 1 or pid == os.getpid():
+        return False
+
+    def _signal(sig: int) -> bool:
+        try:
+            os.killpg(pid, sig)
+            return True
+        except ProcessLookupError:
+            return False
+        except (PermissionError, OSError):
+            try:
+                os.kill(pid, sig)
+                return True
+            except ProcessLookupError:
+                return False
+            except (PermissionError, OSError):
+                return False
+
+    if not _signal(signal.SIGTERM):
+        return False
+    deadline = time.time() + 2.0
+    while time.time() < deadline:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return True
+        time.sleep(0.05)
+    _signal(signal.SIGKILL)
+    return True
+
+
+def _finalize_stopped(
+    params: Params,
+    gate: ScopeGate,
+    target_dir: Path,
+    target: str,
+    clock: Clock,
+    run_started: float,
+    assigner: Any,
+) -> int:
+    state_engine.fail_running_modules(params, target_dir, target)
+    status = str(params.require("run_status_stopped"))
+    state_engine.set_run_status(params, target_dir, target, status, reason="operator stop", failing_module=None)
+    state_engine.clear_run_pid(target_dir)
+    stamp = utc_stamp()
+    counts = _counts(params, target_dir, [], [])
+    if assigner is not None:
+        try:
+            assigner.write_ledger(target_dir)
+            assigner.write_health(target_dir)
+        except Exception:  # noqa: BLE001
+            pass
+    ingest_if_completed(params, gate, target_dir, target, status)
+    snapshot(params, target_dir, stamp)
+    prev = previous_timestamp(params, target_dir, stamp)
+    append_run(params, target_dir, stamp, status, counts)
+    write_diff(params, target_dir, prev, stamp)
+    try:
+        from pipeline.warehouse import ingest_run_end
+
+        ingest_run_end(params, target_dir, target, stamp, status, counts)
+    except Exception as exc:  # noqa: BLE001
+        print(f"warehouse: ok=False reason=disclosed ingest failure: {exc}")
+    run_end_notifications(params, target_dir, target, status, "operator stop", None, counts, clock.time() - run_started)
+    print(f"run {status}: {target_dir}")
+    return _exit_code(params, status)
 
 
 def _classify_status(
@@ -575,6 +762,8 @@ def _run_passive_modules(
         name = str(name)
         if name not in RUNNERS:
             continue
+        if state_engine.operator_stopped(params, target_dir, target):
+            raise OperatorStop("operator stop")
         if state_engine.skip_done(st, name):
             key = data_keys.get(name)
             if key:
@@ -606,8 +795,13 @@ def _run_passive_modules(
             )
             if doc:
                 docs.append(doc)
+            if state_engine.operator_stopped(params, target_dir, target):
+                state_engine.set_status(params, target_dir, name, "failed")
+                raise OperatorStop("operator stop")
             state_engine.set_status(params, target_dir, name, "done")
             st = state_engine.load_state(params, target_dir, target)
+        except OperatorStop:
+            raise
         except Exception as exc:
             state_engine.set_status(params, target_dir, name, "failed")
             _append_log(params, target_dir, name, name, 1, str(exc))
@@ -646,6 +840,8 @@ def _run_active_modules(
         name = str(name)
         if name not in RUNNERS:
             continue
+        if state_engine.operator_stopped(params, target_dir, target):
+            raise OperatorStop("operator stop")
         if state_engine.skip_done(st, name):
             key = data_keys.get(name)
             if key:
@@ -677,8 +873,13 @@ def _run_active_modules(
             )
             if doc:
                 docs.append(doc)
+            if state_engine.operator_stopped(params, target_dir, target):
+                state_engine.set_status(params, target_dir, name, "failed")
+                raise OperatorStop("operator stop")
             state_engine.set_status(params, target_dir, name, "done")
             st = state_engine.load_state(params, target_dir, target)
+        except OperatorStop:
+            raise
         except EmptyWordlistError as exc:
             state_engine.set_status(params, target_dir, name, "failed")
             partial.append(f"empty_wordlist:{exc}")
@@ -714,6 +915,8 @@ def _run_parallel(
     workers = max(1, workers)
 
     def one(name: str) -> InvokeResult | None:
+        if state_engine.operator_stopped(params, target_dir, target_dir.name):
+            raise OperatorStop("operator stop")
         left = deadline - clock.time()
         if left <= 0:
             return None
@@ -723,11 +926,15 @@ def _run_parallel(
         futs = {pool.submit(one, name): name for name in remaining}
         for fut in as_completed(futs):
             name = futs[fut]
+            if state_engine.operator_stopped(params, target_dir, target_dir.name):
+                raise OperatorStop("operator stop")
             if clock.time() >= deadline:
                 partial.append(f"{branch}_budget")
                 break
             try:
                 result = fut.result()
+            except OperatorStop:
+                raise
             except Exception as exc:
                 _append_log(params, target_dir, branch, name, 1, str(exc))
                 partial.append(f"{branch}:{name}:{exc}")
@@ -761,6 +968,8 @@ def _run_sequential(
     deadline = clock.time() + budget
     docs: list[dict[str, Any]] = []
     for name in names:
+        if state_engine.operator_stopped(params, target_dir, target_dir.name):
+            raise OperatorStop("operator stop")
         left = deadline - clock.time()
         if left <= 0:
             partial.append(f"{branch}_budget")
@@ -783,6 +992,8 @@ def _run_sequential(
 def _guard(fn, partial: list[str], branch: str):
     try:
         return fn()
+    except OperatorStop:
+        raise
     except Exception as exc:
         partial.append(f"{branch}_crash:{exc}")
         traceback.print_exc()
@@ -798,6 +1009,8 @@ def _echo_fixture_mode(params: Params) -> bool:
 
 
 def _append_log(params: Params, target_dir: Path, module: str, tool: str, code: int, detail: str) -> None:
+    if state_engine.operator_stopped(params, target_dir, target_dir.name):
+        return
     path = target_dir / str(params.require("run_log"))
     path.parent.mkdir(parents=True, exist_ok=True)
     tail_n = int(params.require("stderr_tail_lines"))
@@ -810,6 +1023,8 @@ def _append_log(params: Params, target_dir: Path, module: str, tool: str, code: 
 
 
 def _append_note(params: Params, target_dir: Path, module: str, detail: str) -> None:
+    if state_engine.operator_stopped(params, target_dir, target_dir.name):
+        return
     path = target_dir / str(params.require("run_log"))
     path.parent.mkdir(parents=True, exist_ok=True)
     from datetime import datetime, timezone

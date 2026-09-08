@@ -169,21 +169,17 @@ def cmd_resume(params: Params, target: str, aggressive: bool = False) -> int:
 def cmd_stop(params: Params, target: str) -> int:
     target = sanitize_target(target)
     target_dir = target_root(params, target)
-    if not state_engine.state_path(params, target_dir).exists():
-        print(f"stop: no run in progress for {target}")
-        return 0
-    st = state_engine.load_state(params, target_dir, target)
-    running = [
-        name
-        for name, row in (st.get("modules") or {}).items()
-        if (row or {}).get("status") == "running"
-    ]
     from pipeline.engine import stop_target
 
+    running: list[str] = []
+    if state_engine.state_path(params, target_dir).exists():
+        st = state_engine.load_state(params, target_dir, target)
+        running = [
+            name
+            for name, row in (st.get("modules") or {}).items()
+            if (row or {}).get("status") == "running"
+        ]
     stopped = stop_target(params, target_dir)
-    if not running and not stopped:
-        print(f"stop: no running modules for {target}")
-        return 0
     print(f"stop requested for: {', '.join(running) or '(none)'}; containers={len(stopped)}")
     return int(params.require("exit_code_stopped"))
 

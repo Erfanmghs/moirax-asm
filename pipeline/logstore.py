@@ -8,8 +8,9 @@ Contract:
 - NEVER-FAIL for the pipeline: housekeep() raises nothing to the run verdict --
   the engine call-site wraps it in try/except exactly like reporting (section 10.1).
 - PROTECTED (never deleted): data.json, runs.json, state.json, diff.json,
-  the current report dir (90_report), the current logs/run.log and
-  logs/agent-journal.jsonl, and anything outside the two managed surfaces.
+  warehouse.sqlite (and WAL/SHM), the current report dir (90_report), the
+  current logs/run.log and logs/agent-journal.jsonl, and anything outside
+  the two managed surfaces.
 - MANAGED SURFACES ONLY:
     1. history/<stamp>/ snapshots -- keep the newest N, prune older.
     2. logs/*.gz -- rotation archives created here (gzip level 9); prune

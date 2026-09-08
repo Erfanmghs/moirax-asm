@@ -101,6 +101,11 @@ def set_status(params: Params, target_dir: Path, module: str, status: str) -> di
     allowed = tuple(params.require("module_status_values"))
     if status not in allowed:
         raise ValueError(f"invalid module status {status!r}")
+    # Operator STOP wins: do not start or complete modules after the run is stopped.
+    if status in ("running", "done") and operator_stopped(params, target_dir, target_dir.name):
+        if status == "running":
+            return load_state(params, target_dir, target_dir.name)
+        status = "failed"
     state = load_state(params, target_dir, target_dir.name)
     modules = state.setdefault("modules", {})
     row = modules.get(module) or {"status": "pending", "started_at": None, "finished_at": None}
@@ -122,8 +127,14 @@ def set_run_status(
     status: str,
     reason: str | None = None,
     failing_module: str | None = None,
+    *,
+    overwrite_stopped: bool = False,
 ) -> dict[str, Any]:
     state = load_state(params, target_dir, target)
+    stopped = str(params.require("run_status_stopped"))
+    current = str((state.get("run") or {}).get("status") or "")
+    if current == stopped and status != stopped and not overwrite_stopped:
+        return state
     state["run"] = {
         "status": status,
         "reason": reason,
@@ -132,6 +143,56 @@ def set_run_status(
     }
     save_state(params, target_dir, state)
     return state
+
+
+def run_pid_path(target_dir: Path) -> Path:
+    return target_dir / "run.pid"
+
+
+def write_run_pid(target_dir: Path, pid: int) -> Path:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    path = run_pid_path(target_dir)
+    path.write_text(f"{int(pid)}\n", encoding="utf-8")
+    return path
+
+
+def read_run_pid(target_dir: Path) -> int | None:
+    path = run_pid_path(target_dir)
+    if not path.is_file():
+        return None
+    try:
+        pid = int(path.read_text(encoding="utf-8").strip().split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+    return pid if pid > 1 else None
+
+
+def clear_run_pid(target_dir: Path) -> None:
+    path = run_pid_path(target_dir)
+    try:
+        path.unlink()
+    except OSError:
+        return
+
+
+def operator_stopped(params: Params, target_dir: Path, target: str) -> bool:
+    state = load_state(params, target_dir, target)
+    return str((state.get("run") or {}).get("status") or "") == str(
+        params.require("run_status_stopped")
+    )
+
+
+def fail_running_modules(params: Params, target_dir: Path, target: str) -> list[str]:
+    """Mark in-flight module rows failed. module_status_values has no 'stopped'."""
+    state = load_state(params, target_dir, target)
+    names = [
+        name
+        for name, row in (state.get("modules") or {}).items()
+        if (row or {}).get("status") == "running"
+    ]
+    for name in names:
+        set_status(params, target_dir, name, "failed")
+    return names
 
 
 def paused_modules(params: Params, target_dir: Path, target: str) -> dict[str, Any]:

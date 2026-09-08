@@ -3,6 +3,6 @@ root: wordlists/custom
 lists:
   platform_learned:
     path: wordlists/custom/platform-learned.txt
-    entries: 0
+    entries: 4
     shape: hostname
     origin: platform

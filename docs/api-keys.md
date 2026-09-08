@@ -35,6 +35,14 @@ to the next healthy engine; >20% errors over 60s -> ISOLATED.
 | subfinder / amass / assetfinder / findomain | -- (keyless) | always run |
 | chaos (ProjectDiscovery) | `CHAOS_KEY` | agent skipped, disclosed |
 
+Keyless HTTP APIs also run every time (no signup): HackerTarget, Anubis/jldc,
+AlienVault OTX, urlscan.io. Optional keys below add more names when present.
+
+| Agent | Key | Without key |
+|---|---|---|
+| SecurityTrails | `SECURITYTRAILS_API_KEY` | source skipped; keyless APIs still run |
+| VirusTotal | `VIRUSTOTAL_API_KEY` | source skipped; keyless APIs still run |
+
 ## Archives -- PSV-4 (all keyless: waybackurls, gau, direct CDX fallback)
 
 ## GitHub OSINT -- PSV-7
@@ -55,10 +63,9 @@ targets skip per spec) **and** the provider key is present.
 
 ## Port plane -- B4 PORT-SWEEP
 
-**No external APIs by design.** naabu (SYN full range) and the optional
-nmap -sV second stage (toggle OFF by default -- designated VA hook) are pure
-network scanners driven by the forged resolver fleet and the pacer; there is
-nothing to sign up for.
+**Default is 100% TCP coverage (ports 1-65535) on every resolved IP.**
+The light top-ports check is optional and off by default. naabu SYN full
+range is always-on; nmap -sV stays opt-in.
 
 ## Notifications -- B5 (optional)
 
@@ -72,8 +79,7 @@ nothing to sign up for.
 |---|---|
 | `DASHBOARD_TOKEN` | auth for the FastAPI/React control center (bind 127.0.0.1:8080) |
 
-## Reserved slots (registered, wired in a later phase)
+## Reserved slots
 
-`SECURITYTRAILS_API_KEY`, `VIRUSTOTAL_API_KEY` -- harmless if set today; they
-are reserved for future source integrations and are listed here so the
-operator can provision them in advance.
+None. `SECURITYTRAILS_API_KEY` and `VIRUSTOTAL_API_KEY` are wired as optional
+PSV-3b sources (skipped honestly when unset).

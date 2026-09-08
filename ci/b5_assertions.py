@@ -7,8 +7,7 @@
                  run_end_notifications with a fake sender
   I3  MANDATORY  ACCEPTANCE (new-asset flood above threshold -> exactly ONE
                  digest message) -- same frozen evaluate_diff_alerts
-  I4  MANDATORY  ACCEPTANCE (closed-port-only diff -> NO Telegram alert,
-                 dashboard diff view only) -- same frozen evaluate_diff_alerts
+    I4  MANDATORY  ACCEPTANCE (closed-port-only diff -> Telegram CLOSED PORT alert)
   I5  MANDATORY  Real vehicle diff.json exists + its notify ledger discloses
                  the section 4.6 evaluation (skip reason or alertable counts)
   I6  MANDATORY  COMMITTED content intact (HEAD blobs of tools.yaml re-parsed
@@ -105,16 +104,21 @@ def main() -> int:
     flood = {"hosts": [{"host": f"h{i}.example.com", "sources": ["subfinder"]} for i in range(12)]}
     diff3 = {"schema_version": 1, "from_run": "a", "to_run": "b", "added": flood, "removed": _classes(), "changed": _classes()}
     ledger3 = evaluate_diff_alerts(params, diff3, sender=sink3.append)
-    ok3 = len(sink3) == 1 and "DIGEST: 12 new findings" in sink3[0] and ledger3.get("digest_sent") is True
+    ok3 = len(sink3) == 1 and "DIGEST: 12 findings" in sink3[0] and ledger3.get("digest_sent") is True
     check("I3", "MANDATORY", ok3, f"messages={len(sink3)} digest_sent={ledger3.get('digest_sent')} threshold={ledger3.get('digest_threshold')}")
 
-    # ---- I4 closed-port-only diff -> silence -----------------------------------
+    # ---- I4 closed-port-only diff -> CLOSED PORT alert -------------------------
     sink4: list[str] = []
     closed_only = {"ports": [{"host": "a.example.com", "ip": "93.184.215.14", "port": 80, "proto": "tcp"}]}
     diff4 = {"schema_version": 1, "from_run": "a", "to_run": "b", "added": _classes(), "removed": closed_only, "changed": _classes()}
     ledger4 = evaluate_diff_alerts(params, diff4, sender=sink4.append)
-    ok4 = sink4 == [] and ledger4.get("alertable") == 0 and ledger4.get("skipped_reason") in ("no_added_assets", "no_alertable_assets")
-    check("I4", "MANDATORY", ok4, f"messages={len(sink4)} ledger_alertable={ledger4.get('alertable')} reason={ledger4.get('skipped_reason')}")
+    ok4 = (
+        len(sink4) == 1
+        and "CLOSED PORT:" in sink4[0]
+        and ledger4.get("alertable") == 1
+        and ledger4.get("instant_sent") == 1
+    )
+    check("I4", "MANDATORY", ok4, f"messages={len(sink4)} first={sink4[0] if sink4 else '-'} ledger_alertable={ledger4.get('alertable')}")
 
     # ---- I5 real diff.json + disclosed section 4.6 evaluation ------------------------
     diff_ok = DIFF.is_file()

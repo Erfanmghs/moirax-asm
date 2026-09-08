@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import socket
 import subprocess
@@ -14,6 +15,7 @@ from dashboard.service import (
     DashboardError,
     ProxyUnreachableError,
     apply_filters,
+    attach_open_ports,
     apply_tools_edit,
     apply_wordlists_edit,
     check_proxy_reachable,
@@ -85,6 +87,17 @@ class TestApiKeysPanelD(unittest.TestCase):
         delete_key(params, "SHODAN_API_KEY")
         self.assertFalse({r["name"] for r in list_keys(params) if r["set"]} & {"SHODAN_API_KEY"})
 
+    def test_env_write_preserves_comments_and_unrelated_keys(self):
+        params = self._params()
+        env_path = params.root / ".env"
+        env_path.write_text("# keep me\nUNRELATED=stay\nSHODAN_API_KEY=old\n", encoding="utf-8")
+        set_key(params, "BRAVE_API_KEY", "newbravevalue")
+        text = env_path.read_text(encoding="utf-8")
+        self.assertIn("# keep me", text)
+        self.assertIn("UNRELATED=stay", text)
+        self.assertIn("BRAVE_API_KEY=newbravevalue", text)
+        self.assertIn("SHODAN_API_KEY=old", text)
+
     def test_registry_is_allowlist(self):
         with self.assertRaises(DashboardError):
             set_key(self._params(), "NOT_A_KEY", "x")
@@ -93,7 +106,8 @@ class TestApiKeysPanelD(unittest.TestCase):
         names = {r["name"] for r in list_keys(self._params())}
         for required in ("SHODAN_API_KEY", "CENSYS_API_ID", "GITHUB_TOKEN", "CHAOS_KEY",
                          "SERPER_API_KEY", "BRAVE_API_KEY", "GOOGLE_CSE_KEY", "GOOGLE_CSE_CX",
-                         "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
+                         "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+                         "SECURITYTRAILS_API_KEY", "VIRUSTOTAL_API_KEY"):
             self.assertIn(required, names)
 
 
@@ -117,6 +131,30 @@ class TestSettingsPanelE(unittest.TestCase):
         self.assertIn("424242", raw)  # non-secret chat id stored
         loaded = load_settings(params)
         self.assertEqual(loaded["digest_threshold"], 7)
+
+    def test_partial_save_does_not_clobber_bot_token(self):
+        params = self._params()
+        save_settings(params, {
+            "telegram": {"bot_token": "123456:ABCDEF-secret", "chat_id": "424242"},
+            "digest_threshold": 7,
+        })
+        saved = save_settings(params, {
+            "digest_threshold": 11,
+            "telegram": {"chat_id": "999"},
+        })
+        self.assertEqual(saved["digest_threshold"], 11)
+        self.assertEqual(saved["telegram"]["chat_id"], "999")
+        self.assertEqual(saved["telegram"]["bot_token"], "123****et")
+        raw = (params.root / "dashboard" / "config.json").read_text(encoding="utf-8")
+        self.assertIn("123456:ABCDEF-secret", raw)
+        self.assertNotIn("123****et", raw)
+        save_settings(params, {"telegram": {"bot_token": "123****et", "chat_id": "999"}})
+        raw2 = (params.root / "dashboard" / "config.json").read_text(encoding="utf-8")
+        self.assertIn("123456:ABCDEF-secret", raw2)
+
+    def test_nested_settings_closed_allow_list(self):
+        self.assertTrue(validate_settings({"telegram": {"receiver_map": {"x": "1"}}}))
+        self.assertTrue(validate_settings({"agent": {"shell": "id"}}))
 
     def test_validation_rejects(self):
         self.assertTrue(validate_settings({"digest_threshold": 0}))
@@ -197,6 +235,17 @@ class TestToolsEditorPanelA(unittest.TestCase):
 
         reloaded = load_yaml_file(str(tmp / "tools.yaml"))
         self.assertEqual(reloaded["tools"][tool]["flag_overrides"]["target_domain"], "probe.example.com")
+
+    def test_full_port_sweep_cannot_be_disabled(self):
+        params = _isolated_params()
+        from pipeline.yaml_util import load_yaml_file
+
+        doc = load_yaml_file(str(params.root / "tools.yaml"))
+        with self.assertRaises(DashboardError):
+            validate_tools_edit(doc, "naabu-full", {"enabled": False})
+        apply_tools_edit(params, "naabu", {"enabled": True})
+        reloaded = load_yaml_file(str(params.root / "tools.yaml"))
+        self.assertTrue(reloaded["tools"]["naabu"]["enabled"])
 
 
 class TestWordlistsEditorPanelA(unittest.TestCase):
@@ -334,9 +383,12 @@ class TestDashboardApi(unittest.TestCase):
             self.assertEqual(r2.status_code, 503)
 
     def test_auth_rejects_bad_token(self):
-        with mock.patch.dict(os.environ, {"DASHBOARD_TOKEN": "real"}, clear=False):
+        with mock.patch.dict(os.environ, {"DASHBOARD_TOKEN": "real-token"}, clear=False):
             r = self.client.get("/api/tools", headers={"Authorization": "Bearer wrong"})
             self.assertEqual(r.status_code, 401)
+        with mock.patch.dict(os.environ, {"DASHBOARD_TOKEN": "short"}, clear=False):
+            r3 = self.client.get("/api/tools", headers={"Authorization": "Bearer short"})
+            self.assertEqual(r3.status_code, 503, "token shorter than 8 chars is fail-closed")
 
     def test_tools_wordlists_settings_scheduler_endpoints(self):
         params = _isolated_params()
@@ -349,6 +401,13 @@ class TestDashboardApi(unittest.TestCase):
                 r = self.client.get("/api/tools", headers=self.token_headers)
                 self.assertEqual(r.status_code, 200)
                 self.assertIn("tools", r.json())
+                names = [t.get("name") for t in r.json()["tools"]]
+                self.assertIn("ffuf", names)
+                self.assertNotIn("echo-tool", names)
+                dnsx = next(t for t in r.json()["tools"] if t.get("id") == "dnsx")
+                self.assertIn("subdomain", (dnsx.get("technique") or "").lower())
+                httpx = next(t for t in r.json()["tools"] if t.get("id") == "httpx")
+                self.assertIn("length", httpx.get("technique") or "")
                 r = self.client.put("/api/tools/echo-tool", json={"enabled": True}, headers=self.token_headers)
                 self.assertEqual(r.status_code, 200, r.text)
                 r = self.client.put("/api/tools/echo-tool", json={"evil": 1}, headers=self.token_headers)
@@ -368,6 +427,41 @@ class TestDashboardApi(unittest.TestCase):
                 r = self.client.get("/api/keys", headers=self.token_headers)
                 self.assertEqual(r.status_code, 200)
 
+    def test_wordlists_expose_original_filenames(self):
+        with mock.patch.dict(os.environ, {"DASHBOARD_TOKEN": "test-token"}, clear=False):
+            r = self.client.get("/api/wordlists", headers=self.token_headers)
+            self.assertEqual(r.status_code, 200)
+            lists = r.json().get("lists") or {}
+            smoke = lists.get("test_smoke_200") or {}
+            self.assertEqual(smoke.get("name"), "test-smoke-200.txt")
+            top = lists.get("dns_fast_top5000") or {}
+            self.assertEqual(top.get("name"), "subdomains-top1million-5000.txt")
+            tasks = r.json().get("tasks") or {}
+            self.assertIn("DNSR-1", tasks)
+            self.assertIn("FFUF-0", tasks)
+            self.assertIn("FFUF-2", tasks)
+            self.assertEqual(tasks.get("DNSR-1", {}).get("default_key"), "dns_fast_top5000")
+            self.assertEqual(tasks.get("FFUF-2", {}).get("default_key"), "vhost_top5000")
+
+    def test_wordlist_preview_returns_up_to_twenty_random_lines(self):
+        from dashboard.service import wordlist_preview
+
+        params = _isolated_params()
+        dest = params.root / "wordlists" / "local"
+        dest.mkdir(parents=True, exist_ok=True)
+        src = _ROOT / "wordlists" / "local" / "test-smoke-200.txt"
+        if src.is_file():
+            (dest / "test-smoke-200.txt").write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+        else:
+            (dest / "test-smoke-200.txt").write_text("\n".join(f"h{i}.example" for i in range(40)) + "\n", encoding="utf-8")
+        a = wordlist_preview(params, "test_smoke_200", 20)
+        self.assertEqual(a["key"], "test_smoke_200")
+        self.assertLessEqual(len(a["samples"]), 20)
+        self.assertGreaterEqual(len(a["samples"]), 1)
+        self.assertTrue(all(isinstance(s, str) and s.isascii() for s in a["samples"]))
+        with self.assertRaises(DashboardError):
+            wordlist_preview(params, "../etc/passwd", 20)
+
     def test_keys_roundtrip_via_api(self):
         params = _isolated_params()
         tmp = params.root
@@ -383,6 +477,111 @@ class TestDashboardApi(unittest.TestCase):
                 r = self.client.delete("/api/keys/SHODAN_API_KEY", headers=self.token_headers)
                 self.assertEqual(r.status_code, 200)
                 self.assertNotIn("SHODAN_API_KEY=", (tmp / ".env").read_text(encoding="utf-8"))
+
+    def test_warehouse_api_auth_isolation_and_results_enrichment(self):
+        from pipeline.factory import ensure_layout
+        from pipeline.history import empty_maps
+        from pipeline.warehouse import ingest_maps
+
+        params = _isolated_params()
+        a = ensure_layout(params, "alpha.example")
+        b = ensure_layout(params, "beta.example")
+
+        def maps(hosts):
+            out = empty_maps()
+            for row in hosts:
+                out["hosts"][str(row["host"])] = row
+            return out
+
+        ingest_maps(params, a, "alpha.example", "20260101T000000Z", "completed", {},
+                    maps([{"host": "only-alpha.example", "alive": True}]))
+        ingest_maps(params, a, "alpha.example", "20260102T000000Z", "completed", {},
+                    maps([{"host": "only-alpha.example", "alive": True}, {"host": "new-alpha.example", "alive": True}]))
+        ingest_maps(params, b, "beta.example", "20260101T000000Z", "completed", {},
+                    maps([{"host": "only-beta.example", "alive": True}]))
+        with mock.patch.dict(os.environ, {"DASHBOARD_TOKEN": "test-token"}, clear=False):
+            from dashboard import app as appmod
+
+            with mock.patch.object(appmod, "_params_obj", return_value=params):
+                denied = self.client.get("/api/warehouse/alpha.example")
+                self.assertEqual(denied.status_code, 401)
+                st_a = self.client.get("/api/warehouse/alpha.example", headers=self.token_headers)
+                st_b = self.client.get("/api/warehouse/beta.example", headers=self.token_headers)
+                self.assertEqual(st_a.status_code, 200, st_a.text)
+                self.assertEqual(st_a.json()["bound_target"], "alpha.example")
+                self.assertEqual(st_b.json()["bound_target"], "beta.example")
+                self.assertEqual(st_a.json()["facts"]["hosts"], 2)
+                self.assertEqual(st_b.json()["facts"]["hosts"], 1)
+                self.assertEqual(st_a.json()["path"], "warehouse.sqlite")
+                self.assertTrue(st_a.json()["sealed"])
+                self.assertTrue(st_b.json()["sealed"])
+                illegal = self.client.get("/api/warehouse/-x", headers=self.token_headers)
+                self.assertEqual(illegal.status_code, 422)
+                diff = self.client.get(
+                    "/api/results/alpha.example/diff?from_run=20260101T000000Z&to_run=20260102T000000Z",
+                    headers=self.token_headers,
+                )
+                self.assertEqual(diff.status_code, 200, diff.text)
+                added = {row["host"] for row in (diff.json().get("added") or {}).get("hosts") or []}
+                self.assertEqual(added, {"new-alpha.example"})
+                self.assertNotIn("only-beta.example", added)
+                snap = self.client.get(
+                    "/api/results/alpha.example?run=20260102T000000Z",
+                    headers=self.token_headers,
+                )
+                self.assertEqual(snap.status_code, 200)
+                names = {row["host"] for row in snap.json().get("assets") or []}
+                self.assertEqual(names, {"only-alpha.example", "new-alpha.example"})
+                self.assertTrue(all(row.get("first_seen") for row in snap.json()["assets"]))
+                rebuilt = self.client.post("/api/warehouse/alpha.example/rebuild", headers=self.token_headers)
+                self.assertEqual(rebuilt.status_code, 200)
+                self.assertTrue(rebuilt.json().get("ok"))
+
+
+class TestOpenPortsJoin(unittest.TestCase):
+    """RESULTS rows show which ports are open on which host, from port JSON (no warehouse schema)."""
+
+    def test_join_sweep_ports_to_subdomain(self):
+        params = _isolated_params()
+        target = "example.com"
+        td = params.root / "recon" / target
+        (td / "30_ports" / "naabu-full").mkdir(parents=True)
+        (td / "30_ports" / "naabu-full" / "data.json").write_text(
+            json.dumps({
+                "scans": [
+                    {
+                        "ip": "1.2.3.4",
+                        "hosts": ["api.example.com", "www.example.com"],
+                        "ports": [
+                            {"port": 443, "proto": "tcp", "state": "open"},
+                            {"port": 80, "proto": "tcp"},
+                        ],
+                    },
+                    {
+                        "ip": "9.9.9.9",
+                        "hosts": ["dev.example.com"],
+                        "ports": [{"port": 22, "proto": "tcp"}],
+                    },
+                ],
+                "services": [
+                    {"ip": "1.2.3.4", "port": 443, "proto": "tcp", "product": "nginx", "version": "1.25"},
+                ],
+            })
+            + "\n",
+            encoding="utf-8",
+        )
+        out = attach_open_ports(params, target, [
+            {"host": "www.example.com", "ip": "1.2.3.4", "alive": True},
+            {"host": "api.example.com", "ips": ["1.2.3.4"], "alive": True},
+            {"host": "dev.example.com", "ip": "9.9.9.9", "alive": True},
+            {"host": "lonely.example.com", "ip": "8.8.8.8", "alive": False},
+        ])
+        by = {r["host"]: r for r in out}
+        self.assertEqual(by["www.example.com"]["open_ports_text"], "80/tcp, 443/tcp nginx 1.25")
+        self.assertEqual(by["api.example.com"]["open_ports_text"], "80/tcp, 443/tcp nginx 1.25")
+        self.assertEqual(by["dev.example.com"]["open_ports_text"], "22/tcp")
+        self.assertEqual(by["lonely.example.com"]["open_ports_text"], "")
+        self.assertEqual([p["port"] for p in by["www.example.com"]["open_ports"]], [80, 443])
 
 
 if __name__ == "__main__":

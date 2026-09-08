@@ -40,7 +40,11 @@
         },
         "misconfig_suspect": { "type": "boolean" },
         "filtered_suspect": { "type": "boolean" },
-        "anomalous_open_suspect": { "type": "boolean" }
+        "anomalous_open_suspect": { "type": "boolean" },
+        "http_status": { "type": ["integer", "null"] },
+        "length": { "type": ["integer", "null"] },
+        "tech": { "type": "array", "items": { "type": "string" } },
+        "title": { "type": ["string", "null"] }
       }
     },
     "quarantine_item": {

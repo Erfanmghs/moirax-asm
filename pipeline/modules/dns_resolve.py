@@ -16,6 +16,7 @@ from pipeline.resolver_forge import forge_resolvers
 from pipeline.scope import ScopeGate
 from pipeline.textio import atomic_write_text, read_lines
 from pipeline.wordlist_forge import copy_into_target, materialize_effective
+from pipeline import httpx_probe
 
 
 def _unlink_stale(path: Path) -> None:
@@ -69,8 +70,8 @@ def run_dns_resolve(
     copy_into_target(params, target_dir, brute_src, brute_rel)
     brute_lines = [line.strip() for line in read_lines(target_dir / brute_rel) if line.strip()]
 
-    known = _ffuf_hosts(params, target_dir)
-    seeds = wildcard_seeds(gate)
+    known = _ffuf_hosts(params, target_dir) + _passive_hosts(params, target_dir) + _prior_asset_hosts(params, target_dir)
+    seeds = wildcard_seeds(gate, target)
     apex = seeds[0] if seeds else target
 
     resolved: dict[str, dict[str, Any]] = {}
@@ -130,8 +131,11 @@ def run_dns_resolve(
     else:
         partial.append("load_balance_canary_pause")
     flagged = _misconfig_flagged(params, target_dir)
-    wildcard_seed_suspects = _wildcard_ip_members(sorted(set(known)), resolved, wildcard_ip)
-    perm_hosts, seed_counts = _filter_seeds(sorted(set(known)), flagged, wildcard_seed_suspects)
+    # Permute DNS-validated names (brute hits + any earlier ffuf/passive
+    # artifacts), not HTTP-fuzz noise. Empty ffuf is expected when dnsx runs first.
+    perm_seed = sorted(set(known) | set(resolved.keys()) | set(seeds))
+    wildcard_seed_suspects = _wildcard_ip_members(perm_seed, resolved, wildcard_ip)
+    perm_hosts, seed_counts = _filter_seeds(perm_seed, flagged, wildcard_seed_suspects)
     dropped_aggregate = 0
     if perm_hosts:
         if not balancer.tick(resolvers_c, "logs/raw/dnsx-canary", extra_lb):
@@ -242,6 +246,9 @@ def run_dns_resolve(
                 suspects.append(host)
         wildcard_suspects = sorted(set(suspects))
 
+    _httpx_enrich_resolved(
+        params, adapter, target_dir, target, extra, planned, timeout_sec, resolved
+    )
     valid = sum(1 for row in resolved.values() if row.get("resolution_status") == "resolved")
     payload = {
         "schema_version": int(params.require("schema_version")),
@@ -553,6 +560,84 @@ def _read_doc(path: Path) -> dict[str, Any] | None:
         return None
 
 
+def _httpx_enrich_resolved(
+    params: Params,
+    adapter: Adapter,
+    target_dir: Path,
+    target: str,
+    extra: dict[str, Any],
+    planned: int,
+    timeout_sec: float | None,
+    resolved: dict[str, dict[str, Any]],
+) -> None:
+    """When httpx is ENABLED, tag resolved names with length + technology."""
+    for row in resolved.values():
+        row.setdefault("alive", None)
+        row.setdefault("http_status", None)
+        row.setdefault("length", None)
+        row.setdefault("tech", [])
+        row.setdefault("title", None)
+    if not bool(params.require("dnsr_httpx_probe")):
+        return
+    if not adapter.enabled("httpx"):
+        return
+    names = [
+        host
+        for host, row in resolved.items()
+        if row.get("resolution_status") == "resolved" and row.get("ips")
+    ]
+    if not names:
+        return
+    by_host = httpx_probe.probe_hosts(
+        params,
+        adapter,
+        target_dir,
+        target,
+        extra,
+        planned,
+        timeout_sec,
+        names,
+        str(params.require("dnsr_httpx_list_rel")),
+        str(params.require("dnsr_httpx_out_rel")),
+        "dns-resolve",
+        "logs/raw/httpx-dnsr",
+    )
+    for host in names:
+        row = resolved.get(host)
+        if row is None:
+            continue
+        httpx_probe.apply_enrich(row, by_host.get(host), miss_alive=True)
+
+
+def _prior_asset_hosts(params: Params, target_dir: Path) -> list[str]:
+    """Always re-check FQDNs already proven on this target (no disable switch)."""
+    path = target_dir / str(params.require("assets_relpath"))
+    doc = _read_doc(path)
+    if not doc:
+        return []
+    found: list[str] = []
+    for row in doc.get("assets") or []:
+        if not isinstance(row, dict):
+            continue
+        host = str(row.get("host") or "").strip().lower()
+        if host:
+            found.append(host)
+    return found
+
+
+def _passive_hosts(params: Params, target_dir: Path) -> list[str]:
+    """Use passive candidates as alterx seeds when that branch already wrote data."""
+    path = target_dir / str(params.require("passive_data_json"))
+    doc = _read_doc(path)
+    if not doc:
+        return []
+    found: list[str] = []
+    for row in doc.get("candidates") or []:
+        if isinstance(row, dict) and row.get("host"):
+            found.append(str(row["host"]).lower())
+    return found
+
+
 def _ffuf_hosts(params: Params, target_dir: Path) -> list[str]:
     path = target_dir / str(params.require("ffuf_data_json"))
     if not path.is_file():
@@ -661,7 +746,7 @@ def _asn_of(rec: dict[str, Any]) -> Any:
 
 
 def _empty_resolved(host: str, source: str) -> dict[str, Any]:
-    return {
+    row = {
         "host": host,
         "ips": [],
         "cname": [],
@@ -673,6 +758,8 @@ def _empty_resolved(host: str, source: str) -> dict[str, Any]:
         "resolution_status": "unresolved",
         "resolution_reason": "not queried",
     }
+    row.update(httpx_probe.empty_http_fields())
+    return row
 
 
 def _merge_resolved(store: dict[str, dict[str, Any]], rec: dict[str, Any], host: str, source: str) -> None:

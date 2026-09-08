@@ -127,8 +127,9 @@ def run_port_sweep(
     if scope_mode == "alive_only":
         candidates = [a for a in assets if a.get("alive") is True]
     else:
-        # all_resolved: every host with a resolved IP regardless of alive flag
-        candidates = [a for a in assets if (a.get("ips") or [])]
+        # all_resolved (default): every merged host -- missing IPs go through
+        # the resolution-guarantee pass so coverage is not limited to HTTP-alive.
+        candidates = list(assets)
     _log(params, target_dir, f"input assets={len(assets)} scope={scope_mode} candidates={len(candidates)}")
 
     # ---- IP map (RULE 2) from DNSR-3/PSV-6/PSV-8 attributions --------------

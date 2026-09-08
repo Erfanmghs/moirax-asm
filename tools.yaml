@@ -6,11 +6,13 @@ settings:
   recon_container_mount: /recon
   state_filename: state.json
   runs_filename: runs.json
+  warehouse_filename: warehouse.sqlite
   out_of_scope_log: logs/out_of_scope.log
   dashboard_bind_host: "127.0.0.1"
   dashboard_bind_port: 8080
   dashboard_image: busybox:1.36.1
   recon_volume: ./recon
+  recon_host_root: ""
   seclists_host_path: ~/seclists
   seclists_container_path: /usr/share/seclists
   digest_threshold: 10
@@ -63,6 +65,7 @@ settings:
     - passive-recon
     - merge
     - port-sweep
+    - ffuf-4
   module_status_values:
     - pending
     - running
@@ -78,6 +81,7 @@ settings:
     - 15_vhosts
     - 15_vhosts/ffuf
     - 15_vhosts/ffuf-3
+    - 15_vhosts/ffuf-4
     - 20_dns
     - 20_dns/dnsx
     - 30_ports
@@ -128,7 +132,7 @@ settings:
   # the TEST 4 cleanup review.
   portcheck_top_ports: 100
   portcheck_rate: 300
-  portsweep_scope: alive_only
+  portsweep_scope: all_resolved
   portsweep_duration_hours: 24
   portsweep_duration_hours_min: 1
   portsweep_profile: full
@@ -199,7 +203,18 @@ settings:
   httpx_threads: 200
   httpx_disable_update_check: "-duc"
   httpx_hf_hub_offline: "1"
+  # Tech + title flags for the operator httpx switch. Empty string disables
+  # the optional_argv hook. Default ON so ENABLED httpx writes length/tech.
+  httpx_tech_detect: "-td"
+  httpx_probe_title: "-title"
   passive_httpx_probe: true
+  # ACTIVE subdomain brute is dnsx (DNSR-1), not HTTP ffuf. Keep the old
+  # http://FUZZ.parent loop available as an opt-in (dashboard flag).
+  ffuf_http_subdomain_brute: false
+  # After DNSR-3, probe resolved names with httpx when the httpx tool is ENABLED.
+  dnsr_httpx_probe: true
+  dnsr_httpx_list_rel: 20_dns/dnsx/httpx-hosts.txt
+  dnsr_httpx_out_rel: 20_dns/dnsx/httpx.json
   github_search_req_per_min: 30
   wordlists_registry: wordlists.yaml
   # C2 (release directive): generated full-SecLists index + operator custom
@@ -264,6 +279,14 @@ settings:
   # jobs per run; over-cap truncates with an explicit ffuf3_dead_probe_cap
   # partial marker (never silent). Named section 5.6 dashboard-editable parameter.
   ffuf3_max_dead_probes: 1000
+  # FFUF-4: Host-header vhost on HTTP-like ports discovered by PORT-SWEEP.
+  # Not a branch member -- engine runs it after port-sweep, before OWASP.
+  ffuf4_module: ffuf-4
+  ffuf4_data_json: 15_vhosts/ffuf-4/data.json
+  ffuf4_summary: 15_vhosts/ffuf-4/summary.md
+  ffuf4_max_jobs: 200
+  vhost_http_ports: "80,81,3000,3001,4000,4173,5000,5001,5601,5985,7001,8000,8008,8080,8081,8088,8880,8888,9000,9090,9200,10000"
+  vhost_https_ports: "443,8443,9443,10443"
   tool_retry_count: 2
   retry_backoff_base_sec: 1
   passive_branch_budget_sec: 1200
@@ -380,11 +403,12 @@ settings:
   portcheck_target_set_rel: 30_ports/naabu-light/target-set.txt
   passive_branch_tools: []
   active_branch_tools: []
+  # Yield order: DNS brute+resolve (dnsx) first, then vhost (ffuf Host header)
+  # on those IPs, then dead-name vhost (ffuf-3), then light ports. HTTP
+  # subdomain brute (ffuf_http_subdomain_brute) stays OFF by default.
   active_branch_modules:
-    - ffuf
     - dns-resolve
-    # FFUF-3 (spec v1.9 section 8): appended ACTIVE sub-step -- runs after DNS-RESOLVE
-    # completes and BEFORE MERGE; existing module orders untouched.
+    - ffuf
     - ffuf-3
     - port-check
   # ---- B3 PASSIVE BRANCH (spec section 8 PSV-0..PSV-8) -- module wiring + artifacts.
@@ -571,6 +595,7 @@ tools:
       - -mc
       - "{ffuf_match_codes}"
       - -ac
+      - -k
       - -t
       - "{ffuf_threads}"
       - -timeout
@@ -615,6 +640,12 @@ tools:
       - when: httpx_disable_update_check
         argv:
           - "{httpx_disable_update_check}"
+      - when: httpx_tech_detect
+        argv:
+          - "{httpx_tech_detect}"
+      - when: httpx_probe_title
+        argv:
+          - "{httpx_probe_title}"
       - when: proxy_url
         argv:
           - -http-proxy
@@ -804,7 +835,7 @@ tools:
     output_summary: 20_dns/dnsx/alterx-summary.md
     output_raw_dir: logs/raw/alterx
   naabu:
-    enabled: true
+    enabled: false
     branch: active
     fallback: null
     image_ref: naabu
@@ -1218,6 +1249,12 @@ tools:
       - when: httpx_disable_update_check
         argv:
           - "{httpx_disable_update_check}"
+      - when: httpx_tech_detect
+        argv:
+          - "{httpx_tech_detect}"
+      - when: httpx_probe_title
+        argv:
+          - "{httpx_probe_title}"
       - when: proxy_url
         argv:
           - -http-proxy

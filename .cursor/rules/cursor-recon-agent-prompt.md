@@ -160,7 +160,10 @@ Purpose: production path for the vhost-misconfiguration class on DNS-DEAD names.
 
 ### MODULE: PORT-SWEEP — branch: ACTIVE | order: 4 (runs AFTER MERGE — consumes assets.json) | full-range scan on LIVE subdomains (the light top-50 PORT-CHECK stays as order-3 early signal — both coexist)
 Purpose: complete port surface (all 65,535 ports) for every LIVE subdomain, with hard guarantees: exactly ONE scan command per unique IP per run, rate-ramped so WAF/IDS never blacklists us, professional profile switches (user-mandated).
-- Input filter: hosts with `alive=true` from assets.json (PSV-6 / FFUF-2 probes). When the probe toggle is off, `portsweep_scope: alive_only | all_resolved` (dashboard-editable) decides the input set.
+- Input filter: every host with a resolved IP (`portsweep_scope: all_resolved`
+  default -- full coverage). `alive_only` remains available as a tighter
+  optional filter. `light` profile is the optional top-ports preview; default
+  profile is `full` (TCP 1-65535).
 - POST-MERGE RESOLUTION GUARANTEE (§8 IP-CENTRIC PORT SCANNING, RULE 1 — user-mandated v1.8): hosts lacking a resolved IP are batch-resolved (ONE dnsx pass) BEFORE the IP→[hostnames] map is built; still-unresolvable hosts carry `resolution_status: unresolved` + reason and are EXCLUDED from scanning with an explicit log line — the unique-IP target set is derived only after this guarantee.
 - IP DEDUP (MANDATORY): build IP→[hostnames] from the DNSR-3 map + PSV-8 passive IPs → each UNIQUE IP is scanned EXACTLY ONCE per run; results are attributed back to EVERY hostname sharing that IP. Duplicates are logged and skipped, never re-scanned.
 - Tool: naabu via tools.yaml, SYN scan, host network (§2.4): `naabu -l <unique-ips> -p - -scan-type s -retries 2 -timeout 1000 -c <concurrency> -rate <pps> -json`

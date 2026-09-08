@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recon.local/schemas/ffuf-4.schema.json",
+  "title": "ffuf-4 data.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "module", "vhosts", "targets", "suppressed"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "module": { "type": "string", "const": "ffuf-4" },
+    "vhosts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["base_host", "vhost", "ip", "port", "scheme", "alive", "http_status", "length", "misconfig_suspect"],
+        "properties": {
+          "base_host": { "type": "string" },
+          "vhost": { "type": "string" },
+          "ip": { "type": "string" },
+          "port": { "type": "integer" },
+          "scheme": { "type": "string", "enum": ["http", "https"] },
+          "alive": { "type": ["boolean", "null"] },
+          "http_status": { "type": ["integer", "null"] },
+          "length": { "type": ["integer", "null"] },
+          "misconfig_suspect": { "type": "boolean" },
+          "ips": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ip", "port", "scheme"],
+        "properties": {
+          "ip": { "type": "string" },
+          "port": { "type": "integer" },
+          "scheme": { "type": "string" },
+          "hosts": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "suppressed": { "type": "integer" },
+    "skipped": { "type": ["string", "null"] }
+  }
+}

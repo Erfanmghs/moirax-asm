@@ -46,7 +46,20 @@ def selected_keys(params: Params, task: str) -> list[str]:
 
 
 def seclists_host_root(params: Params) -> Path:
-    return params.expand_user_path("seclists_host_path")
+    """Resolve the SecLists tree for host-side reads.
+
+    Dashboard docker often runs as uid 1000 with HOME=/, so ``~/seclists``
+    expands to ``/seclists`` even though compose mounted the real clone at
+    ``seclists_container_path`` (/usr/share/seclists). Prefer a path that
+    actually exists; keep the expanded host path as the miss-message.
+    """
+    host = params.expand_user_path("seclists_host_path")
+    if host.is_dir():
+        return host
+    container = Path(str(params.settings.get("seclists_container_path") or "/usr/share/seclists"))
+    if container.is_dir():
+        return container
+    return host
 
 
 def host_list_path(params: Params, registry: WordlistRegistry, key: str) -> Path:
@@ -65,10 +78,12 @@ def materialize_effective(params: Params, task: str) -> Path:
         if key not in registry.allowed_keys(task):
             raise WordlistError(f"key {key!r} is not registered for task {task}")
     sources = [host_list_path(params, registry, key) for key in keys]
+    extra_paths = _always_on_learned_paths(params)
+    hash_sources = list(sources) + extra_paths
     missing = [str(path) for path in sources if not path.is_file()]
     if missing:
         raise WordlistError(f"wordlist source missing: {missing[0]}")
-    digest = _selection_hash(keys, sources)
+    digest = _selection_hash(keys + ["__learned__"] * bool(extra_paths), hash_sources)
     cache_dir = params.root / "wordlists" / "forge" / "cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path = cache_dir / f"{task}-{digest}.txt"
@@ -79,6 +94,12 @@ def materialize_effective(params: Params, task: str) -> Path:
         _log_count(params, task, keys, _count_lines(effective), digest, cache="HIT")
         return effective
     merged = _union_normalize(sources)
+    if extra_paths:
+        seen = set(merged)
+        for label in _union_normalize(extra_paths):
+            if label not in seen:
+                seen.add(label)
+                merged.append(label)
     if not merged:
         raise EmptyWordlistError(f"empty wordlist after union for task {task}")
     body = "\n".join(merged) + "\n"
@@ -109,40 +130,25 @@ def forge_custom_subdomains(params: Params) -> Path:
 
 
 def ingest_if_completed(params: Params, gate, target_dir: Path, target: str, status: str) -> None:
-    """section 8 FFUF-0: append validated labels only after a completed run (engine finalization)."""
+    """Append validated labels after a completed or partial run (always on)."""
     log = params.root / "wordlists" / "forge" / "counts.log"
     log.parent.mkdir(parents=True, exist_ok=True)
-    completed = str(params.require("run_status_completed"))
-    if status != completed:
+    allowed = {
+        str(params.require("run_status_completed")),
+        str(params.require("run_status_partial")),
+    }
+    if status not in allowed:
         with log.open("a", encoding="utf-8") as handle:
             handle.write(f"GROW-SKIP\tstatus={status}\n")
         return
     from pipeline.hostsutil import wildcard_seeds
-    from pipeline.jsonio import read_json
+    from pipeline.custom_lists import valid_discovered_hosts
 
-    seeds = wildcard_seeds(gate)
+    seeds = wildcard_seeds(gate, target)
     blocked = _probe_blocklist(params)
     tagged: list[tuple[str, str]] = []
-    ffuf_path = target_dir / str(params.require("ffuf_data_json"))
-    if ffuf_path.is_file():
-        doc = read_json(ffuf_path)
-        for row in doc.get("hosts") or []:
-            host = str(row.get("fqdn") or "").strip().lower()
-            if host:
-                tagged.append((host, "FFUF-1"))
-        for row in doc.get("vhosts") or []:
-            host = str(row.get("vhost") or "").strip().lower()
-            if host:
-                tagged.append((host, "FFUF-2"))
-    dnsr_path = target_dir / str(params.require("dnsr_data_json"))
-    if dnsr_path.is_file():
-        doc = read_json(dnsr_path)
-        for row in doc.get("resolved") or []:
-            if str(row.get("resolution_status") or "") != "resolved":
-                continue
-            host = str(row.get("host") or "").strip().lower()
-            if host:
-                tagged.append((host, "DNSR"))
+    for host in valid_discovered_hosts(params, target_dir):
+        tagged.append((host, "VALID"))
     hosts: list[str] = []
     sources: dict[str, str] = {}
     for host, source in tagged:
@@ -214,6 +220,21 @@ def copy_into_target(params: Params, target_dir: Path, source: Path, rel: str) -
     dest.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(dest, source.read_text(encoding="utf-8", errors="replace"))
     return dest
+
+
+def _always_on_learned_paths(params: Params) -> list[Path]:
+    """Global validated labels -- always mixed into every task, never optional."""
+    paths: list[Path] = []
+    try:
+        custom_rel = str(params.require("wordlist_forge_output"))
+    except Exception:  # noqa: BLE001
+        custom_rel = "wordlists/forge/custom-subdomains.txt"
+    custom = params.root / custom_rel
+    learned = params.root / "wordlists" / "custom" / "platform-learned.txt"
+    for path in (custom, learned):
+        if path.is_file() and path.stat().st_size > 0:
+            paths.append(path)
+    return paths
 
 
 def _union_normalize(sources: list[Path]) -> list[str]:

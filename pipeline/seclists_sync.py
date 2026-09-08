@@ -93,7 +93,9 @@ def render_index(doc: dict[str, Any]) -> str:
 
 
 def sync_seclists_index(params: Params) -> dict[str, Any]:
-    root = params.expand_user_path("seclists_host_path")
+    from pipeline.wordlist_forge import seclists_host_root
+
+    root = seclists_host_root(params)
     if not root.is_dir():
         raise FileNotFoundError(
             f"SecLists clone not found at {root} -- clone danielmiessler/SecLists there and retry"

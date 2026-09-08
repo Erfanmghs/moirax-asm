@@ -73,9 +73,13 @@ def run_ffuf3(
     # fabricated perm mutations -> an unbounded 1237-job probe). The probed
     # dead set is therefore FFUF-1 records that DNSR-3 marks unresolved; the
     # whole-store unresolved count is disclosed alongside (never hidden).
+    # BASE-HOST SET: FFUF enum records UNION DNSR unresolved names that are
+    # not alterx perm NXDOMAIN (source=perm). DNS-first runs have no FFUF-1
+    # HTTP brute; unresolved "known"/brute names still feed the dead-name pass.
     unresolved_store = [h for h, s in dnsr_status.items() if s == "unresolved"]
     unresolved_ffuf1 = [h for h in ffuf1_records if dnsr_status.get(h) == "unresolved"]
-    base_set = sorted(set(ffuf1_records) | set(unresolved_ffuf1))
+    unresolved_known = _dnsr_unresolved_non_perm(dnsr_doc)
+    base_set = sorted(set(ffuf1_records) | set(unresolved_ffuf1) | set(unresolved_known))
     dead_names = [name for name in base_set if dnsr_status.get(name) == "unresolved"]
     counts = {
         "ffuf1_records": len(ffuf1_records),
@@ -200,6 +204,25 @@ def run_ffuf3(
     return payload
 
 
+def _dnsr_unresolved_non_perm(doc: dict[str, Any] | None) -> list[str]:
+    """Dead names that dnsx actually asked about, excluding alterx perm NXDOMAIN."""
+    if not doc:
+        return []
+    found: list[str] = []
+    for row in doc.get("resolved") or []:
+        if not isinstance(row, dict):
+            continue
+        if row.get("resolution_status") != "unresolved":
+            continue
+        src = str(row.get("source") or "")
+        if src not in ("known", "brute"):
+            continue
+        host = str(row.get("host") or "").strip().lower()
+        if host:
+            found.append(host)
+    return found
+
+
 def _ffuf1_records(doc: dict[str, Any] | None) -> list[str]:
     """FFUF-1 completed enum records: every fqdn row of the ffuf module doc."""
     if not doc:
@@ -231,7 +254,8 @@ def _alive_bases(
     """ALIVE in-scope bases of the SAME TARGET ZONE (spec v1.9 section 8: 'an ALIVE
     in-scope base ... e.g. apex/www from the same target').
 
-    A candidate must (a) be alive per FFUF-1's httpx probe, (b) carry a
+    A candidate must (a) be HTTP-alive (FFUF httpx tag OR DNSR httpx
+    `alive: true`), (b) carry a
     resolved IP in the DNSR-3 map, and (c) belong to the run target's zone
     (host == target or host endswith "." + target) -- a base from a foreign
     zone would probe dead names against unrelated infrastructure (run #15:
@@ -252,7 +276,10 @@ def _alive_bases(
         if not isinstance(row, dict):
             continue
         host = normalize_fqdn(str(row.get("host") or ""))
-        if not host or host not in alive_ffuf:
+        if not host:
+            continue
+        dnsr_alive = row.get("alive") is True
+        if host not in alive_ffuf and not dnsr_alive:
             continue
         if host != apex and not host.endswith(zone_suffix):
             continue  # foreign zone -- never a binding base (same-target law)

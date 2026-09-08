@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shlex
 import shutil
 import subprocess
@@ -43,5 +44,21 @@ def docker_available(params: Params) -> bool:
 
 def volume_host_path(params: Params, host_path: Path) -> str:
     """Return a Linux host path for docker -v binds (no Windows/UNC translation)."""
-    _ = params.require("docker_binary")  # keep section 5.6 params wire live
-    return str(host_path.resolve())
+    _ = params.require("docker_binary")
+    resolved = host_path.resolve()
+    override = str(params.settings.get("recon_host_root") or "").strip() or os.environ.get(
+        "RECON_HOST_ROOT", ""
+    ).strip()
+    if override:
+        root = params.root.resolve()
+        try:
+            rel = resolved.relative_to(root)
+            return str(Path(override) / rel)
+        except ValueError:
+            pass
+        try:
+            rel = resolved.relative_to(Path("/app").resolve())
+            return str(Path(override) / rel)
+        except ValueError:
+            pass
+    return str(resolved)

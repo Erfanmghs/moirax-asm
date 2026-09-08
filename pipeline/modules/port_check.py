@@ -1,4 +1,4 @@
-"""PORT-CHECK -- IP-centric naabu top-50 (ACTIVE order 3)."""
+"""PORT-CHECK -- optional top-ports preview (ACTIVE). Full TCP coverage is PORT-SWEEP."""
 
 from __future__ import annotations
 
@@ -84,7 +84,13 @@ def run_port_check(
 
     results: list[dict[str, Any]] = []
     unreachable: list[str] = []
+    scan_top = adapter.enabled("naabu")
+    if not scan_top:
+        _log(params, target_dir, "top-ports skipped: optional preview OFF -- full TCP 1-65535 coverage is PORT-SWEEP")
     for ip, hosts in ip_hosts.items():
+        if not scan_top:
+            results.append({"ip": ip, "hosts": hosts, "ports": []})
+            continue
         _log(params, target_dir, f"naabu-invoke\tip={ip}\thosts={','.join(hosts)}")
         extra_n = {
             **extra,

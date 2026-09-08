@@ -138,6 +138,8 @@ def main() -> int:
         "test_new_subdomain_instant",
         "test_newly_opened_port_instant",
         "test_closed_port_only_diff_is_silent",
+        "test_services_class_never_alerts",
+        "test_changed_host_includes_field_hint",
         "test_flood_above_threshold_sends_exactly_one_digest",
         "test_disabled_class_suppresses",
         "test_require_new_ip_known_ip_not_alerted",

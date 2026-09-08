@@ -20,7 +20,9 @@
           "parent": { "type": ["string", "null"] },
           "alive": { "type": ["boolean", "null"] },
           "http_status": { "type": ["integer", "null"] },
-          "length": { "type": ["integer", "null"] }
+          "length": { "type": ["integer", "null"] },
+          "tech": { "type": "array", "items": { "type": "string" } },
+          "title": { "type": ["string", "null"] }
         }
       }
     },

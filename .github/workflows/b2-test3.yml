@@ -41,6 +41,10 @@ jobs:
           docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
           python3 --version
 
+      - name: "Clone SecLists (registry materialization root: ~/seclists)"
+        run: |
+          git clone --depth 1 https://github.com/danielmiessler/SecLists "$HOME/seclists"
+          find "$HOME/seclists" -name '*.txt' | wc -l
       - name: "Build pinned local tool images (REM6: ffuf v2.1.0)"
         run: |
           set -e
@@ -55,10 +59,6 @@ jobs:
       - name: Preflight gates (forge anchor, selection, scope, T3-1 fix, egress)
         run: PYTHONPATH=. python3 ci/test3_preflight.py
 
-      - name: "Clone SecLists (registry materialization root: ~/seclists)"
-        run: |
-          git clone --depth 1 https://github.com/danielmiessler/SecLists "$HOME/seclists"
-          find "$HOME/seclists" -name '*.txt' | wc -l
       - name: "Install suite deps (REM22/REM23 parity: fastapi + uvicorn + httpx + reportlab)"
         run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5"
       - name: Unit proof (incl. tests/test_dns_freshness.py T3-1 regression)

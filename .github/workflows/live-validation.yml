@@ -60,6 +60,9 @@ jobs:
       - name: "Install suite deps (REM22/REM23 parity: fastapi + uvicorn + httpx + reportlab)"
         run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5"
 
+      - name: Unit proof (full suite)
+        run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
+
       - name: "Build pinned local tool image (REM6: ffuf v2.1.0)"
         run: |
           set -e
@@ -155,9 +158,6 @@ jobs:
 
       - name: Preflight gates (verify_b1 diff-empty + smoke-200 anchor + seed fleet)
         run: PYTHONPATH=. python3 ci/live_validation_preflight.py
-
-      - name: Unit proof (full suite)
-        run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
 
       - name: Reconcile stale live state (frozen stop path; expect EXIT 4 or usage)
         run: |

@@ -264,14 +264,22 @@ def apply_transient(params: Params, target: str, before_copy_dir: Path) -> dict[
             m = block_re.search(text)
             if not m:
                 raise ProfileError(f"wordlists.yaml has no task block {task!r}")
-            # idempotence guard: never stack a second selection under a block
+            # selection law: exactly ONE selection under a block, ever.
+            # A crashed run can leave the previous selection behind; a fresh
+            # apply REPLACES it in place (self-heal), it never stacks.
             block_end_m = re.search(r"^  [A-Za-z0-9_-]+:", text[m.end():], re.M)
             block_text = text[m.end(): m.end() + (block_end_m.start() if block_end_m else len(text[m.end():]))]
             if re.search(r"^\s{4}selection:", block_text, re.M):
-                raise ProfileError(f"task block {task!r} already carries a selection (remove it first)")
-            insert_at = m.end()
-            rendered = f"\n{4 * ' '}selection:\n" + "\n".join(f"{4 * ' '}  - {k}" for k in keys)
-            text = text[:insert_at] + rendered + text[insert_at:]
+                fresh = "\n" + 4 * " " + "selection:\n" + "\n".join(
+                    f"{6 * ' '}- {k}" for k in keys
+                )
+                text = re.sub(
+                    r"\n {4}selection:\n(?: {6}- [^\n]*)+", fresh, text, count=1
+                )
+            else:
+                insert_at = m.end()
+                rendered = f"\n{4 * ' '}selection:\n" + "\n".join(f"{4 * ' '}  - {k}" for k in keys)
+                text = text[:insert_at] + rendered + text[insert_at:]
         atomic_write_text(wl, text)
 
     return {"plan": plan, "snapshots": snapshots}

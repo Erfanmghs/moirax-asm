@@ -46,6 +46,8 @@ jobs:
       - name: Preflight gates (G-R1..G-R7)
         run: PYTHONPATH=. python3 ci/b7_preflight.py
 
+      - name: "Install suite deps (REM22/REM23 parity: fastapi + uvicorn + httpx + reportlab)"
+        run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5"
       - name: Unit proof (full regression suite incl. B7 reporting)
         run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
 

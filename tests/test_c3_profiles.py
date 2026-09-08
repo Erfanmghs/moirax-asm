@@ -12,6 +12,7 @@ Laws under test:
 
 from __future__ import annotations
 
+import re
 import shutil
 import sys
 import tempfile
@@ -150,11 +151,24 @@ class TransientApplyRestore(unittest.TestCase):
         restore_transient(first)
         second = apply_transient(self.params, "example.com", self.root)
         restore_transient(second)
-        # applying twice WITHOUT restoring must refuse stacking
-        applied = apply_transient(self.params, "example.com", self.root)
-        with self.assertRaises(ProfileError):
-            apply_transient(self.params, "example.com", self.root)
+        # crash-recovery law: applying again WITHOUT restoring REPLACES the
+        # leftover selection in place -- two selections can never stack.
+        # (per-token before-dirs mirror the vehicle contract: one dir per
+        # restore token, so snapshots never clobber each other)
+        snap_a = self.root / "snap-a"
+        snap_a.mkdir()
+        applied = apply_transient(self.params, "example.com", snap_a)
+        snap_b = self.root / "snap-b"
+        snap_b.mkdir()
+        again = apply_transient(self.params, "example.com", snap_b)
+        text = (self.root / "wordlists.yaml").read_text(encoding="utf-8")
+        self.assertEqual(len(re.findall(r"^ {4}selection:", text, re.M)), 1)
+        wl_doc = load_yaml_file(str(self.root / "wordlists.yaml"))
+        self.assertEqual(wl_doc["tasks"]["DNSR-1"]["selection"], ["test_smoke_200"])
+        # nested restores unwind byte-identically to the clean template
+        restore_transient(again)
         restore_transient(applied)
+        self.assertEqual((self.root / "wordlists.yaml").read_bytes(), self.wl_before)
 
 
 if __name__ == "__main__":

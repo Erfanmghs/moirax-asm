@@ -55,6 +55,8 @@ jobs:
       - name: Preflight gates (forge anchor, selection, scope, T3-1 fix, egress)
         run: PYTHONPATH=. python3 ci/test3_preflight.py
 
+      - name: "Install suite deps (REM22/REM23 parity: fastapi + uvicorn + httpx + reportlab)"
+        run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5"
       - name: Unit proof (incl. tests/test_dns_freshness.py T3-1 regression)
         run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
 

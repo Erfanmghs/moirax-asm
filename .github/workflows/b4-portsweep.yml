@@ -57,6 +57,8 @@ jobs:
       - name: Preflight gates (G-W1..G-W8)
         run: PYTHONPATH=. python3 ci/b4_preflight.py
 
+      - name: "Install suite deps (REM22/REM23 parity: fastapi + uvicorn + httpx + reportlab)"
+        run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5"
       - name: Unit proof (full regression suite incl. B4 port-sweep)
         run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
 

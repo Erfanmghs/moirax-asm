@@ -44,6 +44,10 @@ jobs:
       - name: Toolchain
         run: python3 --version && docker version --format 'client={{.Client.Version}}'
 
+      - name: "Clone SecLists (registry materialization root: ~/seclists)"
+        run: |
+          git clone --depth 1 https://github.com/danielmiessler/SecLists "$HOME/seclists"
+          find "$HOME/seclists" -name '*.txt' | wc -l
       - name: "Install suite deps (REM22/REM23 parity)"
         run: pip install --quiet fastapi uvicorn httpx reportlab
 

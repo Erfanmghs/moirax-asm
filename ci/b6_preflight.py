@@ -8,7 +8,7 @@
         values, sticky headers, badges, JSON inspector) + panels a-e
   G-Z4  views.yaml frozen-loader contract: every module fields is a LIST
         (REM20 -- committed file was mangled at B0 and unparseable as lists)
-  G-Z5  section 9.3 proxy rule: engine fail-fast wiring + proxy_gate implementation
+  G-Z5  section 9.3 proxy rule: engine fail-fast wiring (pool-or-legacy) + impls
   G-Z6  verify_b1.py has no working-tree diff (frozen since handoff)
   G-Z7  vehicle scope: example.com retained
   G-Z8  unit coverage markers in tests/test_dashboard.py
@@ -91,11 +91,20 @@ def main() -> int:
     check("G-Z4 views-contract", bool(modules) and not non_list,
           f"modules={sorted(modules)} non_list={non_list}")
 
-    # ---- G-Z5 proxy rule ---------------------------------------------------------
+    # ---- G-Z5 proxy rule (pool-or-legacy law, E1 wiring) -------------------------
     engine_text = (ROOT / "pipeline" / "engine.py").read_text(encoding="utf-8")
     service_text = (ROOT / "dashboard" / "service.py").read_text(encoding="utf-8")
-    gate_wired = "proxy_gate(params)" in engine_text and "PROXY RULE fail-fast" in engine_text
-    impl = "def check_proxy_reachable(" in service_text and "def proxy_gate(" in service_text
+    rotation_text = (ROOT / "pipeline" / "ip_rotation.py").read_text(encoding="utf-8")
+    gate_wired = (
+        "gate_pool_or_legacy(params)" in engine_text
+        and "PROXY RULE fail-fast" in engine_text
+    )
+    impl = (
+        "def check_proxy_reachable(" in service_text
+        and "def proxy_gate(" in service_text
+        and "def gate_pool_or_legacy(" in rotation_text
+        and "def gate(" in rotation_text
+    )
     check("G-Z5 proxy-rule", gate_wired and impl, f"engine_wired={gate_wired} impl={impl}")
 
     # ---- G-Z6 verify_b1 clean ------------------------------------------------------

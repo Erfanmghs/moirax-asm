@@ -37,3 +37,4 @@ ci/pip-audit.json
 ci/ui-e2e-screens/
 ci/ui-e2e-report.md
 ci/ui-e2e-console.txt
+verify/

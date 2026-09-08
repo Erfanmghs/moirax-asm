@@ -60,7 +60,10 @@ jobs:
       - name: "Wordlist selection accommodation (operator-law transient: recorded, never committed)"
         run: |
           set -e
-          cp wordlists.yaml ci/wordlists_runtime_before.yaml
+          mkdir -p wordlists/forge
+          rm -f wordlists/forge/custom-subdomains.txt wordlists/forge/effective-*.txt
+          rm -rf wordlists/forge/cache
+          [ -f ci/wordlists_runtime_before.yaml ] || cp wordlists.yaml ci/wordlists_runtime_before.yaml
           python3 - <<'PY'
           import pathlib
           text = pathlib.Path("wordlists.yaml").read_text(encoding="utf-8")

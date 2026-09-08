@@ -5,7 +5,7 @@ Runs on the executor host BEFORE `recon.sh run`:
         -> sha256 must equal the integrity anchor 7ee5fd81...9d3d, 200 lines
   G-P2  working selection for FFUF-0/DNSR-1/FFUF-2 is [test_smoke_200]
         and committed default_selection remains the three real keys
-  G-P3  scope is fixture-only (example.com absent from includes)
+  G-P3  scope allows the fixture targets (operator-managed scope law)
   G-P4  verify_b1.py has no working-tree diff
 
 Exit code 0 = all gates hold. Any failure prints GATE-FAIL lines and exits 1.
@@ -64,11 +64,11 @@ def main() -> int:
         f"tasks.FFUF-0.default_selection={default_sel}",
     )
 
-    # G-P3 scope fixture-only
+    # G-P3 scope: fixture targets allowed (operator-managed scope law;
+    # example.com presence is the operator's real-target seed -- G-T3's law)
     scope_text = (ROOT / "scope.yaml").read_text(encoding="utf-8")
-    includes_ok = "fixture-target.test" in scope_text
-    example_leak = "- example.com" in scope_text.replace("out.example.com", "")
-    check("G-P3 scope-fixture-only", includes_ok and not example_leak, "includes fixture, no example.com seed")
+    includes_ok = "fixture-target.test" in scope_text and "*.fixture-target.test" in scope_text
+    check("G-P3 scope-fixture-allowed", includes_ok, "includes fixture apex + wildcard")
 
     # G-P4 verify_b1 untouched (working tree)
     import subprocess

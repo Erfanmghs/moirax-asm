@@ -57,6 +57,20 @@ jobs:
               print(name, "->", socket.gethostbyname(name))
           PY
 
+      - name: "Wordlist selection accommodation (operator-law transient: recorded, never committed)"
+        run: |
+          set -e
+          cp wordlists.yaml ci/wordlists_runtime_before.yaml
+          python3 - <<'PY'
+          import pathlib
+          text = pathlib.Path("wordlists.yaml").read_text(encoding="utf-8")
+          for task in ("FFUF-0", "DNSR-1", "FFUF-2"):
+              marker = f"  {task}:"
+              i = text.index(marker) + len(marker)
+              text = text[:i] + "\n    selection:\n      - test_smoke_200" + text[i:]
+          pathlib.Path("wordlists.yaml").write_text(text, encoding="utf-8")
+          print("SELECTION ACCOMMODATION: FFUF-0/DNSR-1/FFUF-2 = [test_smoke_200] (transient, restored at teardown)")
+          PY
       - name: "Build pinned local tool images (REM6: ffuf v2.1.0)"
         run: |
           set -e
@@ -109,6 +123,7 @@ jobs:
         if: always()
         run: |
           sudo -n python3 docker/vhost-fixture/hosts.py remove || true
+          if [ -f ci/wordlists_runtime_before.yaml ]; then cp ci/wordlists_runtime_before.yaml wordlists.yaml && echo "selection accommodation restored"; fi
           docker compose -f docker-compose.yml -f docker-compose.vhost-fixture.yml --profile vhost-fixture down -v || true
 
       - name: Upload evidence artifacts (always)

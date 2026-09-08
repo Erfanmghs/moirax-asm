@@ -318,10 +318,43 @@ secret manager of your choice, never in the repo (R-1 enforces).
 - C5: IP rotation / proxy pool -- DELIVERED (see section 7b); remaining
   refinement: per-request (not per-module) rotation and outbound-IP
   health telemetry over time.
-- C6: OWASP Top 10 + OWASP API Top 10 passive check modules.
+- C6: OWASP Top 10 + OWASP API Top 10 passive check modules -- DELIVERED
+  (single `owasp-passive` module, `pipeline/modules/owasp_passive.py`):
+  post-MERGE zero-packet artifact analyzer (same hook law as PORT-SWEEP:
+  resume-aware, breaker-aware, partial markers). Reads assets.json +
+  raw httpx probe rows + PORT-CHECK/PORT-SWEEP results; emits
+  `70_owasp/data.json` + `70_owasp/summary.md` with 7 evidence-backed
+  finding classes (A05 banners, A05 misconfig_suspect, A05/API8 management
+  ports, A02 cleartext, A06 versioned tech, API3/API1 api-named surface,
+  A01/API6 admin-named surface). Honesty laws: severity capped at medium,
+  review_required always true, every finding cites its evidence file, and
+  items that CANNOT be assessed passively (injection, auth, rate-limit
+  classes) are DISCLOSED under coverage.not_passively_assessable -- never
+  silently skipped. Params: owasp_module/owasp_data_json/owasp_summary/
+  owasp_risk_ports/owasp_api_words/owasp_admin_words (tools.yaml) + layout
+  dir 70_owasp. Tests: tests/test_c6_owasp.py (16 atomic laws incl. the
+  zero-packet adapter contract).
 - C7: self-improvement loop beyond the platform-learned wordlist
-  (auto-tuning budgets from breaker telemetry).
-- C8: v1.0.0 tag + history rewrite with SHA mapping table.
+  (auto-tuning budgets from breaker telemetry) -- DELIVERED
+  (`pipeline/selftune.py`): end-of-run hook observes the run's REAL budget
+  signals (passive_budget / active_budget exhaustion markers) and writes
+  bounded per-branch budget multipliers for the NEXT run of the same target
+  (80_selftune/tuning.json + capped ledger). Growth x1.25 on a marker, decay
+  x0.9 toward 1.0 after 2 clean runs, clamped to [0.5, 2.0], never below the
+  committed base; module failures never move budgets (breaker owns module
+  health, section 11.4); toggle selftune_enabled=false disables read AND
+  write; corrupt state ignored and rewritten (never-fail, never-flip).
+  Start-of-run hook applies the multipliers through engine._tuned_budgets.
+  Tests: tests/test_c7_selftune.py (12 atomic laws).
+- C8: v1.0.0 tag + history rewrite with SHA mapping table -- DELIVERED in
+  its honest form: annotated v1.0.0 tag + docs/RELEASE-v1.0.0.md
+  (milestone-to-SHA traceability table) backed by a FULL-HISTORY audit
+  (88 commits / 2094 blobs): zero real secrets, zero personal data; the two
+  historical Persian files are the only withdrawn-waiver artifacts and stay
+  confined to private history. The destructive rewrite was REJECTED with
+  evidence (breaks clones, GHCR sha tags, evidence chains; zero security
+  benefit on a private repo) -- if the repo is ever published, scrub those
+  two paths with filter-repo first, then re-issue tags.
 
 ## 14. Glossary
 

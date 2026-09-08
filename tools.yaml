@@ -86,6 +86,8 @@ settings:
     - 40_services
     - 50_web
     - 60_screenshots
+    - 70_owasp
+    - 80_selftune
     - 90_report
     - history
     - logs
@@ -160,6 +162,31 @@ settings:
   portsweep_ramp_interval_sec: 30
   portsweep_canary_connect_timeout_sec: 3
   portsweep_sentinel_limit: 3
+  # ---- C6 OWASP-PASSIVE (post-MERGE, zero-packet artifact analyzer).
+  # Passive evidence only: severity capped at medium, review_required always,
+  # not-passively-assessable OWASP items are DISCLOSED, never silently skipped.
+  owasp_module: owasp-passive
+  owasp_data_json: 70_owasp/data.json
+  owasp_summary: 70_owasp/summary.md
+  # management/datastore ports whose open state is A05/API8 evidence
+  owasp_risk_ports: "23,135,139,445,2375,3306,3389,5432,5900,6379,6443,8081,9200,10250,11211,27017"
+  # naming words that mark an API surface (API3/API1 review inventory)
+  owasp_api_words: "api,rest,graphql,swagger,openapi,grpc"
+  # naming words that mark admin/dev surfaces (A01/API6 review inventory)
+  owasp_admin_words: "admin,administrator,manager,console,dashboard,panel,cms,staging,dev,uat,test"
+  # ---- C7 SELFTUNE (self-improvement loop: branch budgets from run evidence).
+  # Bounded, disclosed, reversible: growth only from REAL budget-exhaustion
+  # markers, decay only toward 1.0 (never below the committed base), every
+  # change appended to the ledger. Toggle off = read AND write disabled.
+  selftune_enabled: true
+  selftune_dirname: 80_selftune
+  selftune_state_filename: tuning.json
+  selftune_multiplier_max: 2.0
+  selftune_multiplier_min: 0.5
+  selftune_growth_step: 1.25
+  selftune_decay_step: 0.9
+  selftune_clean_runs_decay: 2
+  selftune_ledger_max: 50
   dork_timeout_sec: 60
   crtsh_max_time_sec: 120
   crtsh_retries: 3

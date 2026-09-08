@@ -320,10 +320,18 @@ so you can see exactly where a new piece would plug in.
 1. **Spreading requests over several outgoing IPs** -- big websites sometimes
    block a scanner that asks too much from one address. Rotating outgoing
    addresses (a proxy or IP pool) would keep long checks running smoothly.
+   **DELIVERED** (C5): per-target proxy pools with fail-fast preflight,
+   round-robin assignment, a masked rotation ledger, and dashboard editing.
 2. **Built-in common-weakness checks** -- after finding the doors, the
    platform could automatically try the industry-standard list of the most
    common well-known weaknesses (the OWASP Top 10 for websites and for APIs)
    and attach a short, readable explanation of each hit to the report.
+   **DELIVERED (passive form)** (C6): after every merge the platform now
+   analyzes already-collected evidence and writes OWASP Top 10 (2021) + API
+   Top 10 (2023) findings with plain-language explanations to
+   `recon/<target>/70_owasp/`. It sends zero packets to the target, caps
+   severity at medium, and marks every item for human review -- active
+   exploitation stays out of scope by design.
 3. **Automatic watch-list growth** -- when the platform discovers a new
    website name under your domain, it could offer to add it to future checks
    with one click, so the watch list grows by itself.

@@ -24,6 +24,26 @@ from pipeline.wordlist_forge import EmptyWordlistError, ingest_if_completed
 from pipeline import state as state_engine
 
 
+def _tuned_budgets(params: Params, target_dir: Path) -> tuple[float, float, str]:
+    """C7 start-of-run hook: base branch budgets scaled by persisted selftune
+    multipliers (bounded; corrupt state ignored, disclosed, never fail)."""
+    try:
+        from pipeline.selftune import applied_budgets
+
+        return applied_budgets(
+            params,
+            target_dir,
+            float(params.require("passive_branch_budget_sec")),
+            float(params.require("active_branch_budget_sec")),
+        )
+    except Exception as exc:  # noqa: BLE001 -- tuning must never start-fail a run
+        return (
+            float(params.require("passive_branch_budget_sec")),
+            float(params.require("active_branch_budget_sec")),
+            f"tuning read failed (disclosed, base budgets kept): {exc}",
+        )
+
+
 def run_pipeline(
     params: Params,
     gate: ScopeGate,
@@ -93,6 +113,13 @@ def run_pipeline(
     partial: list[str] = []
     failed = False
 
+    # C7 SELFTUNE (operator roadmap): persisted branch-budget multipliers for
+    # THIS target scale the committed base budgets at start (bounded, never
+    # below base after decay-to-1.0 law); the end-of-run hook updates them.
+    passive_budget, active_budget, tune_note = _tuned_budgets(params, target_dir)
+    if tune_note:
+        print(f"selftune: {tune_note}")
+
     passive_names = _filter_paused(
         params, target_dir, breaker, _branch_tools(params, "passive_branch_tools")
     )
@@ -114,7 +141,7 @@ def run_pipeline(
             target_dir,
             target,
             extra,
-            float(params.require("passive_branch_budget_sec")),
+            passive_budget,
             clock,
             planned,
             partial,
@@ -131,7 +158,7 @@ def run_pipeline(
                 target_dir,
                 passive_names,
                 extra,
-                float(params.require("passive_branch_budget_sec")),
+                passive_budget,
                 clock,
                 max(1, min(len(passive_names), passive_workers) or 1),
                 planned,
@@ -151,7 +178,7 @@ def run_pipeline(
                 target_dir,
                 target,
                 extra,
-                float(params.require("active_branch_budget_sec")),
+                active_budget,
                 clock,
                 planned,
                 partial,
@@ -162,7 +189,7 @@ def run_pipeline(
             target_dir,
             active_names,
             extra,
-            float(params.require("active_branch_budget_sec")),
+            active_budget,
             clock,
             planned,
             partial,
@@ -222,6 +249,32 @@ def run_pipeline(
                 partial.append(f"portsweep:{exc}")
                 _append_log(params, target_dir, sweep_name, sweep_name, 1, str(exc))
                 _engage_agent(sweep_name, "active", str(exc))
+                traceback.print_exc()
+
+    # C6 OWASP-PASSIVE (operator roadmap): post-MERGE zero-packet artifact
+    # analyzer, mirroring the PORT-SWEEP hook law exactly -- resume-aware,
+    # breaker-aware, partial markers shape the final verdict like any stage.
+    owasp_name = str(params.require("owasp_module"))
+    if owasp_name in RUNNERS:
+        st = state_engine.load_state(params, target_dir, target)
+        if state_engine.skip_done(st, owasp_name):
+            print(f"skip: module={owasp_name} reason=already done (resume)")
+        elif not adapter.breaker.allow(owasp_name):
+            reason = adapter.breaker.pause_reason(owasp_name) or "circuit breaker paused this module"
+            _append_log(params, target_dir, owasp_name, owasp_name, 0, f"skip: {reason}")
+            print(f"skip: module={owasp_name} reason={reason}")
+        else:
+            state_engine.set_status(params, target_dir, owasp_name, "running")
+            try:
+                RUNNERS[owasp_name](
+                    params, gate, adapter, target_dir, target, extra, planned, None, partial
+                )
+                state_engine.set_status(params, target_dir, owasp_name, "done")
+            except Exception as exc:
+                state_engine.set_status(params, target_dir, owasp_name, "failed")
+                partial.append(f"owasp:{exc}")
+                _append_log(params, target_dir, owasp_name, owasp_name, 1, str(exc))
+                _engage_agent(owasp_name, "post-merge", str(exc))
                 traceback.print_exc()
 
     # C5 IP rotation ledger: every module's pool assignment is always visible
@@ -302,6 +355,19 @@ def run_pipeline(
     print(
         f"learned: target={target} added={learned_ledger.get('added')} "
         f"total={learned_ledger.get('total')} selectable=platform_learned"
+    )
+    # C7 SELFTUNE end-of-run hook: observe this run's budget markers, update
+    # the NEXT run's multipliers (never-fail exactly like reporting/storage).
+    try:
+        from pipeline.selftune import update_tuning
+
+        tune_ledger = update_tuning(params, target_dir, target, partial, stamp)
+    except Exception as exc:  # noqa: BLE001 -- tuning must never flip a verdict
+        tune_ledger = {"updated": False, "reason": f"error (disclosed): {exc}"}
+    print(
+        f"selftune: updated={tune_ledger.get('updated')} "
+        f"passive={tune_ledger.get('passive')} active={tune_ledger.get('active')} "
+        f"reason={tune_ledger.get('reason')}"
     )
     code = _exit_code(params, status)
     print(f"run {status}: {target_dir}")

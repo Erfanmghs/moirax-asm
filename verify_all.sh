@@ -47,14 +47,31 @@ disclose() { # id title reason
 }
 
 s0_env() {
+  # HARD requirements: python3 + git only. Suite deps are S1's job -- failing
+  # S0 for them would fail the whole fleet on a virgin machine BEFORE S1 can
+  # install them (first-run trap). Advisory here, proven by S4+ anyway.
   command -v python3 >/dev/null || { echo "python3 missing"; return 1; }
   command -v git >/dev/null || { echo "git missing"; return 1; }
-  python3 -c "import fastapi, uvicorn, httpx" 2>/dev/null || { echo "suite deps missing (S1 installs them)"; return 1; }
-  echo "python3 + git + suite deps present"
+  if python3 -c "import fastapi, uvicorn, httpx" 2>/dev/null; then
+    echo "python3 + git + suite deps present"
+  else
+    echo "python3 + git present; suite deps missing (S1 installs them now)"
+  fi
 }
 
 s1_deps() {
-  python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5" bandit
+  # PEP 668 (Ubuntu 23+/Debian 12) refuses plain system pip installs -- fall
+  # back honestly: system -> --user -> --break-system-packages (this is the
+  # operator's own machine; 4 pinned pure-python packages + bandit).
+  local pkgs=("fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5" bandit)
+  if python3 -m pip install --quiet "${pkgs[@]}" 2>/dev/null; then
+    echo "suite deps installed (system pip)"; return 0
+  fi
+  if python3 -m pip install --quiet --user "${pkgs[@]}" 2>/dev/null; then
+    echo "suite deps installed (--user)"; return 0
+  fi
+  echo "system pip refused (PEP 668) -- retrying with --break-system-packages"
+  python3 -m pip install --quiet --break-system-packages "${pkgs[@]}"
 }
 
 s2_seclists() {
@@ -71,14 +88,7 @@ s4_units() { PYTHONPATH=. python3 -m unittest discover -s tests -t .; }
 
 s5_dast() { python3 ci/pentest_dast.py; }
 
-s6_ui() {
-  if ! python3 -c "import playwright" 2>/dev/null; then
-    echo "playwright not installed -- one-time setup:"
-    echo "  python3 -m pip install playwright && python3 -m playwright install chromium"
-    return 1
-  fi
-  python3 ci/ui_e2e_journey.py
-}
+s6_ui() { PYTHONPATH=. python3 ci/ui_e2e_journey.py; }
 
 s7_dashboard_preflight() { PYTHONPATH=. python3 ci/b6_preflight.py; }
 
@@ -134,7 +144,19 @@ run_stage 2 "seclists root" s2_seclists
 run_stage 3 "c1 release gate" s3_gate
 run_stage 4 "unit suite" s4_units
 run_stage 5 "dast pentest" s5_dast
-run_stage 6 "ui journey" s6_ui
+if python3 -c "import playwright" 2>/dev/null; then
+  run_stage 6 "ui journey" s6_ui
+else
+  # DISCLOSED-SKIP law (never silent): the UI journey needs a real browser;
+  # a machine without playwright can still pass the fleet honestly, with the
+  # one-time fix printed and re-runnable via --stage 6.
+  echo "=== S6 ui journey ==="
+  echo "playwright not installed -- one-time setup, then re-run stage 6:"
+  echo "  python3 -m pip install playwright && python3 -m playwright install chromium"
+  echo "  (add --break-system-packages if your Ubuntu refuses the pip call)"
+  echo "  then: ./verify_all.sh --stage 6"
+  disclose 6 "ui journey" "playwright absent -- one-time install above, then re-run with --stage 6"
+fi
 run_stage 7 "b6 dashboard preflight" s7_dashboard_preflight
 run_stage 8 "rem4r preflight" s8_rem4r_preflight
 run_stage 9 "test3 preflight" s9_test3_preflight

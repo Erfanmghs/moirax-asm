@@ -48,38 +48,143 @@ tells you when a new one appears.
 
 ## 3. What do you need before starting?
 
-- A computer or small server with **Docker** installed. Everything else the
-  platform needs is downloaded and built automatically on first start.
-- That is all. No database to install, no accounts to create, no keys to buy.
+- A computer with **Windows 10/11, macOS, or Linux**, about **4 GB of free
+  memory** and **10 GB of free disk space**.
+- An **internet connection**.
+- A **GitHub account that has access to this repository**. The repository is
+  private: either you are its owner, or the owner has invited your account.
+- About **20 minutes** of time the first time.
+- Nothing else. No database to install, no accounts to create, no keys to
+  buy. The two free tools the platform needs (Git and Docker) are installed
+  in the next section, step by step.
 
-## 4. Start it in 3 steps
+## 4. Install it from zero to hundred
 
-Open a terminal in the project folder and run:
+This section takes you from an empty computer to a running dashboard. Every
+step is one-time work; after step 4.6 you only use the browser.
+
+### 4.1 Install Git -- the tool that downloads the code
+
+- **Windows**: download the installer from <https://git-scm.com/downloads>,
+  run it, and keep pressing Next until it finishes.
+- **macOS**: open Terminal, type `git --version`, and press Install in the
+  window that appears.
+- **Linux (Ubuntu/Debian)**: run
+  `sudo apt update && sudo apt install -y git`.
+
+Check that it worked: open a **new** terminal and run `git --version`. It
+should print a version number.
+
+### 4.2 Install Docker -- the tool that runs the platform
+
+- **Windows / macOS**: download **Docker Desktop** from
+  <https://www.docker.com/products/docker-desktop/>, install it, start it,
+  and wait until it says it is running. (On Windows, accept the "WSL 2"
+  option if it is offered.)
+- **Linux**: run `curl -fsSL https://get.docker.com | sh`, then
+  `sudo usermod -aG docker $USER`, then log out and log back in.
+
+Check that it worked: run `docker --version` and `docker compose version`.
+Both should print version numbers. Keep Docker Desktop running while you use
+the platform.
+
+### 4.3 Download the project (clone)
+
+Open a terminal **in the folder where you want the project to live** (on
+Windows: open the folder, then open PowerShell or "Git Bash" there), and run:
+
+```bash
+git clone -b private https://github.com/Erfanmghs/recon-pipeline.git
+cd recon-pipeline
+```
+
+Because the repository is **private**, GitHub asks you to prove who you are
+during the download. Two easy ways:
+
+- **Easiest -- GitHub CLI**: install it from <https://cli.github.com/>, run
+  `gh auth login` once, then repeat the clone command. No passwords after
+  that.
+- **With a Personal Access Token**: on GitHub open Settings -> Developer
+  settings -> Personal access tokens -> **Tokens (classic)**, generate a
+  token with the `repo` tick, and when the clone asks for a password, paste
+  that token (not your GitHub password).
+
+> You can also download the code as a ZIP from the green **Code** button on
+> the repository page -- but cloning with Git makes every future update a
+> one-command job (see 4.8).
+
+### 4.4 Create your settings file
+
+Inside the `recon-pipeline` folder, run:
 
 ```bash
 cp .env.example .env
 ```
 
-Then open the new `.env` file with any text editor and set one line -- the
-login password for the dashboard:
+(The same `cp` command works in PowerShell; in the old Windows command
+prompt, use `copy` instead.)
+
+Open the new `.env` file with any text editor and set one line -- the login
+password for the dashboard:
 
 ```
 DASHBOARD_TOKEN=changeme
 ```
 
-Replace `changeme` with a long password of your choice. (If you want Telegram
-alerts, also paste the bot token here -- see section 7. You can skip that for
-now and do it later.)
+Replace `changeme` with a long password of your choice. That is enough to
+start. (If you want Telegram alerts, also paste the bot token here -- see
+section 7. You can skip that for now and do it later.)
 
-Now start the platform:
+### 4.5 Start the platform
 
 ```bash
 docker compose --profile dashboard up -d --build
 ```
 
-The first start builds the tool boxes, so give it a few minutes. After that it
-starts in seconds. Open **http://127.0.0.1:8080** in your browser, paste the
-same password in the top-right box, and you are in.
+The **first** start downloads and builds everything, so give it
+**5-15 minutes** and let the terminal finish. Every start after that takes
+seconds.
+
+### 4.6 Open the dashboard
+
+Open **http://127.0.0.1:8080** in your browser, paste the same password you
+put in `DASHBOARD_TOKEN` into the box at the top-right, and you are in.
+
+### 4.7 Prove that everything works
+
+1. On **SETTINGS**, type your Telegram username and press **SEND TEST** --
+   a test message should arrive (section 5, step 1).
+2. On **TARGETS**, add the website you own.
+3. On **RUN CONTROL**, press **START** and watch the check run live.
+
+The complete walk-through is in section 5 and inside the dashboard's HELP
+panel.
+
+### 4.8 Everyday commands (cheat sheet)
+
+| I want to ... | Command |
+|---|---|
+| Stop everything | `docker compose --profile dashboard down` |
+| Start it again | `docker compose --profile dashboard up -d` |
+| Update to the newest version | `git pull`, then `docker compose --profile dashboard up -d --build` |
+| Watch what it is doing right now | `docker compose logs -f dashboard` |
+| Check that it is running | `docker compose ps` |
+
+### 4.9 If something goes wrong
+
+| What you see | Why | What to do |
+|---|---|---|
+| `git: command not found` | Git is not installed, or the terminal was already open during install | Install it (4.1) and open a new terminal |
+| `docker: command not found` | Docker is not installed, or Docker Desktop is not running | Install it (4.2) / start Docker Desktop and wait until it is running |
+| `permission denied ... docker.sock` (Linux) | Your user is not in the docker group | `sudo usermod -aG docker $USER`, then log out and back in |
+| Clone rejects my password | GitHub no longer accepts account passwords | Use a Personal Access Token or `gh auth login` (4.3) |
+| Clone says `repository not found` | Your account has no access to this private repository, or the address has a typo | Ask the owner to invite your account and re-check the address |
+| `port is already allocated` | Another program is using port 8080 | Add `DASHBOARD_BIND_PORT=9090` to `.env`, restart, and open http://127.0.0.1:9090 |
+| The dashboard page does not open | It is still building, or it stopped | Run `docker compose ps`; wait until the status says `Up`, then reload the page |
+| First start seems frozen | It is downloading, not frozen | Wait, or run `docker compose logs -f dashboard` to see the progress |
+
+That is the whole installation. From now on, you only need the browser -- and
+the cheat sheet above.
 
 ## 5. Using it day to day (the whole journey)
 

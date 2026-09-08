@@ -32,16 +32,62 @@ allow-list is refused, hard.
 
 ## 2. Before you start
 
-You need exactly one thing:
-
-- A computer or small server with **Docker** installed.
-
-Everything else is built automatically on first start. No database, no
-accounts, no paid services.
+- A computer with **Windows 10/11, macOS, or Linux**, about **4 GB of free
+  memory** and **10 GB of free disk space**.
+- An **internet connection**.
+- A **GitHub account that has access to this repository** (it is private:
+  you are the owner, or the owner invited you).
+- Nothing else. The two free tools the platform needs -- **Git** and
+  **Docker** -- are installed in the next section, step by step. No
+  database, no paid services.
 
 ---
 
-## 3. Install in 3 steps
+## 3. Install from zero to hundred
+
+### 3.1 Install the two tools (one time, free)
+
+**Git** -- the tool that downloads the code:
+
+- **Windows**: run the installer from <https://git-scm.com/downloads>
+  (Next, Next, Finish).
+- **macOS**: type `git --version` in Terminal and press Install in the
+  popup.
+- **Linux**: `sudo apt update && sudo apt install -y git`.
+
+Check: open a **new** terminal, run `git --version` -- it prints a version
+number.
+
+**Docker Desktop** -- the tool that runs everything:
+
+- **Windows / macOS**: install from
+  <https://www.docker.com/products/docker-desktop/>, start it, and wait
+  until it shows it is running. On Windows, accept the "WSL 2" option if
+  asked.
+- **Linux**: `curl -fsSL https://get.docker.com | sh`, then
+  `sudo usermod -aG docker $USER`, then log out and back in.
+
+Check: `docker compose version` prints a version number.
+
+### 3.2 Download the project (clone)
+
+Open a terminal in the folder where you want the project to live, then:
+
+```bash
+git clone -b private https://github.com/Erfanmghs/recon-pipeline.git
+cd recon-pipeline
+```
+
+The repository is **private**, so GitHub asks you to prove who you are:
+
+- **Easiest**: install the GitHub CLI (<https://cli.github.com/>) and run
+  `gh auth login` once; then repeat the clone command.
+- **Or**: generate a Personal Access Token (GitHub -> Settings ->
+  Developer settings -> Personal access tokens -> Tokens (classic), tick
+  `repo`) and paste it when the clone asks for a password -- not your
+  GitHub password.
+
+### 3.3 Configure and start
 
 ```bash
 # 1) copy the example configuration
@@ -55,8 +101,9 @@ cp .env.example .env
 docker compose --profile dashboard up -d --build
 ```
 
-The first start builds the tool boxes -- give it a few minutes. After that it
-starts in seconds.
+The **first** start downloads and builds the tool boxes -- give it
+**5-15 minutes** and let the terminal finish. After that it starts in
+seconds.
 
 Open **http://127.0.0.1:8080**, paste your password in the top-right box,
 press **SET**. You are in.
@@ -64,6 +111,19 @@ press **SET**. You are in.
 > **Example:** if your password is `my-secret-42`, you put
 > `DASHBOARD_TOKEN=my-secret-42` in the `.env` file, start the platform, then
 > type `my-secret-42` into the top-right box of the dashboard.
+
+### 3.4 Everyday commands
+
+| I want to ... | Command |
+|---|---|
+| Stop everything | `docker compose --profile dashboard down` |
+| Start it again | `docker compose --profile dashboard up -d` |
+| Update to the newest version | `git pull`, then `docker compose --profile dashboard up -d --build` |
+| Watch what it is doing right now | `docker compose logs -f dashboard` |
+
+If any of the steps above fail (for example `docker: command not found`, or
+the clone rejects your password), the README's troubleshooting table
+(section 4.9) has the fix for the eight most common cases.
 
 ---
 

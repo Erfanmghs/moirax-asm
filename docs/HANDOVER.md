@@ -207,13 +207,25 @@ Laws: scheme allow-list http/https/socks5 (parse_pool, ValueError names the
 bad entry); fail-fast gate health-checks EVERY entry before the first module
 (engine + /api/run/start|resume through `gate_pool_or_legacy`) and sanitizes
 the checker's own reason (raw entry with credentials must never surface);
-round-robin assignment PER MODULE INVOCATION happens inside Adapter.invoke
-before any retry, so one module = one pool entry; tools WITHOUT the
-`when: proxy_url` hook (naabu, dnsx, ...) run DIRECT and the ledger says so
--- honesty law. Ledger: logs/proxy-rotation.json (never-fail write, masked
-`user:***@host:port` via mask_proxy). Proxy-hooked tools today: ffuf,
-ffuf-vhost, httpx, httpx-passive (-x / -http-proxy). Per-target profile key:
-`proxy.proxy_pool` (closed allow-list PROXY_KEYS_ALLOW, scheme-validated).
+PER-REQUEST rotation (C5 v2): assignment happens inside Adapter._attempt_loop,
+one pool entry PER ATTEMPT (the first try AND every retry take the next entry
+-- not one per module invocation), so a failing entry is naturally abandoned
+on the next attempt; tools WITHOUT the `when: proxy_url` hook (naabu, dnsx,
+...) run DIRECT and the ledger says so ONCE -- honesty law. Ledger:
+logs/proxy-rotation.json (never-fail write, masked `user:***@host:port` via
+mask_proxy, `attempt` number on every row). IP HEALTH TELEMETRY (C5 v2):
+every proxied attempt records its exit-code outcome per entry; entries with
+>= 3 consecutive failures are SKIPPED while a healthy entry remains; when ALL
+entries are unhealthy the plain round-robin continues (never stall, never
+raise); telemetry persists per target at logs/proxy-health.json -- MASKED
+keys only, 500-event ring, corrupt state ignored + rewritten (never-fail,
+selftune class); seeded at run start by `assigner.load_health(target_dir)`
+and flushed next to the ledger by `write_health` + `health_lines` stdout.
+Proxy-hooked tools today: ffuf, ffuf-vhost, httpx, httpx-passive
+(-x / -http-proxy). Per-target profile key: `proxy.proxy_pool` (closed
+allow-list PROXY_KEYS_ALLOW, scheme-validated). Tests:
+tests/test_c5_rotation.py (33 laws incl. per-attempt rotation via
+ScriptedRunner + health skip/heal/never-stall/cross-run/corrupt-state).
 
 ## 8. Dashboard
 
@@ -315,9 +327,14 @@ secret manager of your choice, never in the repo (R-1 enforces).
 
 ## 13. Deferred roadmap (agreed, not built)
 
-- C5: IP rotation / proxy pool -- DELIVERED (see section 7b); remaining
-  refinement: per-request (not per-module) rotation and outbound-IP
-  health telemetry over time.
+- C5: IP rotation / proxy pool -- FULLY DELIVERED including the last two
+  refinements (C5 v2, per-request rotation + IP health telemetry): one pool
+  entry PER ATTEMPT (first try + every retry rotate), per-entry outcome
+  telemetry with health-aware skipping (>= 3 consecutive failures skipped
+  while a healthy entry remains; all-unhealthy never stalls), masked 500-
+  event telemetry persisted per target at logs/proxy-health.json, seeded
+  across runs and ignored when corrupt. See section 7b for the full law set.
+  THE DEFERRED ROADMAP IS NOW EMPTY -- the agreed scope is 100% delivered.
 - C6: OWASP Top 10 + OWASP API Top 10 passive check modules -- DELIVERED
   (single `owasp-passive` module, `pipeline/modules/owasp_passive.py`):
   post-MERGE zero-packet artifact analyzer (same hook law as PORT-SWEEP:

@@ -3,7 +3,10 @@
 Laws under test:
 - pool parse/dedupe/scheme law; credentials never echoed (masking)
 - fail-fast gate names the unreachable entry, masked
-- round-robin assignment per module + honest DIRECT rows for hook-less tools
+- per-REQUEST rotation (C5 v2): every attempt takes the next pool entry;
+  hook-less tools get honest DIRECT rows; per-entry outcome telemetry
+  (masked, capped, persisted) skips consecutively failing entries and
+  never stalls when all are unhealthy
 - resolution chain: transient profile/tools.yaml pool > dashboard config pool
 - per-target profile: closed key allow-list + scheme law + edit-plan emission
 - dashboard settings: proxy_pool accepted (valid) / refused (bad scheme)
@@ -31,6 +34,7 @@ from pipeline.ip_rotation import (  # noqa: E402
     spec_has_proxy_hook,
     validate_pool_value,
 )
+from pipeline.adapter import Completed  # noqa: E402
 from pipeline.params import Params  # noqa: E402
 from pipeline.target_profiles import (  # noqa: E402
     ProfileError,
@@ -262,6 +266,158 @@ class TestSettingsProxyPool(unittest.TestCase):
         errors = validate_settings({"proxy_pool": ["http://a:1"]})
         self.assertEqual(len(errors), 1)
         self.assertIn("comma-separated", errors[0])
+
+
+class TestPerRequestRotationAndHealth(unittest.TestCase):
+    """C5 v2 laws: per-request (per-attempt) rotation + IP health telemetry.
+
+    - every attempt (first try + retries) takes the NEXT pool entry
+    - hook-less tools keep exactly ONE honest DIRECT row (no per-retry noise)
+    - each proxied attempt records its outcome per entry (masked, capped,
+      persisted per target); consecutively failing entries are skipped while
+      a healthy one remains; ALL-unhealthy never stalls (round-robin continues)
+    - corrupt telemetry state is ignored (never-fail law, selftune class)
+    """
+
+    def _adapter(self, params: Params, outcomes: dict[str, list[Completed]],
+                 pool_entries: list[str]):
+        from pipeline.adapter import Adapter, ScriptedRunner
+        from pipeline.breaker import CircuitBreaker, FakeClock
+        from pipeline.ceiling import ResourceCeiling
+
+        clock = FakeClock()
+        breaker = CircuitBreaker(params, clock=clock,
+                                 target_dir=Path(tempfile.mkdtemp()), target="example.com")
+        assigner = ProxyAssigner(ProxyPool(pool_entries))
+        patcher = mock.patch("pipeline.adapter.docker_prefix", return_value=["docker"])
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        runner = ScriptedRunner(outcomes)
+        adapter = Adapter(params, Path(tempfile.mkdtemp()), breaker, ResourceCeiling(params),
+                          clock=clock, runner=runner, proxy_pool=assigner)
+        return adapter, runner, assigner
+
+    def _proxy_from_cmd(self, docker_cmd: list[str], entries: list[str]) -> int:
+        """Index of the pool entry carried by this assembled command (-1 direct)."""
+        for idx, entry in enumerate(entries):
+            if entry in docker_cmd:
+                return idx
+        return -1
+
+    def test_retry_rotates_pool_entry_per_attempt(self):
+        params = Params(_ROOT)  # real root: tools.lock images for the docker stand-in
+        params.settings["tool_retry_count"] = 2  # 3 attempts, deterministic
+        entries = ["http://a:1", "http://b:2", "http://c:3"]
+        outcomes = {"ffuf": [Completed(1, "", "boom"), Completed(1, "", "boom"),
+                             Completed(0, "", "")]}
+        adapter, runner, assigner = self._adapter(params, outcomes, entries)
+        result = adapter.invoke("ffuf", "ffuf", extra={"target_domain": "example.com",
+                                                       "skip_parse": True})
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(result.attempts, 3)
+        carried = [self._proxy_from_cmd(cmd, entries) for cmd in runner.calls]
+        self.assertEqual(carried, [0, 1, 2], f"each attempt must rotate: {carried}")
+        attempts = [row["attempt"] for row in assigner.pool.rows]
+        self.assertEqual(attempts, [1, 2, 3])
+        # health telemetry: one failure per rotated entry, success on c:3
+        self.assertEqual(assigner.pool.health[0]["consecutive_fail"], 1)
+        self.assertEqual(assigner.pool.health[1]["consecutive_fail"], 1)
+        self.assertEqual(assigner.pool.health[2]["ok"], 1)
+        self.assertEqual(assigner.pool.health[2]["last_outcome"], "ok")
+
+    def test_hookless_tool_single_direct_row_despite_retries(self):
+        params = Params(_ROOT)
+        params.settings["tool_retry_count"] = 2
+        outcomes = {"naabu": [Completed(1, "", "boom"), Completed(1, "", "boom"),
+                              Completed(0, "", "")]}
+        adapter, runner, assigner = self._adapter(params, outcomes, ["http://a:1"])
+        result = adapter.invoke("naabu", "port-sweep", extra={"target_domain": "example.com",
+                                                              "skip_parse": True})
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(len(assigner.pool.rows), 1, "exactly one honest DIRECT row")
+        self.assertEqual(assigner.pool.rows[0]["proxy_index"], -1)
+        self.assertEqual(assigner.pool.health, {}, "DIRECT attempts are not proxy health")
+
+    def test_health_aware_skip_while_healthy_entries_remain(self):
+        pool = ProxyPool(["http://a:1", "http://b:2", "http://c:3"])
+        for _ in range(3):
+            pool.record_outcome(0, ok=False, duration_sec=0.1, tool="ffuf")
+        url, idx = pool.assign("ffuf", "ffuf", True, attempt=1)
+        self.assertEqual(idx, 1, "a:1 hit the consecutive-fail ceiling -> skipped")
+        self.assertEqual(url, "http://b:2")
+        self.assertEqual(pool.rows[-1]["health_skipped"], [0])
+        # one success heals the entry (consecutive_fail resets, never decays stats)
+        pool.record_outcome(0, ok=True, duration_sec=0.1, tool="httpx")
+        self.assertEqual(pool.health[0]["consecutive_fail"], 0)
+        self.assertEqual(pool.health[0]["fail"], 3)
+
+    def test_all_unhealthy_never_stalls(self):
+        pool = ProxyPool(["http://a:1", "http://b:2"])
+        for i in (0, 1):
+            for _ in range(3):
+                pool.record_outcome(i, ok=False, duration_sec=0.1, tool="ffuf")
+        url, idx = pool.assign("ffuf", "ffuf", True)
+        self.assertIn(idx, (0, 1), "round-robin continues even when all are unhealthy")
+        self.assertIn("never stall", pool.rows[-1]["health_note"])
+
+    def test_write_health_masked_capped_and_never_fails(self):
+        params = _params()
+        target_dir = params.root / "targets" / "example.com"
+        assigner = ProxyAssigner(ProxyPool(["http://u:topsecret@a:1"]))
+        assigner.load_health(target_dir)  # arms the persistence dir
+        for _ in range(600):
+            assigner.record_outcome(0, ok=True, duration_sec=0.5, tool="ffuf",
+                                    module="ffuf", attempt=1)
+        raw = (target_dir / "logs" / "proxy-health.json").read_text(encoding="utf-8")
+        self.assertNotIn("topsecret", raw, "credentials are never persisted")
+        doc = json.loads(raw)
+        self.assertEqual(len(doc["events"]), 500, "telemetry ring is capped")
+        self.assertEqual(doc["entries"]["http://u:***@a:1"]["ok"], 600)
+        # a genuinely unwritable tree must never raise (never-fail law)
+        blocker = params.root / "blocker"
+        blocker.write_text("x", encoding="utf-8")
+        assigner.write_health(blocker / "cannot" / "exist")  # NotADirectoryError swallowed
+
+    def test_load_health_seeds_cross_run_state_and_ignores_corruption(self):
+        params = _params()
+        target_dir = params.root / "targets" / "example.com"
+        (target_dir / "logs").mkdir(parents=True, exist_ok=True)
+        (target_dir / "logs" / "proxy-health.json").write_text(
+            json.dumps({
+                "unhealthy_after": 3,
+                "entries": {"http://u:***@a:1": {"ok": 0, "fail": 3,
+                                                 "consecutive_fail": 3,
+                                                 "last_outcome": "fail"}},
+                "events": [],
+            }),
+            encoding="utf-8",
+        )
+        pool = ProxyPool(["http://u:topsecret@a:1", "http://b:2"])
+        assigner = ProxyAssigner(pool)
+        assigner.load_health(target_dir)
+        url, idx = pool.assign("ffuf", "ffuf", True)
+        self.assertEqual(idx, 1, "cross-run telemetry: a:1 already failed 3x last run")
+        # corrupt state must be ignored, never raise, and start fresh
+        (target_dir / "logs" / "proxy-health.json").write_text("{not json", encoding="utf-8")
+        pool2 = ProxyPool(["http://a:1"])
+        ProxyAssigner(pool2).load_health(target_dir)
+        self.assertEqual(pool2.health, {})
+        self.assertEqual(pool2.assign("ffuf", "ffuf", True)[1], 0)
+
+    def test_hook_values_for_attempt_contract_and_compat(self):
+        params = _params()
+        assigner = ProxyAssigner(ProxyPool(["http://a:1", "http://b:2"]))
+        frag, idx = assigner.hook_values_for_attempt("ffuf", "ffuf",
+                                                     params.tools["ffuf"], attempt=1)
+        self.assertEqual(frag, {"proxy_url": "http://a:1"})
+        self.assertEqual(idx, 0)
+        frag2, idx2 = assigner.hook_values_for_attempt("ffuf", "ffuf",
+                                                       params.tools["ffuf"], attempt=2)
+        self.assertEqual(frag2, {"proxy_url": "http://b:2"})
+        self.assertEqual(idx2, 1)
+        # legacy facade still returns the plain fragment (attempt 1)
+        self.assertEqual(assigner.hook_values("httpx", "httpx-alive", params.tools["httpx"]),
+                         {"proxy_url": "http://a:1"})
 
 
 if __name__ == "__main__":

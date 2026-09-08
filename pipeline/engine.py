@@ -77,6 +77,10 @@ def run_pipeline(
         return _exit_code(params, str(params.require("run_status_failed")))
     if proxy_reason != "proxy unset -- direct connection (section 9.3)":
         print(f"proxy: {proxy_reason}")
+    if assigner is not None:
+        # C5 v2 health telemetry: seed per-IP outcomes from THIS target's
+        # previous runs (masked keys only; corrupt state ignored -- never-fail).
+        assigner.load_health(target_dir)
     alerts: list[tuple[str, str, str]] = []
 
     # section 12 opt-in supervisor: lazily created ONLY when enabled (section 12.1/section 12.4 --
@@ -281,7 +285,11 @@ def run_pipeline(
     # (never-fail, credentials masked) -- honesty law for the rotation feature.
     if assigner is not None:
         assigner.write_ledger(target_dir)
+        # C5 v2: flush per-IP health telemetry next to the rotation ledger.
+        assigner.write_health(target_dir)
         for line in assigner.pool.summary_lines():
+            print(line)
+        for line in assigner.pool.health_lines():
             print(line)
 
     stamp = utc_stamp()

@@ -288,9 +288,15 @@ single address carries the whole scan.
 - Before a check starts, **every entry is health-checked**. If one is
   unreachable, the check refuses to start and names the bad entry (with its
   password masked) -- you are never left guessing.
-- During the check, discovery steps go out through the entries **in turn**
-  (round-robin): step 1 uses proxy A, step 2 proxy B, step 3 proxy C, step 4
-  proxy A again, and so on.
+- During the check, every attempt (including each automatic retry) goes out
+  through the entries **in turn** (round-robin): attempt 1 uses proxy A,
+  attempt 2 proxy B, attempt 3 proxy C, and so on -- so a temporary problem
+  with one address never stalls a step.
+- The platform **remembers how each address behaved** (per website, over
+  time). An address that keeps failing is automatically put aside while the
+  others keep working, and it comes back after it succeeds again. The
+  history is stored in the run's `logs/proxy-health.json` -- passwords are
+  masked there too.
 - Each step's assignment is written to the run's
   `logs/proxy-rotation.json` -- you can always see exactly which proxy was
   used by which step. Passwords are masked everywhere.

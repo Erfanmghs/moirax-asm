@@ -71,8 +71,9 @@ class Adapter:
         self.clock = clock or Clock()
         self.runner = runner or _DockerRunner(params)
         self.aggressive = aggressive
-        # C5 IP rotation: optional ProxyAssigner; one pool entry per module
-        # invocation (round-robin), ledgered, credentials never echoed.
+        # C5 IP rotation: optional ProxyAssigner; ONE pool entry PER ATTEMPT
+        # (first try + every retry rotate -- per-request law), ledgered,
+        # outcome-telemetered per entry, credentials never echoed.
         self.proxy_pool = proxy_pool
         self._live: dict[str, str] = {}
         self._live_lock = threading.Lock()
@@ -131,13 +132,11 @@ class Adapter:
                 attempts=0,
             )
         spec = self.spec(name)
-        if self.proxy_pool is not None:
-            # C5: assign BEFORE any attempt/retry so one module invocation uses
-            # exactly one pool entry; tools without the proxy hook run DIRECT.
-            extra = {**extra, **self.proxy_pool.hook_values(name, module, spec.raw)}
+        proxy_state = {"idx": -1}  # last assigned pool index for this invocation
         retries = int(self.params.require("tool_retry_count"))
         backoff = float(self.params.require("retry_backoff_base_sec"))
-        result = self._attempt_loop(spec, module, extra, planned_concurrency, timeout_sec, retries, backoff)
+        result = self._attempt_loop(spec, module, extra, planned_concurrency, timeout_sec, retries, backoff,
+                                    proxy_state)
         if result.exit_code != 0 and allow_fallback:
             fallback = spec.get("fallback")
             if fallback:
@@ -146,7 +145,8 @@ class Adapter:
                 # breaker key so a mid-retry pause on `module` cannot skip the chain.
                 fb_module = str(fb.name)
                 fb_result = self._attempt_loop(
-                    fb, fb_module, extra, planned_concurrency, timeout_sec, retries, backoff
+                    fb, fb_module, extra, planned_concurrency, timeout_sec, retries, backoff,
+                    {"idx": -1},
                 )
                 fb_result.used_fallback = True
                 if fb_result.exit_code == 0:
@@ -164,6 +164,7 @@ class Adapter:
         timeout_sec: float | None,
         retries: int,
         backoff: float,
+        proxy_state: dict[str, int] | None = None,
     ) -> InvokeResult:
         last: InvokeResult | None = None
         attempts = retries + 1
@@ -182,7 +183,27 @@ class Adapter:
                     paused=True,
                     attempts=attempt,
                 )
+            # C5 v2 PER-REQUEST ROTATION: every attempt (first try + retries)
+            # takes the next pool entry. Hook-less tools are assigned ONCE (a
+            # single honest DIRECT row, no per-retry noise) and stay DIRECT.
+            if (self.proxy_pool is not None and proxy_state is not None
+                    and (attempt == 0 or proxy_state["idx"] >= 0)):
+                frag, idx = self.proxy_pool.hook_values_for_attempt(
+                    spec.name, module, spec.raw, attempt=attempt + 1
+                )
+                if frag:
+                    extra = {**extra, **frag}
+                proxy_state["idx"] = idx
             last = self._once(spec, module, extra, planned_concurrency, timeout_sec, attempt + 1)
+            # C5 v2 HEALTH TELEMETRY: this attempt's exit code is the entry's
+            # outcome signal (masked, capped, persisted per target; never
+            # raises, never flips a verdict -- same law class as selftune).
+            if self.proxy_pool is not None and proxy_state is not None:
+                self.proxy_pool.record_outcome(
+                    proxy_state["idx"], ok=(last.exit_code == 0),
+                    duration_sec=last.duration_sec, tool=spec.name,
+                    module=module, attempt=attempt + 1,
+                )
             if last.exit_code == 0:
                 return last
             if attempt < retries:

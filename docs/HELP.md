@@ -84,8 +84,9 @@ The repository is **private**, so GitHub asks you to prove who you are:
   `gh auth login` once; then repeat the clone command.
 - **Or**: generate a Personal Access Token (GitHub -> Settings ->
   Developer settings -> Personal access tokens -> Tokens (classic), tick
-  `repo`) and paste it when the clone asks for a password -- not your
-  GitHub password.
+  `repo` and `read:packages`) and paste it when the clone asks for a
+  password -- not your GitHub password. Keep the token handy -- step 3.3's
+  fast way reuses it.
 
 ### 3.3 Configure and start
 
@@ -96,14 +97,30 @@ cp .env.example .env
 # 2) open .env and set your dashboard login password
 #    DASHBOARD_TOKEN=changeme   ->  replace changeme with a long password
 #    (Telegram bot token goes here too -- see section 7)
+```
 
-# 3) start the platform
+**The slow part happens only ONCE per machine.** Every start after it takes
+a few seconds, and after a reboot the platform starts itself.
+
+**Fast way -- download the ready-made app, nothing is built** (reuses the
+token from step 3.2):
+
+```bash
+docker login ghcr.io -u YOUR-GITHUB-USERNAME   # paste the token as the password
+docker pull ghcr.io/erfanmghs/recon-pipeline:dashboard
+docker tag ghcr.io/erfanmghs/recon-pipeline:dashboard recon-pipeline-dashboard
+docker compose --profile dashboard up -d
+```
+
+**Or build locally instead** (one command, no login; the only slow step you
+will ever do, and it too happens once):
+
+```bash
 docker compose --profile dashboard up -d --build
 ```
 
-The **first** start downloads and builds the tool boxes -- give it
-**5-15 minutes** and let the terminal finish. After that it starts in
-seconds.
+The **first** start ends the same way for both: the platform is running.
+Check with `docker compose ps` -- the status should say `Up`.
 
 Open **http://127.0.0.1:8080**, paste your password in the top-right box,
 press **SET**. You are in.
@@ -116,14 +133,14 @@ press **SET**. You are in.
 
 | I want to ... | Command |
 |---|---|
+| Start it (everyday, a few seconds) | `docker compose --profile dashboard up -d` |
 | Stop everything | `docker compose --profile dashboard down` |
-| Start it again | `docker compose --profile dashboard up -d` |
 | Update to the newest version | `git pull`, then `docker compose --profile dashboard up -d --build` |
 | Watch what it is doing right now | `docker compose logs -f dashboard` |
 
 If any of the steps above fail (for example `docker: command not found`, or
 the clone rejects your password), the README's troubleshooting table
-(section 4.9) has the fix for the eight most common cases.
+(section 4.9) has the fix for the nine most common cases.
 
 ---
 

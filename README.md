@@ -53,7 +53,8 @@ tells you when a new one appears.
 - An **internet connection**.
 - A **GitHub account that has access to this repository**. The repository is
   private: either you are its owner, or the owner has invited your account.
-- About **20 minutes** of time the first time.
+- About **10 minutes** the first time (mostly one-time downloads). Every
+  start after that takes a few seconds -- see 4.5.
 - Nothing else. No database to install, no accounts to create, no keys to
   buy. The two free tools the platform needs (Git and Docker) are installed
   in the next section, step by step.
@@ -106,8 +107,9 @@ during the download. Two easy ways:
   that.
 - **With a Personal Access Token**: on GitHub open Settings -> Developer
   settings -> Personal access tokens -> **Tokens (classic)**, generate a
-  token with the `repo` tick, and when the clone asks for a password, paste
-  that token (not your GitHub password).
+  token with the `repo` and `read:packages` ticks, and when the clone asks
+  for a password, paste that token (not your GitHub password). Keep the
+  token handy -- step 4.5 option A reuses it.
 
 > You can also download the code as a ZIP from the green **Code** button on
 > the repository page -- but cloning with Git makes every future update a
@@ -137,13 +139,34 @@ section 7. You can skip that for now and do it later.)
 
 ### 4.5 Start the platform
 
+**Read this once:** the slow part (downloading or building the app's
+package) happens **only on the first start of each machine**. Every start
+after that takes **a few seconds**, and after a reboot the platform starts
+itself -- you just open the browser.
+
+**Option A -- the fast way, nothing is built (recommended).** The
+ready-made app is downloaded from the platform's package store. It reuses
+the token from step 4.3:
+
+```bash
+docker login ghcr.io -u YOUR-GITHUB-USERNAME   # paste the token as the password
+docker pull ghcr.io/erfanmghs/recon-pipeline:dashboard
+docker tag ghcr.io/erfanmghs/recon-pipeline:dashboard recon-pipeline-dashboard
+docker compose --profile dashboard up -d
+```
+
+The download is one small app-sized package -- usually well under a minute.
+
+**Option B -- build on your machine instead.** One command, no login. This
+is the only slow step you will ever do (5-15 minutes on a slow internet),
+and it too happens once:
+
 ```bash
 docker compose --profile dashboard up -d --build
 ```
 
-The **first** start downloads and builds everything, so give it
-**5-15 minutes** and let the terminal finish. Every start after that takes
-seconds.
+Both options end in the same place: the platform is running. Check it with
+`docker compose ps` -- the status should say `Up`.
 
 ### 4.6 Open the dashboard
 
@@ -164,8 +187,9 @@ panel.
 
 | I want to ... | Command |
 |---|---|
+| Start it (everyday, a few seconds) | `docker compose --profile dashboard up -d` |
+| Never type that again | Docker Desktop starts on login and the platform restarts itself -- after a reboot, just open the browser |
 | Stop everything | `docker compose --profile dashboard down` |
-| Start it again | `docker compose --profile dashboard up -d` |
 | Update to the newest version | `git pull`, then `docker compose --profile dashboard up -d --build` |
 | Watch what it is doing right now | `docker compose logs -f dashboard` |
 | Check that it is running | `docker compose ps` |
@@ -179,6 +203,7 @@ panel.
 | `permission denied ... docker.sock` (Linux) | Your user is not in the docker group | `sudo usermod -aG docker $USER`, then log out and back in |
 | Clone rejects my password | GitHub no longer accepts account passwords | Use a Personal Access Token or `gh auth login` (4.3) |
 | Clone says `repository not found` | Your account has no access to this private repository, or the address has a typo | Ask the owner to invite your account and re-check the address |
+| First start says `pull access denied` or `unauthorized` | The ready-made image needs your GitHub login, or the token lacks `read:packages` | Do the login from 4.5 option A, or run option B (`--build`) once |
 | `port is already allocated` | Another program is using port 8080 | Add `DASHBOARD_BIND_PORT=9090` to `.env`, restart, and open http://127.0.0.1:9090 |
 | The dashboard page does not open | It is still building, or it stopped | Run `docker compose ps`; wait until the status says `Up`, then reload the page |
 | First start seems frozen | It is downloading, not frozen | Wait, or run `docker compose logs -f dashboard` to see the progress |

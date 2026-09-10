@@ -1,0 +1,14 @@
+schema_version: 1
+targets:
+  bugdasht.ir:
+    description: "QA owned site depth 3"
+    settings:
+      budgets:
+        recon_depth: 3
+      wordlist_selection:
+        DNSR-1:
+          - dns_fast_top5000
+          - dns_fast_fierce
+        FFUF-2:
+          - vhost_top5000
+          - vhost_fierce

@@ -204,6 +204,7 @@ def _harden_connection(conn: sqlite3.Connection, *, write: bool) -> None:
         conn.execute("PRAGMA secure_delete=ON")
         conn.execute("PRAGMA temp_store=MEMORY")
         conn.execute(f"PRAGMA application_id={_APPLICATION_ID}")
+        conn.execute("PRAGMA wal_autocheckpoint=1000")
         conn.execute("BEGIN IMMEDIATE")
 
 
@@ -221,6 +222,12 @@ def _connect(path: Path, *, write: bool = True) -> Iterator[sqlite3.Connection]:
         yield conn
         if write:
             conn.commit()
+            # Flush WAL into the main file so a process/host restart does not
+            # depend on replay of a leftover -wal sidecar.
+            try:
+                conn.execute("PRAGMA wal_checkpoint(FULL)")
+            except sqlite3.OperationalError:
+                pass
             _chmod_private(path)
     except Exception:
         if write:

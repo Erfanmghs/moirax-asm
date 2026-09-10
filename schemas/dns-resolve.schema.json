@@ -46,6 +46,10 @@
     "wildcard_suspects": {
       "type": "array",
       "items": { "type": "string" }
+    },
+    "nested_parents": {
+      "type": "array",
+      "items": { "type": "string" }
     }
   }
 }

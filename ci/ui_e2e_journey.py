@@ -1,18 +1,17 @@
 """UI E2E journey 0-100 (operator mandate: test every capability in the UI
 like a normal user). Real chromium against a real uvicorn boot.
 
-J1  landing + auth (SET token -> online badge)
+J1  landing + auth (sign in -> online badge)
 J2  TOOLS panel: tool toggle + wordlist selection save
 J3  TARGETS panel: create profile with per-target Telegram user id (D-protocol)
 J4  TARGETS persistence across reload (LOAD restores the id)
-J5  FLEET panel: members + no-run state
-J6  RESULTS panel: assets, filters, coverage, diff badges (global TARGET box)
+J6  RESULTS panel: pick SCAN site, assets, filters, coverage, diff
 J7  REPORTS panel: GENERATE NOW -> tamper-checked VERIFIED bundle
 J8  RUN CONTROL: status from state.json + scheduler save
 J9  API KEYS: set + masked
 J10 SETTINGS: global Telegram user id + SEND TEST (honest skip ledger)
 J11 XSS probe rendered inert (textContent escaping + CSP; no dialogs)
-J12 unauthorized UX: token cleared -> panels refuse with guidance toast
+J12 unauthorized UX: LOCK -> sign-in gate
 
 Exit 0 iff every step passes. Screenshots land in ci/ui-e2e-screens/.
 """
@@ -112,10 +111,12 @@ def journey() -> int:
         # J1 landing + auth
         page.goto(BASE)
         assert page.locator(".brand").inner_text().strip() != ""
-        page.fill("#token", TOKEN)
-        page.click("#token-save")
+        page.wait_for_selector("#auth-gate:not([hidden])")
+        page.fill("#auth-password", TOKEN)
+        page.click("#auth-submit")
+        page.wait_for_function("document.querySelector('#auth-gate').hidden")
         page.wait_for_function("document.querySelector('#conn').textContent.includes('online')")
-        step("J1", "landing + auth", True, "brand visible, token set, conn badge online")
+        step("J1", "landing + auth", True, "brand visible, signed in, conn badge online")
         page.screenshot(path=str(SCREENS / "J1-landing.png"))
 
         # J2 TOOLS + WORDLISTS (original filenames)
@@ -135,7 +136,7 @@ def journey() -> int:
         assert any("test-smoke-200.txt" in n for n in names), names[:8]
         assert any("subdomains-top1million-5000.txt" in n for n in names), names[:8]
         assert page.locator("#header-start").count() == 0
-        assert page.locator("#run-start").count() == 1
+        assert page.locator("#run-start").count() == 0
         assert page.locator("#global-target").count() == 0
         boxes = page.locator("#wordlists input[type=checkbox]")
         assert boxes.count() > 0, "no wordlist checkboxes"
@@ -171,18 +172,10 @@ def journey() -> int:
         val = page.input_value("#t-tg")
         step("J4", "TARGETS persistence (reload + LOAD)", val == "123456789", f"restored id={val!r}")
 
-        # J5 FLEET
-        page.click('[data-panel="fleet"]')
-        page.wait_for_timeout(400)
-        mv = page.locator("#fl-members-view").inner_text()
-        badge = page.locator("#fl-status").inner_text()
-        step("J5", "FLEET surface", "ui-target.example" in mv and "no fleet run" in badge,
-             f"members view: {mv[:60]!r}, badge: {badge!r}")
-        page.screenshot(path=str(SCREENS / "J5-fleet.png"))
-
-        # J6 RESULTS via the RESULTS page site picker (not a global header target)
-        page.fill("#results-target", "example.com")
+        # J6 RESULTS: site list is SCAN targets (select, not a leftover default)
         page.click('[data-panel="results"]')
+        page.wait_for_function("() => [...document.querySelectorAll('#results-target option')].some(o => o.value === 'example.com')")
+        page.select_option("#results-target", "example.com")
         page.click("#results-load")
         page.wait_for_selector("#assets-table tbody tr")
         n_all = page.locator("#assets-table tbody tr").count()
@@ -200,7 +193,8 @@ def journey() -> int:
         # J7 REPORTS: generate + verified (poll the badge -- generation takes
         # a beat: PDF render + digest chain)
         page.click('[data-panel="reports"]')
-        page.fill("#rep-target", "example.com")
+        page.wait_for_function("() => [...document.querySelectorAll('#rep-target option')].some(o => o.value === 'example.com')")
+        page.select_option("#rep-target", "example.com")
         gen_ok = True
         with page.expect_response(lambda r: "/api/report/" in r.url and "/generate" in r.url,
                                   timeout=20000) as ri:
@@ -218,15 +212,17 @@ def journey() -> int:
              f"badge={badge!r} open_links={open_links} generate_status={ri.value.status}")
         page.screenshot(path=str(SCREENS / "J7-reports.png"))
 
-        # J8 RUN CONTROL + scheduler
+        # J8 RUN CONTROL + scheduler (global defaults live in SETTINGS)
         page.fill("#run-target", "example.com")
         page.click('[data-panel="run"]')
-        assert page.locator("#run-start").inner_text().strip() == "START SCAN"
+        assert page.locator("#run-start").count() == 0
         assert page.locator("#header-start").count() == 0
         page.wait_for_timeout(500)
         st = page.locator("#run-status").inner_text()
+        page.click('[data-panel="settings"]')
         page.fill("#sched-interval", "15")
-        page.click("#sched-save")
+        page.select_option("#sched-enabled", "true")
+        page.click("#s-save")
         page.wait_for_timeout(400)
         step("J8", "RUN CONTROL status + scheduler save", "completed" in st,
              f"status={st!r}, scheduler interval=15 saved")
@@ -268,13 +264,10 @@ def journey() -> int:
         page.screenshot(path=str(SCREENS / "J11-xss.png"))
 
         # J12 unauthorized UX
-        page.evaluate("sessionStorage.removeItem('recon_dashboard_token'); localStorage.removeItem('recon_dashboard_token')")
-        page.reload()
-        page.wait_for_selector(".brand")
-        page.click('[data-panel="results"]')
-        page.wait_for_timeout(400)
-        toast = page.locator("#toast").inner_text()
-        step("J12", "unauthorized UX guidance", "DASHBOARD_TOKEN" in toast, f"toast: {toast!r}")
+        page.click("#session-lock")
+        page.wait_for_selector("#auth-gate:not([hidden])")
+        title = page.locator("#auth-title").inner_text()
+        step("J12", "unauthorized UX guidance", "Sign in" in title, f"gate title: {title!r}")
         page.screenshot(path=str(SCREENS / "J12-unauth.png"))
 
         browser.close()

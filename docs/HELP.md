@@ -96,9 +96,8 @@ The repository is **private**, so GitHub asks you to prove who you are:
 # 1) copy the example configuration
 cp .env.example .env
 
-# 2) open .env and set your dashboard login password
-#    DASHBOARD_TOKEN=changeme   ->  replace changeme with a long password
-#    (Telegram bot token goes here too -- see section 7)
+# 2) open .env only if you want optional keys (Telegram, search APIs).
+#    Dashboard password is set in the browser on first visit -- not here.
 ```
 
 **The slow part happens only ONCE per machine.** Every start after it takes
@@ -124,12 +123,10 @@ docker compose --profile dashboard up -d --build
 The **first** start ends the same way for both: the platform is running.
 Check with `docker compose ps` -- the status should say `Up`.
 
-Open **http://127.0.0.1:8080**, paste your password in the top-right box,
-press **SET**. You are in.
-
-> **Example:** if your password is `my-secret-42`, you put
-> `DASHBOARD_TOKEN=my-secret-42` in the `.env` file, start the platform, then
-> type `my-secret-42` into the top-right box of the dashboard.
+Open **http://127.0.0.1:8080**. The first visit asks you to choose a password
+(12+ characters). Later visits ask you to sign in. After 15 minutes with no
+click, you must sign in again. You do **not** need `DASHBOARD_TOKEN` in `.env`
+for this.
 
 ### 3.4 Everyday commands
 
@@ -232,7 +229,7 @@ Two lines in the `.env` file:
 
 | Line | What it is | Where to get it |
 |---|---|---|
-| `DASHBOARD_TOKEN` | Dashboard login password | You choose it -- make it long |
+| `DASHBOARD_TOKEN` | Optional legacy API bearer | Leave empty; set the password in the browser |
 | `TELEGRAM_BOT_TOKEN` | Lets the platform send Telegram messages | In Telegram: talk to `@BotFather`, send `/newbot`, answer two questions, copy the long token. Extra tokens separated by commas act as automatic backups. |
 
 Everything else is managed later from the dashboard by normal users, without

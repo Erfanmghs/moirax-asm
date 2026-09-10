@@ -192,6 +192,12 @@ def housekeep(params: Params, target_dir: Path) -> dict[str, Any]:
     capped = enforce_total_cap(params, target_dir, cfg["max_total_mb"])
     ledgers.append(pruned)
     ledgers.append(capped)
+    try:
+        from pipeline.deleted import purge_expired_all
+
+        ledgers.append(purge_expired_all(params))
+    except Exception:  # noqa: BLE001 -- tombstone purge never fails the run
+        pass
     freed = sum(int(entry.get("freed_bytes") or 0) for entry in ledgers)
     return {
         "applied": True,

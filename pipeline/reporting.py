@@ -22,8 +22,8 @@ from pipeline.yaml_util import load_yaml_file
 
 # Flat per-class CSV columns (section 10.1: flat export.csv per asset class).
 CSV_CLASSES: dict[str, tuple[str, ...]] = {
-    "hosts": ("host", "ips", "alive", "sources", "tags"),
-    "vhosts": ("base_host", "vhost", "ip", "port", "scheme", "alive", "http_status", "misconfig_suspect"),
+    "hosts": ("host", "ips", "alive", "length", "sources", "tags"),
+    "vhosts": ("base_host", "vhost", "ip", "port", "scheme", "alive", "http_status", "length", "misconfig_suspect"),
     "ports": ("host", "ip", "port", "proto"),
     "services": ("ip", "port", "proto", "service", "product", "version"),
     "passive_ips": ("ip", "sources"),
@@ -43,21 +43,82 @@ def _read_json(path: Path) -> dict[str, Any]:
         return {}
 
 
+def _live_module_rel(rel: str) -> bool:
+    rel = rel.replace("\\", "/")
+    return not rel.startswith("history/") and not rel.startswith("logs/")
+
+
+def _facts(params: Params, target_dir: Path, hosts: list[dict[str, Any]], module_docs: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    with_ip = [r for r in hosts if any(r.get("ips") or [])]
+    alive = [r for r in hosts if r.get("alive")]
+    dns = module_docs.get("20_dns/dnsx/data.json") or {}
+    resolved = [r for r in (dns.get("resolved") or []) if isinstance(r, dict)]
+    dns_with_ip = sum(1 for r in resolved if r.get("ips"))
+    light = module_docs.get("30_ports/naabu-light/data.json") or {}
+    full = module_docs.get("30_ports/naabu-full/data.json") or {}
+    open_ports = 0
+    for doc in (light, full):
+        for scan in doc.get("scans") or doc.get("results") or []:
+            if isinstance(scan, dict):
+                open_ports += len(scan.get("ports") or [])
+    owasp = module_docs.get("70_owasp/data.json") or {}
+    findings = [f for f in (owasp.get("findings") or []) if isinstance(f, dict)]
+    wl = load_yaml_file(str(params.root / "wordlists.yaml")) or {}
+    tasks = wl.get("tasks") or {}
+    dnsr = (tasks.get("DNSR-1") or {})
+    ffuf2 = (tasks.get("FFUF-2") or {})
+    state = _read_json(target_dir / "state.json")
+    return {
+        "hosts_with_ip": len(with_ip),
+        "alive_hosts_list": alive,
+        "dns_names": len(resolved),
+        "dns_with_ip": dns_with_ip,
+        "dns_unresolved": max(0, len(resolved) - dns_with_ip),
+        "portcheck_ips": _as_int(light.get("unique_ips_checked")),
+        "skipped_no_ip": _as_int(light.get("skipped_no_ip")),
+        "portsweep_ips": _as_int(full.get("unique_ips_scanned")),
+        "open_port_rows": open_ports,
+        "owasp_findings": findings,
+        "dnsr1_lists": dnsr.get("selection") or ([dnsr.get("default_key")] if dnsr.get("default_key") else []),
+        "ffuf2_lists": ffuf2.get("selection") or ([ffuf2.get("default_key")] if ffuf2.get("default_key") else []),
+        "run_status": ((state.get("run") or {}).get("status") or ""),
+        "modules": (state.get("modules") or {}),
+        "breakers": list(((state.get("breaker") or {}).get("paused") or {}).keys()),
+    }
+
+
+def _as_int(val: Any) -> int:
+    if isinstance(val, bool):
+        return int(val)
+    if isinstance(val, (int, float)):
+        return int(val)
+    if isinstance(val, list):
+        return len(val)
+    if isinstance(val, str) and val.isdigit():
+        return int(val)
+    return 0
+
+
 def collect(params: Params, target_dir: Path, stamp: str) -> dict[str, Any]:
     """Canonical bundle: assets.json rows + every module data.json (section 6.3)."""
     assets_doc = _read_json(target_dir / str(params.require("assets_relpath")))
     module_docs: dict[str, dict[str, Any]] = {}
     for path in sorted(target_dir.rglob("data.json")):
         try:
-            rel = str(path.relative_to(target_dir))
+            rel = str(path.relative_to(target_dir)).replace("\\", "/")
         except ValueError:
+            continue
+        if not _live_module_rel(rel):
             continue
         module_docs[rel] = _read_json(path)
     hosts = [r for r in assets_doc.get("assets") or [] if isinstance(r, dict) and r.get("host")]
+    facts = _facts(params, target_dir, hosts, module_docs)
     counts = {
         "hosts": len(hosts),
         "alive_hosts": len([r for r in hosts if r.get("alive")]),
         "module_docs": len(module_docs),
+        "hosts_with_ip": facts["hosts_with_ip"],
+        "open_port_rows": facts["open_port_rows"],
     }
     return {
         "schema_version": int(params.require("schema_version")),
@@ -67,6 +128,7 @@ def collect(params: Params, target_dir: Path, stamp: str) -> dict[str, Any]:
         "counts": counts,
         "hosts": hosts,
         "module_docs": module_docs,
+        "facts": facts,
     }
 
 
@@ -77,6 +139,7 @@ def file_digest(path: Path) -> str:
 def write_report_md(params: Params, target_dir: Path, bundle: dict[str, Any]) -> Path:
     out = target_dir / str(params.require("report_dirname")) / "report.md"
     out.parent.mkdir(parents=True, exist_ok=True)
+    facts = bundle.get("facts") or {}
     lines = [
         f"# Recon report -- {bundle['target']}",
         "",
@@ -92,6 +155,50 @@ def write_report_md(params: Params, target_dir: Path, bundle: dict[str, Any]) ->
         "Scope violations, if any, are logged in logs/out_of_scope.log and were "
         "never scanned; every candidate was re-validated at MERGE time (section 7.3).",
         "",
+        "## What this run actually measured",
+        "",
+        f"- DNS brute names: {facts.get('dns_names', 0)} (with A/AAAA: {facts.get('dns_with_ip', 0)}; unresolved: {facts.get('dns_unresolved', 0)}).",
+        f"- Asset list hosts with at least one IP: {facts.get('hosts_with_ip', 0)}.",
+        f"- Port-check unique IPs checked: {facts.get('portcheck_ips', 0)}; skipped (no IP): {facts.get('skipped_no_ip', 0)}.",
+        f"- Port-sweep unique IPs scanned: {facts.get('portsweep_ips', 0)}; open-port rows: {facts.get('open_port_rows', 0)}.",
+        f"- DNSR-1 wordlists: {', '.join(str(x) for x in (facts.get('dnsr1_lists') or []) if x) or 'default'}.",
+        f"- FFUF-2 wordlists: {', '.join(str(x) for x in (facts.get('ffuf2_lists') or []) if x) or 'default'}.",
+        f"- Pipeline run status: {facts.get('run_status') or 'unknown'}.",
+        "",
+        "## Alive hosts",
+        "",
+    ]
+    alive = facts.get("alive_hosts_list") or []
+    if not alive:
+        lines.append("(none recorded as alive)")
+    else:
+        for r in alive:
+            ips = ", ".join(str(i) for i in (r.get("ips") or []) if i) or "(no IP)"
+            length = r.get("length")
+            length_txt = f" -- length={length}" if length is not None else ""
+            lines.append(f"- `{r.get('host')}` -- {ips}{length_txt} -- sources: {', '.join(r.get('sources') or [])}")
+    lines += [
+        "",
+        "## Open ports",
+        "",
+        "No open ports in canonical naabu data.json." if not facts.get("open_port_rows") else f"{facts.get('open_port_rows')} open-port rows in naabu scans.",
+        "",
+        "## Findings (OWASP passive)",
+        "",
+    ]
+    findings = facts.get("owasp_findings") or []
+    if not findings:
+        lines.append("(none)")
+    else:
+        for f in findings:
+            hosts = ", ".join(str(h) for h in (f.get("hosts") or [])[:12])
+            extra = "" if len(f.get("hosts") or []) <= 12 else f" (+{len(f.get('hosts') or []) - 12} more)"
+            lines.append(f"- **{f.get('severity', '')}** `{f.get('id')}` {f.get('top10', '')} -- {hosts}{extra}")
+            if f.get("rationale"):
+                lines.append(f"  {f.get('rationale')}")
+    if facts.get("breakers"):
+        lines += ["", "## Circuit breakers paused", "", ", ".join(facts["breakers"]), ""]
+    lines += [
         "## Per-module sections",
         "",
     ]
@@ -120,22 +227,39 @@ def write_report_html(params: Params, target_dir: Path, bundle: dict[str, Any], 
     out = target_dir / str(params.require("report_dirname")) / "report.html"
     out.parent.mkdir(parents=True, exist_ok=True)
     new_hosts = {str(r.get("host")) for r in ((diff or {}).get("added") or {}).get("hosts") or []}
+    facts = bundle.get("facts") or {}
+    hosts_for_table = list(bundle["hosts"])
+    if len(hosts_for_table) > 80:
+        prefer = [r for r in hosts_for_table if r.get("alive") or (r.get("ips") or [])]
+        rest = [r for r in hosts_for_table if r not in prefer]
+        hosts_for_table = prefer + rest[: max(0, 80 - len(prefer))]
     rows = []
-    for r in bundle["hosts"]:
+    for r in hosts_for_table:
         badge = ' <span class="badge new">NEW</span>' if str(r.get("host")) in new_hosts else ""
         alive = f'<span class="badge {"alive" if r.get("alive") else "dead"}">{"ALIVE" if r.get("alive") else "DEAD"}</span>'
         rows.append(
             f"<tr><td>{r.get('host')}{badge}</td><td>{', '.join(r.get('ips') or [])}</td>"
-            f"<td>{alive}</td><td>{', '.join(r.get('sources') or [])}</td><td>{', '.join(r.get('tags') or [])}</td></tr>"
+            f"<td>{alive}</td><td>{'' if r.get('length') is None else r.get('length')}</td>"
+            f"<td>{', '.join(r.get('sources') or [])}</td><td>{', '.join(r.get('tags') or [])}</td></tr>"
         )
+    measure = (
+        f"<p>DNS names {facts.get('dns_names', 0)} (A/AAAA {facts.get('dns_with_ip', 0)}, "
+        f"unresolved {facts.get('dns_unresolved', 0)}). "
+        f"Port-check IPs {facts.get('portcheck_ips', 0)}, skipped no-IP {facts.get('skipped_no_ip', 0)}. "
+        f"Port-sweep IPs {facts.get('portsweep_ips', 0)}, open-port rows {facts.get('open_port_rows', 0)}.</p>"
+    )
+    cap_note = "" if len(bundle["hosts"]) <= 80 else f"<p>Asset table shows {len(hosts_for_table)} of {len(bundle['hosts'])} hosts (alive and IP-bearing first). Full list is in export.csv.</p>"
     html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>recon report -- {bundle['target']}</title>
 <style>{_THEME_CSS}</style></head><body>
 <h1>recon report -- {bundle['target']}</h1>
 <p>run timestamp: {bundle['run_timestamp']} &nbsp;|&nbsp; scope digest: <code>{bundle['scope_digest']}</code></p>
 <h2>counts</h2>
 <p>hosts: {bundle['counts']['hosts']} | alive: {bundle['counts']['alive_hosts']} | module data.json: {bundle['counts']['module_docs']}</p>
+<h2>what was measured</h2>
+{measure}
+{cap_note}
 <h2>assets</h2>
-<table><thead><tr><th>host</th><th>ips</th><th>alive</th><th>sources</th><th>tags</th></tr></thead>
+<table><thead><tr><th>host</th><th>ips</th><th>alive</th><th>length</th><th>sources</th><th>tags</th></tr></thead>
 <tbody>{''.join(rows)}</tbody></table>
 <h2>modules</h2>
 <ul>{''.join(f'<li><code>{rel}</code> -- {doc.get("module", "")}</li>' for rel, doc in bundle['module_docs'].items())}</ul>
@@ -163,6 +287,7 @@ def _class_rows(bundle: dict[str, Any], cls: str) -> list[dict[str, Any]]:
                 "host": r.get("host"),
                 "ips": ",".join(r.get("ips") or []),
                 "alive": bool(r.get("alive")),
+                "length": "" if r.get("length") is None else r.get("length"),
                 "sources": ",".join(r.get("sources") or []),
                 "tags": ",".join(r.get("tags") or []),
             }
@@ -225,6 +350,9 @@ def write_report_pdf(params: Params, target_dir: Path, bundle: dict[str, Any]) -
     line(f"run timestamp: {bundle['run_timestamp']}")
     line(f"scope digest: {bundle['scope_digest']}")
     line(f"hosts: {bundle['counts']['hosts']}  alive: {bundle['counts']['alive_hosts']}")
+    facts = bundle.get("facts") or {}
+    line(f"dns A/AAAA: {facts.get('dns_with_ip', 0)}  unresolved: {facts.get('dns_unresolved', 0)}")
+    line(f"open-port rows: {facts.get('open_port_rows', 0)}")
     line(f"module data.json files: {bundle['counts']['module_docs']}")
     line("")
     line("HOSTS:")

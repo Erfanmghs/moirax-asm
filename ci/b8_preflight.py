@@ -87,11 +87,15 @@ def main() -> int:
     js = (ROOT / "dashboard" / "static" / "app.js").read_text(encoding="utf-8")
     surface_ok = (
         "/api/run/agent-journal/{target}" in app_text
+        and "/api/run/log/{target}/export" in app_text
+        and "/api/run/agent-journal/{target}/export" in app_text
         and "AGENT JOURNAL" in html
         and "startJournalStream" in js
+        and "exportRunArtifact" in js
+        and "log-export" in html and "journal-export" in html
         and "s-agent-enabled" in html and "s-agent-passive" in html and "s-agent-active" in html
     )
-    check("G-N5 journal-surface", surface_ok, "journal endpoint + SPA toggle + live stream")
+    check("G-N5 journal-surface", surface_ok, "journal endpoint + SPA toggle + live stream + export")
 
     # ---- G-N6 verify_b1 clean -----------------------------------------------------------------
     diff = subprocess.run(

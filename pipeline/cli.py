@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
+from typing import Any, Callable
 
 from pipeline.factory import ensure_layout, sanitize_target, target_root
 from pipeline.params import Params
@@ -132,6 +134,31 @@ def cmd_status(params: Params, target: str | None) -> int:
     return 0
 
 
+def _run_with_target_profile(params: Params, target: str, runner: Callable[[], int]) -> int:
+    """Apply per-target SETUP for this run, then restore global files.
+
+    Empty / description-only profiles leave tools.yaml and wordlists.yaml
+    untouched, so SETTINGS and WORDLISTS apply as-is.
+    """
+    from pipeline.target_profiles import ProfileError, apply_transient, restore_transient
+
+    snap = Path(tempfile.mkdtemp(prefix="recon-profile-"))
+    applied: dict[str, Any] | None = None
+    try:
+        try:
+            applied = apply_transient(params, target, snap)
+        except ProfileError as exc:
+            print(f"target profile apply failed: {exc}")
+            return 1
+        # Disk edits land in tools.yaml; in-memory Params must refresh or
+        # recon_depth / module order stay at the pre-SETUP globals.
+        params.reload()
+        return runner()
+    finally:
+        if applied:
+            restore_transient(applied)
+
+
 def cmd_run(params: Params, target: str, aggressive: bool = False) -> int:
     target = sanitize_target(target)
     try:
@@ -148,7 +175,9 @@ def cmd_run(params: Params, target: str, aggressive: bool = False) -> int:
         return 1
     from pipeline.engine import run_pipeline
 
-    return run_pipeline(params, gate, target, aggressive=aggressive)
+    return _run_with_target_profile(
+        params, target, lambda: run_pipeline(params, gate, target, aggressive=aggressive)
+    )
 
 
 def cmd_resume(params: Params, target: str, aggressive: bool = False) -> int:
@@ -163,7 +192,11 @@ def cmd_resume(params: Params, target: str, aggressive: bool = False) -> int:
         return 1
     from pipeline.engine import run_pipeline
 
-    return run_pipeline(params, gate, target, aggressive=aggressive, resume=True)
+    return _run_with_target_profile(
+        params,
+        target,
+        lambda: run_pipeline(params, gate, target, aggressive=aggressive, resume=True),
+    )
 
 
 def cmd_stop(params: Params, target: str) -> int:

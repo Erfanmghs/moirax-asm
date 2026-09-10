@@ -16,7 +16,8 @@ from pipeline.ceiling import ResourceCeiling
 from pipeline.factory import ensure_layout
 from pipeline.history import append_run, previous_timestamp, snapshot, utc_stamp, write_diff
 from pipeline.jsonio import read_json
-from pipeline.merge import load_tool_doc, merge_branches
+from pipeline.merge import append_active_doc, load_tool_doc, merge_branches
+from pipeline.modules.dns_resolve import expand_nested_after_vhosts
 from pipeline.modules import RUNNERS
 from pipeline.notify import run_end_notifications, send_status
 from pipeline.ip_rotation import gate_pool_or_legacy
@@ -296,6 +297,15 @@ def run_pipeline(
                 RUNNERS[ffuf4_name](
                     params, gate, adapter, target_dir, target, extra, planned, None, partial
                 )
+                try:
+                    nested = expand_nested_after_vhosts(
+                        params, gate, adapter, target_dir, target, extra, planned, None, partial
+                    )
+                    if nested:
+                        append_active_doc(params, gate, target_dir, target, nested)
+                except Exception as exc:  # noqa: BLE001
+                    partial.append(f"nested-dns-ffuf4:{exc}")
+                    _append_log(params, target_dir, "dns-resolve", "dns-resolve", 0, f"nested-after-ffuf4: {exc}")
                 state_engine.set_status(params, target_dir, ffuf4_name, "done")
             except Exception as exc:
                 state_engine.set_status(params, target_dir, ffuf4_name, "failed")
@@ -528,6 +538,7 @@ def run_module(
 
 
 def stop_target(params: Params, target_dir: Path) -> list[str]:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     from pipeline.dockerbin import docker_prefix
     import subprocess
 
@@ -545,6 +556,12 @@ def stop_target(params: Params, target_dir: Path) -> list[str]:
     )
     state_engine.fail_running_modules(params, target_dir, target)
 
+    # Kill the pipeline process FIRST so it cannot spawn more tool containers
+    # while we tear down Docker. UI must feel instant.
+    recorded = state_engine.read_run_pid(target_dir)
+    killed = _kill_run_processes(target, recorded)
+    state_engine.clear_run_pid(target_dir)
+
     prefix = docker_prefix(params)
     label = str(params.require("docker_label_target"))
     listed = subprocess.run(
@@ -554,12 +571,22 @@ def stop_target(params: Params, target_dir: Path) -> list[str]:
         check=False,
     )
     ids = [line.strip() for line in listed.stdout.splitlines() if line.strip()]
-    for cid in ids:
-        subprocess.run([*prefix, "stop", "-t", "2", cid], capture_output=True, text=True, check=False)
 
-    recorded = state_engine.read_run_pid(target_dir)
-    killed = _kill_run_processes(target, recorded)
-    state_engine.clear_run_pid(target_dir)
+    def _kill_one(cid: str) -> None:
+        # kill = immediate SIGKILL in the container runtime (no graceful wait).
+        subprocess.run([*prefix, "kill", cid], capture_output=True, text=True, check=False)
+        subprocess.run([*prefix, "rm", "-f", cid], capture_output=True, text=True, check=False)
+
+    if ids:
+        workers = min(16, len(ids))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futs = [pool.submit(_kill_one, cid) for cid in ids]
+            for fut in as_completed(futs):
+                try:
+                    fut.result()
+                except Exception:  # noqa: BLE001 -- never fail STOP
+                    pass
+
     print(f"stop: killed_pids={killed} containers={len(ids)}")
     return ids
 
@@ -586,6 +613,8 @@ def _pids_for_cli_run(target: str) -> list[int]:
     needles = (
         f"pipeline.cli run {target}".encode(),
         f"pipeline.cli resume {target}".encode(),
+        f"recon.sh run {target}".encode(),
+        f"recon.sh resume {target}".encode(),
     )
     for entry in proc.iterdir():
         if not entry.name.isdigit():
@@ -621,13 +650,13 @@ def _terminate_pid(pid: int) -> bool:
 
     if not _signal(signal.SIGTERM):
         return False
-    deadline = time.time() + 2.0
+    deadline = time.time() + 0.35
     while time.time() < deadline:
         try:
             os.kill(pid, 0)
         except OSError:
             return True
-        time.sleep(0.05)
+        time.sleep(0.03)
     _signal(signal.SIGKILL)
     return True
 
@@ -827,6 +856,17 @@ def _run_active_modules(
     names = params.require("active_branch_modules")
     if not isinstance(names, list):
         return []
+    # Post-merge-only stages must never sit in the ACTIVE branch (SETUP UI
+    # used to offer ffuf-4 here; that ran too early with empty port data).
+    banned = {"ffuf-4", "port-sweep", "owasp-passive", "merge", "passive-recon"}
+    cleaned: list[str] = []
+    for raw in names:
+        name = str(raw)
+        if name in banned:
+            print(f"skip: module={name} reason=not an active-branch member (post-merge or other branch)")
+            continue
+        cleaned.append(name)
+    names = cleaned
     deadline = clock.time() + budget
     docs: list[dict[str, Any]] = []
     st = state_engine.load_state(params, target_dir, target)
@@ -836,28 +876,27 @@ def _run_active_modules(
         "ffuf-3": "ffuf3_data_json",
         "port-check": "portcheck_data_json",
     }
-    for name in names:
-        name = str(name)
+
+    def _one(name: str) -> dict[str, Any] | None:
+        nonlocal st
         if name not in RUNNERS:
-            continue
+            return None
         if state_engine.operator_stopped(params, target_dir, target):
             raise OperatorStop("operator stop")
         if state_engine.skip_done(st, name):
             key = data_keys.get(name)
             if key:
-                doc = load_tool_doc(target_dir / str(params.require(key)))
-                if doc:
-                    docs.append(doc)
-            continue
+                return load_tool_doc(target_dir / str(params.require(key)))
+            return None
         if not adapter.breaker.allow(name):
             reason = adapter.breaker.pause_reason(name) or "circuit breaker paused this module"
             _append_log(params, target_dir, name, name, 0, f"skip: {reason}")
             print(f"skip: module={name} reason={reason}")
-            continue
+            return None
         left = deadline - clock.time()
         if left <= 0:
             partial.append("active_budget")
-            break
+            return None
         state_engine.set_status(params, target_dir, name, "running")
         try:
             doc = RUNNERS[name](
@@ -871,26 +910,78 @@ def _run_active_modules(
                 left,
                 partial,
             )
-            if doc:
-                docs.append(doc)
+            if name == "ffuf":
+                try:
+                    nested = expand_nested_after_vhosts(
+                        params, gate, adapter, target_dir, target, extra, planned, left, partial
+                    )
+                    if nested:
+                        docs[:] = [d for d in docs if d.get("module") != "dns-resolve"]
+                        docs.append(nested)
+                except Exception as exc:  # noqa: BLE001 -- nested DNS never fails the vhost pass
+                    partial.append(f"nested-dns:{exc}")
+                    _append_log(params, target_dir, "dns-resolve", "dns-resolve", 0, f"nested-after-vhost: {exc}")
             if state_engine.operator_stopped(params, target_dir, target):
                 state_engine.set_status(params, target_dir, name, "failed")
                 raise OperatorStop("operator stop")
             state_engine.set_status(params, target_dir, name, "done")
             st = state_engine.load_state(params, target_dir, target)
+            return doc if isinstance(doc, dict) else None
         except OperatorStop:
             raise
         except EmptyWordlistError as exc:
             state_engine.set_status(params, target_dir, name, "failed")
             partial.append(f"empty_wordlist:{exc}")
             print(f"fail-fast: {exc}")
-            break
+            raise
         except Exception as exc:
             state_engine.set_status(params, target_dir, name, "failed")
             _append_log(params, target_dir, name, name, 1, str(exc))
             partial.append(f"active:{name}:{exc}")
             traceback.print_exc()
-            continue
+            return None
+
+    # dns-resolve first (feeds vhost + early ports). Then port-check runs
+    # beside ffuf/ffuf-3 so the PORTS panel fills without waiting for vhost.
+    before: list[str] = []
+    after: list[str] = []
+    seen_dns = False
+    for name in names:
+        if not seen_dns:
+            before.append(name)
+            if name == "dns-resolve":
+                seen_dns = True
+        else:
+            after.append(name)
+
+    try:
+        for name in before:
+            doc = _one(name)
+            if doc:
+                docs.append(doc)
+
+        port_names = [n for n in after if n == "port-check"]
+        vhost_names = [n for n in after if n != "port-check"]
+        if port_names and vhost_names:
+            print("active: port-check || ffuf/ffuf-3 (early PORTS)")
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(_one, port_names[0])
+                try:
+                    for name in vhost_names:
+                        doc = _one(name)
+                        if doc:
+                            docs.append(doc)
+                finally:
+                    port_doc = fut.result()
+                    if port_doc:
+                        docs.append(port_doc)
+        else:
+            for name in after:
+                doc = _one(name)
+                if doc:
+                    docs.append(doc)
+    except EmptyWordlistError:
+        return docs
     return docs
 
 

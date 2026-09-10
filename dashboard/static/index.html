@@ -4,10 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Attack Vector Detection Platform | recon-pipeline</title>
-<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/theme.css?v=ux20">
+<link rel="icon" href="/static/favicon.svg?v=ux22" type="image/svg+xml" sizes="any">
+<link rel="stylesheet" href="/static/theme.css?v=ux48">
 </head>
 <body>
+<div id="auth-gate" class="auth-gate" hidden>
+  <div class="auth-card">
+    <p class="auth-kicker">operator console</p>
+    <h1 id="auth-title">Set operator password</h1>
+    <p id="auth-lead" class="dim hidden"></p>
+    <form id="auth-form">
+      <label>Password <input id="auth-password" type="password" autocomplete="new-password" minlength="12" required></label>
+      <label id="auth-confirm-wrap">Confirm <input id="auth-confirm" type="password" autocomplete="new-password" minlength="12"></label>
+      <p id="auth-error" class="auth-error hidden" role="alert"></p>
+      <button type="submit" id="auth-submit" class="primary">Register</button>
+    </form>
+  </div>
+</div>
 <a class="skip" href="#main">Skip to content</a>
 <header class="topbar">
   <div class="hero-banner">
@@ -19,7 +32,7 @@
         <span class="sub">security watcher for your websites</span>
       </span>
     </a>
-    <div class="token-zone"><input id="token" type="password" placeholder="DASHBOARD_TOKEN" autocomplete="off" aria-label="Dashboard token"><button id="token-save">SET</button><span id="conn" class="badge">|</span></div>
+    <div class="token-zone"><span id="conn" class="badge">|</span><button id="session-lock" type="button">LOCK</button></div>
   </div>
   <nav class="tabs" id="tabs" aria-label="Sections">
     <div class="nav-group">
@@ -28,7 +41,6 @@
         <button data-panel="run" class="tab">SCAN</button>
         <button data-panel="results" class="tab">RESULTS</button>
         <button data-panel="reports" class="tab">REPORTS</button>
-        <button data-panel="fleet" class="tab">FLEET</button>
       </div>
     </div>
     <div class="nav-group">
@@ -65,22 +77,21 @@
         <li><a href="#h-tools">4. TOOLS</a></li>
         <li><a href="#h-wl">5. WORDLISTS</a></li>
         <li><a href="#h-tgt">6. TARGETS</a></li>
-        <li><a href="#h-fleet">7. FLEET</a></li>
-        <li><a href="#h-res">8. RESULTS</a></li>
-        <li><a href="#h-rep">9. REPORTS</a></li>
-        <li><a href="#h-keys">10. API KEYS</a></li>
-        <li><a href="#h-set">11. SETTINGS</a></li>
-        <li><a href="#h-faq">12. If something fails</a></li>
+        <li><a href="#h-res">7. RESULTS</a></li>
+        <li><a href="#h-rep">8. REPORTS</a></li>
+        <li><a href="#h-keys">9. API KEYS</a></li>
+        <li><a href="#h-set">10. SETTINGS</a></li>
+        <li><a href="#h-faq">11. If something fails</a></li>
       </ul>
 
       <h3 id="h-token">1. Sign in</h3>
       <ol>
-        <li>Copy <span class="ui">DASHBOARD_TOKEN</span> from the local <span class="ui">.env</span> file.</li>
-        <li>Paste it in the top-right box and press <span class="ui">SET</span>.</li>
-        <li>The badge must say <span class="ui">online</span>, not <span class="ui">token rejected</span>.</li>
-        <li>If TOOLS or WORDLISTS look empty, an old token is still in the browser: SET again and reopen the tab.</li>
+        <li>On first start, the gate asks you to choose a password (12+ characters) and confirm it. Nothing in <span class="ui">.env</span> is required.</li>
+        <li>Later visits: type that password and press <span class="ui">SIGN IN</span>.</li>
+        <li>The badge must say <span class="ui">online</span>. After 15 minutes with no click, LOCK happens automatically -- sign in again.</li>
+        <li>Press <span class="ui">LOCK</span> (top right) to sign out now.</li>
       </ol>
-      <p class="note">Other tabs do not load data until SET succeeds. There is no global SITE in the header; each tab has its own picker.</p>
+      <p class="note">Other tabs do not load data until sign-in succeeds. There is no global SITE in the header; each tab has its own picker.</p>
 
       <h3 id="h-what">What this platform does</h3>
       <p>You give it a domain you own. It looks from the outside (like a visitor, no login):</p>
@@ -94,34 +105,30 @@
 
       <h3 id="h-first">2. First run (zero to report)</h3>
       <ol>
-        <li>SET the token (section 1).</li>
+        <li>Sign in (section 1).</li>
         <li>SETTINGS: enter your Telegram username or numeric id, press <span class="ui">SAVE SETTINGS</span>, then <span class="ui">SEND TEST NOTIFICATION</span>. If you use a personal username, open the bot in Telegram and press Start once first.</li>
         <li>TARGETS: type the domain on the left (for example <span class="ui">example.com</span>), <span class="ui">ADD / LOAD</span>, then <span class="ui">SAVE PROFILE</span>.</li>
         <li>TOOLS: leave ENABLED the scanners you want. The change applies on the next check. Same binary can appear on more than one row -- use SWITCH to see which control you are toggling.</li>
         <li>WORDLISTS: tick lists per step and press <span class="ui">SAVE SELECTION</span>. For a short test keep the smoke list. Million-line lists take much longer.</li>
-        <li>SCAN: add the domain (ADD TARGET) or type it and press <span class="ui">START SCAN</span>. Expand the site on the same page to watch its log. Keep <span class="ui">Authorize this target</span> ticked so missing names are added to scope.</li>
+        <li>SCAN: ADD TARGET (or ADD LIST), optionally SETUP, then START on that site's row. Authorize adds missing names to scope.</li>
         <li>Expand a site on SCAN and watch that site's live log until the run finishes.</li>
         <li>RESULTS: pick the site, press <span class="ui">LOAD RESULTS</span>.</li>
         <li>REPORTS: pick the site, press <span class="ui">GENERATE NOW</span>, then OPEN next to <span class="ui">report.html</span> or the PDF.</li>
       </ol>
 
       <h3 id="h-scan">3. SCAN -- every site, expandable</h3>
-      <p>This tab lists every registered website. Each site has its own workspace. FLEET still runs several at once.</p>
+      <p>This tab lists every registered website. Each site has its own workspace. ADD LIST plus START on each row is how you check several domains.</p>
       <ol>
         <li>Type a domain in <span class="ui">SITE</span>.</li>
-        <li><span class="ui">ADD TARGET</span> registers it (isolated folder + profile) without starting a check.</li>
-        <li><span class="ui">Authorize this target</span> -- adds the domain to <span class="ui">scope.yaml</span> if missing.</li>
-        <li><span class="ui">START SCAN</span> registers if needed, then starts a check for that site.</li>
-        <li>In the list, press <span class="ui">EXPAND</span> on a site to see its modules, live log, assistant journal, and last runs -- other sites stay collapsed and do not mix logs.</li>
-        <li>START / RESUME / STOP on a row apply only to that site.</li>
+        <li><span class="ui">ADD TARGET</span> registers one domain (isolated folder + profile) without starting a check.</li>
+        <li><span class="ui">ADD LIST</span> registers many domains at once (one per line, or comma-separated).</li>
+        <li><span class="ui">Authorize this target</span> -- adds each new domain to <span class="ui">scope.yaml</span> if missing.</li>
+        <li>On that site's row, press <span class="ui">START</span> to begin a check. Add the site first.</li>
+        <li>SETUP is optional. If you skip it, this site uses global SETTINGS / TOOLS / WORDLISTS. Uncheck inherit to pick tools (each row says what it does) and tick wordlist filenames on this same page. SHOW NAMES previews entries in a file. Automatic checks for this site are also in SETUP.</li>
+        <li>START / RESUME / STOP / DELETE on a row apply only to that site. DELETE hides it from SCAN immediately; warehouse records stay for 7 days, then that site's files are removed.</li>
       </ol>
       <h4>SCHEDULER</h4>
-      <ol>
-        <li>Set <span class="ui">interval (min)</span> -- minimum 10.</li>
-        <li>Tick <span class="ui">enabled</span>.</li>
-        <li>Press <span class="ui">SAVE</span>. The platform checks on its own and can Telegram you when something changed.</li>
-      </ol>
-      <p>Example: 720 minutes is about twice a day.</p>
+      <p>Global defaults live in <span class="ui">SETTINGS</span> (automatic checks on/off and interval, minimum 10 minutes). Each site can enable, change the interval, or turn checks off in <span class="ui">SETUP</span> / TARGETS. Empty per-site fields inherit SETTINGS. Example: 720 minutes is about twice a day.</p>
       <h4>LIVE LOG and AGENT JOURNAL</h4>
       <p><span class="ui">LIVE LOG</span> is the diary of the site in the SITE box (and the last row you expanded), streaming live.
       Use <span class="ui">Readable</span> for a human summary (time, step, what happened) or <span class="ui">Raw</span> for the exact file.
@@ -137,7 +144,7 @@
         <li><span class="ui">BRANCH</span> -- active or passive lane.</li>
         <li><span class="ui">ENABLED</span> -- applies on the next check, not the run already in progress. Internal echo/fallback tools stay hidden.</li>
       </ol>
-      <p class="note">Empty table: SET the token. HTTP 401 means the token does not match <span class="ui">.env</span>.</p>
+      <p class="note">Empty table: sign in first. HTTP 401 means the session expired -- press SIGN IN again.</p>
 
       <h3 id="h-wl">5. WORDLISTS -- original filenames</h3>
       <p>Three separate steps. Filenames stay as in SecLists (for example <span class="ui">subdomains-top1million-5000.txt</span>), not internal YAML keys.</p>
@@ -155,7 +162,7 @@
       <p>Bigger lists find more names and take longer. Keep the short list for a smoke test.</p>
 
       <h3 id="h-tgt">6. TARGETS -- per-site profile</h3>
-      <p>The platform is multi-target. Empty fields inherit SETTINGS.</p>
+      <p>The platform is multi-target. Empty fields inherit SETTINGS. The same profile is also editable from SCAN -- expand a site and press <span class="ui">SETUP</span> / <span class="ui">SAVE SETUP</span>.</p>
       <ol>
         <li>Type the domain on the left, press <span class="ui">ADD / LOAD</span>.</li>
         <li>Fill the cards on the right, press <span class="ui">SAVE PROFILE</span>.</li>
@@ -169,22 +176,14 @@
         <li><span class="ui">WATCHTOWER INSTANT ALERTS</span> -- instant change alerts, or off.</li>
         <li><span class="ui">DIGEST THRESHOLD</span> -- above this many new findings, one summary message instead of a flood.</li>
         <li><span class="ui">PROXY POOL</span> -- proxies for this site only; empty = global pool.</li>
-        <li>Budgets -- time/depth caps. Empty = defaults.</li>
+        <li>Budgets -- time/depth caps. Empty = defaults. <span class="ui">RECON DEPTH</span> is nested DNS + vhost (1-5). <span class="ui">PASSIVE RECURSION DEPTH</span> is OSINT-only.</li>
         <li><span class="ui">MODULES</span> -- leave empty for defaults. Advanced operators only.</li>
         <li><span class="ui">WORDLIST OVERRIDE</span> -- per-site lists, otherwise the WORDLISTS tab.</li>
+        <li><span class="ui">SCHEDULER</span> -- automatic checks for this site: inherit, on, or off, plus an optional interval (min 10). Empty = SETTINGS.</li>
       </ul>
 
-      <h3 id="h-fleet">7. FLEET -- several sites at once</h3>
-      <ol>
-        <li>Save each site in TARGETS first.</li>
-        <li>Members: <span class="ui">all</span> or a comma list like <span class="ui">a.com,b.net</span>.</li>
-        <li>Concurrency 1 to 8.</li>
-        <li><span class="ui">RUN FLEET</span>. One failure does not stop the others.</li>
-        <li><span class="ui">REFRESH</span> reloads status and the fleet ledger.</li>
-      </ol>
-
-      <h3 id="h-res">8. RESULTS -- read findings</h3>
-      <p>The SITE picker here does not change SCAN or FLEET.</p>
+      <h3 id="h-res">7. RESULTS -- read findings</h3>
+      <p>Choose a site that you added on SCAN. The list is that board, not a default leftover.</p>
       <ol>
         <li>Pick the site and press <span class="ui">LOAD RESULTS</span>.</li>
         <li>Filters: free text, source, tag, alive/dead, in/out of scope, run timestamp.</li>
@@ -207,15 +206,15 @@
       not only the latest pair. Diff badges such as <span class="ui">+3 hosts</span>
       mean three new names in that window. SOURCE COVERAGE shows how unique each source is.</p>
 
-      <h3 id="h-rep">9. REPORTS -- shareable output</h3>
+      <h3 id="h-rep">8. REPORTS -- shareable output</h3>
       <ol>
-        <li>Type the domain.</li>
+        <li>Pick the site from the SCAN list.</li>
         <li><span class="ui">CHECK BUNDLE</span> lists files that already exist.</li>
         <li><span class="ui">GENERATE NOW</span> builds a fresh pack: HTML, PDF, CSV, JSON, Markdown.</li>
         <li>Press OPEN. Each file has SHA256 so you can prove it was not modified.</li>
       </ol>
 
-      <h3 id="h-keys">10. API KEYS -- optional</h3>
+      <h3 id="h-keys">9. API KEYS -- optional</h3>
       <p>The platform works with zero keys. Some public sources go deeper with a free key. Without a key that source is skipped openly.</p>
       <ol>
         <li>Each row: key name, module, and behavior without the key.</li>
@@ -223,8 +222,12 @@
         <li>DEL removes it from <span class="ui">.env</span>.</li>
       </ol>
 
-      <h3 id="h-set">11. SETTINGS -- global defaults</h3>
+      <h3 id="h-set">10. SETTINGS -- global defaults</h3>
       <p>Press <span class="ui">SAVE SETTINGS</span> after every change. Empty TARGETS fields inherit from here.</p>
+      <h4>Scheduler</h4>
+      <p><span class="ui">AUTOMATIC CHECKS</span> and <span class="ui">INTERVAL (min)</span> are the default for every site (minimum 10). A site SETUP can turn checks on, change the interval, or disable them for that site only. Press <span class="ui">SAVE SETTINGS</span> after changing the global defaults.</p>
+      <h4>Recon depth</h4>
+      <p><span class="ui">NESTED DNS</span>, <span class="ui">NESTED VHOST</span>, and <span class="ui">PASSIVE RECURSION</span> depths are independent (1-5 / 0-5). A site SETUP can override each one.</p>
       <h4>Network</h4>
       <ol>
         <li><span class="ui">PROXY URL</span> -- one proxy for every check. If it is unreachable, the check refuses to start (it does not silently go direct).</li>
@@ -236,8 +239,8 @@
         <li>Press <span class="ui">SEND TEST NOTIFICATION</span>. If nothing arrives: Start the bot in Telegram, or check the installer token.</li>
         <li><span class="ui">DIGEST THRESHOLD</span> -- when to collapse many findings into one message.</li>
       </ol>
-      <h4>Alert rules</h4>
-      <p><span class="ui">+ RULE</span> adds a rule. Every diff change (new, removed, changed) for hosts, ports, vhosts, services, and passive IPs is sent to Telegram unless you disable that class. require_new_ip = for new hosts, alert only when the server IP is also new.</p>
+      <h4>Telegram change alerts</h4>
+      <p>Tick each asset type and whether New / Removed / Changed should notify Telegram. Unticked kinds still show in RESULTS diffs. Host CHANGED includes HTTP response length. Optional: alert new hosts only when the server IP is also new.</p>
       <h4>Supervisor agent (optional)</h4>
       <p>Default off. If on, it can suggest or auto-fix common failures. MAX LLM CALLS is the per-run cap. The platform is complete without it.</p>
       <h4>Log retention and resources</h4>
@@ -251,10 +254,10 @@
         <li>The check looks from the outside; it does not fill forms or write to the site.</li>
       </ol>
 
-      <h3 id="h-faq">12. If something fails</h3>
+      <h3 id="h-faq">11. If something fails</h3>
       <ul>
         <li><span class="ui">offline</span> -- the dashboard process is not up.</li>
-        <li><span class="ui">token rejected</span> or empty tables -- SET the token from <span class="ui">.env</span> again.</li>
+        <li><span class="ui">session expired</span> or empty tables -- SIGN IN again.</li>
         <li>Start refused -- tick Authorize, or register the site in TARGETS first.</li>
         <li>No Telegram -- Start the bot; a public channel needs the bot as a member.</li>
         <li>TOOLS / WORDLISTS empty after SET -- click the tab again and read any error row.</li>
@@ -269,14 +272,14 @@
     <p class="lede">Turn scanners on or off. The change applies on the next check, not a run already in progress.</p>
     <div class="table-wrap data-table"><table id="tools-table"><thead>
       <tr><th>BINARY</th><th>SWITCH</th><th>TECHNIQUE</th><th>THIS SWITCH CONTROLS</th><th>BRANCH</th><th>ENABLED</th></tr>
-    </thead><tbody><tr><td colspan="6" class="dim">open this tab after SET token -- loading...</td></tr></tbody></table></div>
+    </thead><tbody><tr><td colspan="6" class="dim">open this tab after sign-in -- loading...</td></tr></tbody></table></div>
   </section>
 
   <!-- a1) WORDLISTS -- original SecList filenames, registry keys stay in YAML -->
   <section id="panel-tools" class="panel hidden">
     <h2>WORDLISTS <span class="help" tabindex="0" data-help="Hover a filename. Twenty random lines from that file appear on the RIGHT, away from the name. Tick lists, then SAVE SELECTION.">?</span> <span class="hint">lists keep their original filenames (subdomains-top1million-5000.txt). Internal keys are not renamed.</span></h2>
     <div class="wordlists-layout">
-      <div id="wordlists"><p class="dim">open this tab after SET token -- loading...</p></div>
+      <div id="wordlists"><p class="dim">open this tab after sign-in -- loading...</p></div>
       <aside id="wl-preview" class="wl-rail">
         <h3>SAMPLE</h3>
         <p class="dim" id="wl-preview-label">hover a filename -- names stay visible</p>
@@ -287,7 +290,7 @@
 
   <!-- a2) TARGETS (per-site settings) -->
   <section id="panel-targets" class="panel hidden">
-    <h2>TARGETS <span class="help" tabindex="0" data-help="Add a domain on the left, then edit THIS site's settings on the right. Empty fields inherit SETTINGS. FLEET runs any subset in parallel.">?</span> <span class="hint">register every website you watch -- each has its own alerts and limits</span></h2>
+    <h2>TARGETS <span class="help" tabindex="0" data-help="Add a domain on the left, then edit THIS site's settings on the right. Empty fields inherit SETTINGS.">?</span> <span class="hint">register every website you watch -- each has its own alerts and limits</span></h2>
     <div class="targets-layout">
       <aside class="targets-rail">
         <h3>SITES</h3>
@@ -327,7 +330,9 @@
           <div class="form-grid">
             <label>PASSIVE BUDGET (sec)<input id="t-b-passive" type="number" min="1" class="mono" placeholder="inherit"></label>
             <label>ACTIVE BUDGET (sec)<input id="t-b-active" type="number" min="1" class="mono" placeholder="inherit"></label>
-            <label>PASSIVE RECURSION DEPTH<input id="t-b-depth" type="number" min="0" class="mono" placeholder="inherit"></label>
+            <label><span class="lbl">NESTED DNS DEPTH (1-5) <span class="help" tabindex="0" data-help="How deep active DNS nesting goes for THIS site. Empty = global SETTINGS.">?</span></span><input id="t-b-recon" type="number" min="1" max="5" class="mono" placeholder="inherit"></label>
+            <label><span class="lbl">NESTED VHOST DEPTH (1-5) <span class="help" tabindex="0" data-help="How deep Host-header vhost nesting goes for THIS site. Independent of DNS depth. Empty = global SETTINGS.">?</span></span><input id="t-b-ffuf-depth" type="number" min="1" max="5" class="mono" placeholder="inherit"></label>
+            <label>PASSIVE RECURSION DEPTH<input id="t-b-depth" type="number" min="0" max="5" class="mono" placeholder="inherit"></label>
             <label>FFUF-3 MAX DEAD PROBES<input id="t-b-dead" type="number" min="1" class="mono" placeholder="inherit"></label>
             <label>FFUF-4 MAX PORT JOBS<input id="t-b-ffuf4" type="number" min="1" class="mono" placeholder="inherit"></label>
           </div>
@@ -337,6 +342,13 @@
           <div class="form-grid">
             <label>ACTIVE<input id="t-m-active" class="mono" placeholder="dns-resolve, ffuf, ffuf-3, port-check"></label>
             <label>PASSIVE<input id="t-m-passive" class="mono" placeholder="passive-recon"></label>
+          </div>
+        </section>
+        <section class="tgt-card">
+          <h3>SCHEDULER <span class="hint">empty = SETTINGS</span></h3>
+          <div class="form-grid">
+            <label>AUTOMATIC CHECKS<select id="t-sched-en"><option value="">inherit global</option><option value="true">enabled</option><option value="false">disabled</option></select></label>
+            <label>INTERVAL (min)<input id="t-sched-int" type="number" min="10" class="mono" placeholder="inherit global"></label>
           </div>
         </section>
         <section class="tgt-card">
@@ -356,28 +368,12 @@
     </div>
   </section>
 
-  <!-- a3) FLEET (multi-target execution) -->
-  <section id="panel-fleet" class="panel hidden">
-    <h2>FLEET <span class="help" tabindex="0" data-help="Type all or a comma-separated list of registered targets, choose how many run in parallel (1-8), and press RUN FLEET. A website that fails never blocks the others.">?</span> <span class="hint">check several websites at the same time, each in its own isolated workspace</span></h2>
-    <p class="lede">Save each site in TARGETS first. Then run all of them, or a comma list like a.com,b.net.</p>
-    <div class="row">
-      <input id="fl-members" placeholder="members: all or a.com,b.net" class="mono">
-      <input id="fl-conc" type="number" min="1" max="8" placeholder="concurrency" class="mono w110">
-      <button id="fl-run">RUN FLEET</button>
-      <button id="fl-refresh">REFRESH</button>
-      <span id="fl-status" class="badge">|</span>
-    </div>
-    <div class="mono dim" id="fl-members-view"></div>
-    <h3 class="mt">LATEST FLEET LEDGER</h3>
-    <pre id="fl-ledger" class="json-inspector collapsed">no fleet run yet</pre>
-  </section>
-
   <!-- b) RESULTS -->
   <section id="panel-results" class="panel hidden">
-    <h2>RESULTS <span class="help" tabindex="0" data-help="Choose the website whose findings you want to read. Other sites keep running independently.">?</span> <span class="hint">pick one of your sites -- this picker does not affect SCAN or FLEET</span></h2>
+    <h2>RESULTS <span class="help" tabindex="0" data-help="Choose a site you added on SCAN. Findings for that site only.">?</span> <span class="hint">pick one of the sites on SCAN -- not a leftover default</span></h2>
     <p class="lede">Each host shows which ports are open on that name. Filter, copy a restore link, then compare any two checks of this site only.</p>
     <div class="row">
-      <label>SITE <input id="results-target" class="mono" list="known-targets" placeholder="example.com" autocomplete="off"></label>
+      <label>SITE <select id="results-target" class="mono site-select" aria-label="Results site"><option value="">Choose a site from SCAN...</option></select></label>
       <button id="results-load">LOAD RESULTS</button>
       <span id="wh-badge" class="badge">warehouse</span>
     </div>
@@ -421,7 +417,7 @@
     <h2>REPORTS <span class="help" tabindex="0" data-help="CHECK BUNDLE shows what already exists; GENERATE NOW builds a fresh report from the latest data. Every file carries a checksum so you can prove it was not modified.">?</span> <span class="hint">one-click, tamper-checked reports: web page, PDF, CSV, JSON</span></h2>
     <p class="lede">Build a shareable pack. OPEN each file; SHA256 proves it was not modified after generate.</p>
     <div class="row">
-      <input id="rep-target" class="mono" list="known-targets" placeholder="example.com" autocomplete="off">
+      <label>SITE <select id="rep-target" class="mono site-select" aria-label="Reports site"><option value="">Choose a site from SCAN...</option></select></label>
       <button id="rep-check">CHECK BUNDLE</button>
       <button id="rep-generate">GENERATE NOW</button>
       <span id="rep-status" class="badge">|</span>
@@ -434,44 +430,34 @@
 
   <!-- c) RUN CONTROL -- multi-target board -->
   <section id="panel-run" class="panel">
-    <h2>SCAN <span class="help" tabindex="0" data-help="Add every website you watch. Each row is one isolated target. EXPAND that row to see its log, modules, and last runs.">?</span> <span class="hint">add and manage every site here -- expand one row to watch its log</span></h2>
+    <h2>SCAN <span class="help" tabindex="0" data-help="Add every website you watch. Each row is one isolated target. EXPAND or SETUP that row to customize this site's alerts, modules, budgets, proxy, and wordlists, then watch its log.">?</span> <span class="hint">add sites here -- SETUP on a row customizes that site only</span></h2>
     <div class="howto">
       <ol>
-        <li>Set DASHBOARD_TOKEN (top right) if the badge is not ready.</li>
-        <li>Type a domain, optionally ADD TARGET, then START SCAN. Authorize adds it to the allow-list.</li>
-        <li>Expand a site in the list to see that site's log. Other sites keep their own data.</li>
+        <li>Sign in if the gate is visible.</li>
+        <li>Type a domain, press ADD TARGET. Or paste several names and press ADD LIST. Then START on that row. Authorize adds them to the allow-list.</li>
+        <li>SETUP on a row is optional. Empty setup uses global SETTINGS / TOOLS / WORDLISTS for that site. SAVE SETUP only if this site needs different alerts, schedule, modules, budgets, proxy, or wordlists.</li>
       </ol>
     </div>
     <div class="deck">
       <div class="deck-card">
-        <h3>ADD OR START A SITE</h3>
+        <h3>ADD SITES</h3>
         <div class="row">
           <label>SITE <input id="run-target" class="mono" list="known-targets" placeholder="example.com" autocomplete="off"></label>
           <label class="check"><input id="run-authorize" type="checkbox" checked> Authorize this target (adds it to scope.yaml if missing)</label>
         </div>
         <div class="row">
           <button id="scan-add">ADD TARGET</button>
-          <button id="run-start" class="primary">START SCAN</button>
-          <button id="run-resume">RESUME</button>
-          <button id="run-stop" class="danger">STOP</button>
-          <span id="run-status" class="badge"></span>
+          <button id="scan-add-list">ADD LIST</button>
         </div>
+        <label class="scan-list-label">LIST (one per line or comma-separated)
+          <textarea id="scan-list" class="mono" rows="3" placeholder="a.example&#10;b.example, c.example"></textarea>
+        </label>
         <div class="row" id="run-modules"></div>
       </div>
-      <div class="deck-card">
-        <h3>SCHEDULER <span class="help" tabindex="0" data-help="Set an interval and tick enabled: the platform checks websites by itself and sends a Telegram message when something changed.">?</span></h3>
-        <p class="hint">automatic checks -- minimum every 10 minutes</p>
-        <div class="row">
-          <label>interval (min) <input id="sched-interval" type="number" min="10" class="mono"></label>
-          <label>enabled <input id="sched-enabled" type="checkbox"></label>
-          <button id="sched-save">SAVE</button>
-        </div>
-        <span class="mono dim" id="sched-last"></span>
-      </div>
     </div>
-    <h2 class="mt">YOUR SITES <span class="hint">expand a row -- logs and modules stay on that site only</span></h2>
-    <div id="scan-board" class="scan-board"><p class="dim">set the token, then sites you add appear here</p></div>
-    <h2 class="mt">LIVE LOG <span class="hint">Readable for humans, or Raw for the exact file</span></h2>
+    <h2 class="mt">YOUR SITES <span class="hint">SETUP customizes this site -- logs and modules stay on that site only</span></h2>
+    <div id="scan-board" class="scan-board"><p class="dim">sign in, then sites you add appear here</p></div>
+    <h2 class="mt">LIVE LOG <span class="hint">Readable for humans, or Raw for the exact file -- Export saves the full file</span></h2>
     <div class="term" id="live-term">
       <div class="term-bar">
         <i></i><i></i><i></i>
@@ -479,14 +465,21 @@
         <span class="log-mode" role="group" aria-label="Log view">
           <button type="button" id="log-mode-pretty" class="log-mode-btn active">Readable</button>
           <button type="button" id="log-mode-raw" class="log-mode-btn">Raw</button>
+          <button type="button" id="log-export" class="log-mode-btn">Export</button>
         </span>
       </div>
       <div id="live-log-pretty" class="log-pretty" aria-live="polite"></div>
       <pre id="live-log" class="json-inspector hidden"></pre>
     </div>
-    <h2 class="mt">AGENT JOURNAL <span class="hint">record of the optional assistant's automatic fixes</span></h2>
+    <h2 class="mt">AGENT JOURNAL <span class="hint">record of the optional assistant's automatic fixes -- Export saves the full journal</span></h2>
     <div class="term">
-      <div class="term-bar"><i></i><i></i><i></i> assistant</div>
+      <div class="term-bar">
+        <i></i><i></i><i></i>
+        <span class="term-title">assistant</span>
+        <span class="log-mode" role="group" aria-label="Journal actions">
+          <button type="button" id="journal-export" class="log-mode-btn">Export</button>
+        </span>
+      </div>
       <pre id="agent-journal" class="json-inspector"></pre>
     </div>
   </section>
@@ -509,7 +502,7 @@
       <label><span class="lbl">PROXY URL (single, http/socks5) <span class="help" tabindex="0" data-help="Route every check through one proxy. If it is unreachable, a check refuses to start instead of silently going direct. Leave empty for a direct connection.">?</span></span><input id="s-proxy" class="mono" placeholder="http://user:pass@host:port"></label>
       <label><span class="lbl">PROXY POOL (IP rotation, comma-separated) <span class="help" tabindex="0" data-help="The smarter option: list several proxies and every discovery step goes out through the NEXT one in turn, so no single address carries the whole scan. Entries are health-checked before the run; a per-step report lands in the run's logs/proxy-rotation.json.">?</span></span><input id="s-proxy-pool" class="mono" placeholder="http://user:pass@host:port, socks5://host2:1080"></label>
       <label><span class="lbl">TELEGRAM USERNAME OR ID (where alerts arrive) <span class="help" tabindex="0" data-help="Just your own handle: jackjohns, @jackjohns or 123456789. Personal usernames deliver after you press START on your bot once; public channel handles (@teamname) work immediately.">?</span></span><input id="s-tg-chat" class="mono" placeholder="jackjohns, @jackjohns or 123456789"></label>
-      <label><span class="lbl">TELEGRAM BOT TOKEN (installer provisioning -- normally leave empty) <span class="help" tabindex="0" data-help="The key that lets the platform talk to Telegram. The installer pastes it once into the .env file. Backup tokens go into .env separated by commas: if one stops working, the platform switches to the next one AUTOMATICALLY.">?</span></span><input id="s-tg-token" type="password" placeholder="advanced: override .env"></label>
+      <label><span class="lbl">TELEGRAM BOT TOKEN <span class="help" tabindex="0" data-help="Installer provisioning -- normally leave empty. The installer pastes the token into .env. Backup tokens go into .env separated by commas: if one stops working, the platform switches to the next one AUTOMATICALLY. Fill this box only to override .env.">?</span></span><input id="s-tg-token" type="password" class="mono" autocomplete="off" placeholder="leave empty (uses .env)"></label>
       <label><span class="lbl">DIGEST THRESHOLD <span class="help" tabindex="0" data-help="When a single check finds more new things than this number, they are grouped into one summary message instead of one message each.">?</span></span><input id="s-digest" type="number" min="1" class="mono"></label>
     </div>
     <div class="row">
@@ -519,9 +512,34 @@
     <div id="s-test-hint" class="hint-line"></div>
     </div>
     <div class="set-card">
-    <h3>ALERT FILTER RULES <span class="help" tabindex="0" data-help="Decide which discoveries are worth a Telegram message: hosts (new website names) and/or ports (newly opened doors). require_new_ip = only alert when the address also resolves to a NEW server.">?</span></h3>
-    <div id="rules-editor"></div>
-    <div class="row"><button id="s-add-rule">+ RULE</button></div>
+    <h3>DISCOVERY DEPTHS <span class="help" tabindex="0" data-help="Each process has its own depth. Nested DNS = how deep dnsx goes under resolvable names. Nested vhost = how deep Host-header fuzz goes. Passive recursion = how deep OSINT re-queries on newly found names. Per-site SETUP can override any of these.">?</span></h3>
+    <div class="grid">
+      <label><span class="lbl">NESTED DNS DEPTH (1-5)</span><input id="s-recon-depth" type="number" min="1" max="5" class="mono"></label>
+      <label><span class="lbl">NESTED VHOST DEPTH (1-5)</span><input id="s-ffuf-depth" type="number" min="1" max="5" class="mono"></label>
+      <label><span class="lbl">PASSIVE RECURSION DEPTH (0-5)</span><input id="s-passive-depth" type="number" min="0" max="5" class="mono"></label>
+    </div>
+    <p class="hint">Defaults for every site. SCAN SETUP / TARGETS can set different values for one site only.</p>
+    </div>
+    <div class="set-card sched-card">
+    <h3>SCHEDULER <span class="help" tabindex="0" data-help="Default automatic checks for every site. Interval is minutes between checks (minimum 10). Per-site SETUP can turn this on, change the interval, or disable it for one site.">?</span></h3>
+    <div class="grid">
+      <label><span class="lbl">AUTOMATIC CHECKS</span><select id="sched-enabled"><option value="false">off</option><option value="true">on</option></select></label>
+      <label><span class="lbl">INTERVAL (min)</span>
+        <div class="num-wrap w110">
+          <button type="button" class="num-btn" aria-label="decrease" tabindex="-1">-</button>
+          <input id="sched-interval" type="number" min="10" class="mono">
+          <button type="button" class="num-btn" aria-label="increase" tabindex="-1">+</button>
+        </div>
+      </label>
+    </div>
+    <p class="hint">SAVE SETTINGS stores this default. Each site can override it in SETUP.</p>
+    <p class="mono dim" id="sched-last"></p>
+    </div>
+    <div class="set-card">
+    <h3>TELEGRAM CHANGE ALERTS <span class="help" tabindex="0" data-help="Tick exactly which change kinds should send a Telegram message after a re-scan, scheduled run, or Watchtower check. Unticked kinds still appear in the dashboard RESULTS diff, but do not notify Telegram. Host CHANGED includes HTTP response length and technology shifts.">?</span></h3>
+    <p class="hint">For each asset type, choose New / Removed / Changed. Host alerts can optionally require a brand-new server IP.</p>
+    <div id="rules-editor" class="alert-rules"></div>
+    <div class="row"><button type="button" id="s-reset-rules">RESET ALERT DEFAULTS</button></div>
     </div>
     <div class="set-card">
     <h3>SUPERVISOR AGENT (optional automatic assistant)</h3>
@@ -557,6 +575,7 @@
 <p class="page-foot">Attack Vector Detection Platform -- only scan assets you own or have written permission to test.</p>
 
 <div id="toast" class="toast hidden"></div>
-<script src="/static/app.js?v=ux20"></script>
+<div id="help-pop" class="help-pop hidden" role="tooltip"></div>
+<script src="/static/app.js?v=ux48"></script>
 </body>
 </html>

@@ -51,12 +51,15 @@ OVERRIDABLE = {
     "notifications": dict,           # telegram_chat / digest_threshold / toggles
     "proxy": dict,                   # C5 slot
     "rate_caps": dict,               # C5 slot
+    "scheduler": dict,               # per-target automatic checks (interval / enabled)
 }
 
 BUDGET_KEYS_ALLOW = {
     "passive_branch_budget_sec",
     "active_branch_budget_sec",
     "passive_recursion_depth",
+    "recon_depth",
+    "ffuf_depth",
     "ffuf3_max_dead_probes",
     "ffuf4_max_jobs",
 }
@@ -71,6 +74,12 @@ NOTIFY_KEYS_ALLOW = {
 PROXY_KEYS_ALLOW = {
     "proxy_pool",           # C5: per-target comma-separated proxy pool (IP rotation)
 }
+
+SCHEDULER_KEYS_ALLOW = {
+    "enabled",
+    "interval_minutes",
+}
+_SCHEDULER_MIN_INTERVAL = 10
 
 TARGET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{2,253}$")
 
@@ -151,6 +160,18 @@ def validate_profile(target: str, profile: dict[str, Any]) -> dict[str, Any]:
                         validate_pool_value(v)
                     except ValueError as exc:
                         raise ProfileError(f"proxy.proxy_pool invalid: {exc}") from exc
+        if section == "scheduler":
+            bad = set(value) - SCHEDULER_KEYS_ALLOW
+            if bad:
+                raise ProfileError(f"scheduler keys not overridable: {sorted(bad)}")
+            for k, v in value.items():
+                if k == "enabled" and not isinstance(v, bool):
+                    raise ProfileError("scheduler.enabled must be a boolean")
+                elif k == "interval_minutes":
+                    if not isinstance(v, int) or isinstance(v, bool) or v < _SCHEDULER_MIN_INTERVAL:
+                        raise ProfileError(
+                            f"scheduler.interval_minutes must be an integer >= {_SCHEDULER_MIN_INTERVAL}"
+                        )
         if section == "wordlist_selection":
             # key law enforced at APPLY time against the live registry; here
             # only the shape law (task -> list of key strings) is checked
@@ -177,12 +198,13 @@ def set_profile(params: Params, target: str, profile: dict[str, Any]) -> dict[st
         desc = prof.get("description")
         if desc:
             out.append(f'    description: "{desc}"')
+        sections = profile_sections(prof)
+        if not sections:
+            continue
         out.append("    settings:")
-        for section in sorted(prof):
-            if section == "description":
-                continue
+        for section in sorted(sections):
             out.append(f"      {section}:")
-            for k, v in (prof[section] or {}).items():
+            for k, v in (sections[section] or {}).items():
                 if isinstance(v, list):
                     out.append(f"        {k}:")
                     out.extend(f"          - {item}" for item in v)
@@ -196,14 +218,40 @@ def get_profile(params: Params, target: str) -> dict[str, Any]:
     return load_registry(params).get(target) or {}
 
 
+def profile_sections(profile: dict[str, Any] | None) -> dict[str, Any]:
+    """Normalize YAML-nested or flat profiles to overridable sections only."""
+    prof = profile or {}
+    sections: dict[str, Any] = {}
+    inner = prof.get("settings")
+    if isinstance(inner, dict):
+        for key, value in inner.items():
+            if key in OVERRIDABLE:
+                sections[key] = value
+    for key, value in prof.items():
+        if key in OVERRIDABLE:
+            sections[key] = value
+    return {
+        key: value
+        for key, value in sections.items()
+        if value is not None and value != {} and value != []
+    }
+
+
+def profile_has_overrides(profile: dict[str, Any] | None) -> bool:
+    """True only when THIS site has saved setup sections. Empty = global SETTINGS."""
+    return bool(profile_sections(profile))
+
+
 def build_edit_plan(params: Params, target: str) -> dict[str, Any]:
     """Transient-edit plan for one run: what lines change in tools.yaml /
     wordlists.yaml to realize the profile. Pure function; no mutation."""
     profile = get_profile(params, target)
     settings = profile.get("settings") or {}
     plan: dict[str, Any] = {"target": target, "tools_edits": [], "wordlist_selection": {}}
-    for key, value in (settings.get("budgets") or {}).items():
+    budgets = settings.get("budgets") or {}
+    for key, value in budgets.items():
         plan["tools_edits"].append({"key": key, "value": value})
+    # recon_depth (nested DNS) and ffuf_depth (nested vhost) stay independent.
     for key, value in (settings.get("modules") or {}).items():
         plan["tools_edits"].append({"key": key, "value": value})
     plan["wordlist_selection"] = settings.get("wordlist_selection") or {}
@@ -216,6 +264,26 @@ def build_edit_plan(params: Params, target: str) -> dict[str, Any]:
         plan["tools_edits"].append({"key": "proxy_pool", "value": json.dumps(pool)})
     plan["rate_caps"] = settings.get("rate_caps") or {}
     return plan
+
+
+def _replace_settings_block(text: str, key: str, rendered: str) -> tuple[str, bool]:
+    """Replace a 2-space settings key including any indented block-list body."""
+    pattern = re.compile(rf"^  {re.escape(key)}:.*$", re.M)
+    m = pattern.search(text)
+    if not m:
+        return text, False
+    start, pos = m.start(), m.end()
+    lines = text[pos:].splitlines(keepends=True)
+    end = pos
+    for ln in lines:
+        if ln.strip() == "":
+            end += len(ln)
+            continue
+        if ln.startswith("    ") or ln.startswith("\t"):
+            end += len(ln)
+            continue
+        break
+    return text[:start] + rendered + "\n" + text[end:], True
 
 
 def apply_transient(params: Params, target: str, before_copy_dir: Path) -> dict[str, Any]:
@@ -233,17 +301,13 @@ def apply_transient(params: Params, target: str, before_copy_dir: Path) -> dict[
         text = tools.read_text(encoding="utf-8")
         for edit in plan["tools_edits"]:
             key, value = edit["key"], edit["value"]
-            pattern = re.compile(rf"^  {re.escape(key)}: .*$", re.M)
             if isinstance(value, list):
                 rendered = f"  {key}:\n" + "\n".join(f"    - {item}" for item in value)
-                if pattern.search(text):
-                    text = pattern.sub(rendered.replace("\\", "\\\\"), text, count=1)
-                else:
-                    raise ProfileError(f"tools.yaml has no top-level key {key!r} to override")
             else:
-                if not pattern.search(text):
-                    raise ProfileError(f"tools.yaml has no top-level key {key!r} to override")
-                text = pattern.sub(f"  {key}: {value}", text, count=1)
+                rendered = f"  {key}: {value}"
+            text, replaced = _replace_settings_block(text, key, rendered)
+            if not replaced:
+                raise ProfileError(f"tools.yaml has no top-level key {key!r} to override")
         atomic_write_text(tools, text)
 
     if plan["wordlist_selection"]:
@@ -269,18 +333,23 @@ def apply_transient(params: Params, target: str, before_copy_dir: Path) -> dict[
             # A crashed run can leave the previous selection behind; a fresh
             # apply REPLACES it in place (self-heal), it never stacks.
             block_end_m = re.search(r"^  [A-Za-z0-9_-]+:", text[m.end():], re.M)
-            block_text = text[m.end(): m.end() + (block_end_m.start() if block_end_m else len(text[m.end():]))]
+            block_end = m.end() + (block_end_m.start() if block_end_m else len(text) - m.end())
+            block_text = text[m.end():block_end]
+            fresh = "\n" + 4 * " " + "selection:\n" + "\n".join(
+                f"{6 * ' '}- {k}" for k in keys
+            )
             if re.search(r"^\s{4}selection:", block_text, re.M):
-                fresh = "\n" + 4 * " " + "selection:\n" + "\n".join(
-                    f"{6 * ' '}- {k}" for k in keys
+                new_block, n = re.subn(
+                    r"\n {4}selection:(?:\n {6}- [^\n]*)+",
+                    fresh,
+                    block_text,
+                    count=1,
                 )
-                text = re.sub(
-                    r"\n {4}selection:\n(?: {6}- [^\n]*)+", fresh, text, count=1
-                )
+                if n != 1:
+                    raise ProfileError(f"could not replace selection under task {task!r}")
+                text = text[: m.end()] + new_block + text[block_end:]
             else:
-                insert_at = m.end()
-                rendered = f"\n{4 * ' '}selection:\n" + "\n".join(f"{4 * ' '}  - {k}" for k in keys)
-                text = text[:insert_at] + rendered + text[insert_at:]
+                text = text[: m.end()] + fresh + text[m.end():]
         atomic_write_text(wl, text)
 
     return {"plan": plan, "snapshots": snapshots}

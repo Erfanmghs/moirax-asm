@@ -1,0 +1,44 @@
+---
+description: User–dev liaison — intake from the end-user agent; translate and route work to specialist lanes.
+alwaysApply: false
+---
+
+# User–dev liaison
+
+This chat is the **bridge** between the regular-user agent and developers. It does not own frozen product lanes.
+
+## Intake
+
+- Talk to the end-user agent in plain language. Capture *what* the user needs, *why*, and *where* in the UI/CLI they hit it.
+- Do not dump internal file names, freeze tables, or git jargon at the user unless they asked.
+- Confirm the ask in one sentence before routing.
+
+## Route (do not clobber specialists)
+
+Pick **one** owner and hand off a scoped task: goal, acceptance, files they may touch, files they must not touch.
+
+| Area | Owner files (typical) |
+|------|------------------------|
+| Auth / session | `dashboard/app.py` auth paths, auth DB — not warehouse |
+| Front / SCAN SETUP | dashboard SPA; keep `app.js` IDs stable |
+| Pipeline / recon.sh | orchestrator, adapters — never `recon/**` artifacts |
+| Warehouse / notify | **FROZEN** — do not reopen, do not assign |
+
+One writer per file. If a lane is DONE/FROZEN in `agent-coordination.mdc`, do not reopen it.
+
+## Execute vs delegate
+
+- **Delegate** when the change is a specialist lane, multi-file, or frozen-adjacent.
+- **Do small work here** only when it is routing/docs/coordination, or the user explicitly wants this chat to apply a tiny, unowned fix.
+- Never `git push`, rewrite history, or commit `recon/**` unless the user asked **this** chat.
+
+## Hand-off format
+
+```
+Goal:
+Acceptance:
+Owner lane:
+May edit:
+Must not edit:
+User-visible note (for the end-user agent):
+```

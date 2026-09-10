@@ -122,7 +122,9 @@ lists:
 
 tasks:
   DNSR-1:
-    # C2 (release directive): every registered list is selectable here
+    selection:
+      - dns_fast_fierce
+      - dns_fast_top5000
     allow_registry_wide: true
     default_key: dns_fast_top5000
     # TEST 4: B2 test-mode selection override REMOVED (restore). Default_key
@@ -180,7 +182,9 @@ tasks:
       - dns_exp_fuzzsubs2
       - dns_exp_trickest
   FFUF-2:
-    # C2 (release directive): every registered list is selectable here
+    selection:
+      - vhost_fierce
+      - vhost_top5000
     allow_registry_wide: true
     default_key: vhost_top5000
     # TEST 4: B2 test-mode selection override REMOVED (restore). Default_key

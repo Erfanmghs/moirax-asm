@@ -77,6 +77,25 @@ def due(doc: dict[str, Any], now_epoch: float | None = None) -> bool:
     return now - last_epoch >= interval * 60
 
 
+def overlay_for_target(params: Params, target: str, base: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Global scheduler.json plus optional per-target profile.scheduler overlay.
+
+    last_run stays in scheduler.json (runtime). Profile may set enabled and
+    interval_minutes only; empty overlay inherits the global defaults.
+    """
+    doc = dict(base if base is not None else load_schedule(params))
+    try:
+        from pipeline.target_profiles import get_profile, profile_sections
+    except ImportError:
+        return doc
+    overlay = (profile_sections(get_profile(params, target)).get("scheduler") or {})
+    if "enabled" in overlay:
+        doc["enabled"] = bool(overlay["enabled"])
+    if "interval_minutes" in overlay:
+        doc["interval_minutes"] = int(overlay["interval_minutes"])
+    return doc
+
+
 def mark_run(doc: dict[str, Any], now_epoch: float | None = None) -> dict[str, Any]:
     now = now_epoch if now_epoch is not None else datetime.now(timezone.utc).timestamp()
     doc = dict(doc)

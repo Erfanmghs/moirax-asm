@@ -47,6 +47,10 @@ class _Params:
             "out_of_scope_log": "logs/out_of_scope.log",
             "merge_wildcard_reason": "wildcard",
             "merge_catchall_reason": "catchall",
+            "recon_depth": 1,
+            "ffuf_depth": 1,
+            "ffuf_depth_min": 1,
+            "ffuf_depth_max": 5,
         }
         self.settings.update(overrides)
 
@@ -273,6 +277,23 @@ class TestFfuf4Run(unittest.TestCase):
         self.assertEqual(len(adapter.calls), 1)
         self.assertIn("ffuf4_job_cap", partial)
         self.assertIn("ffuf-4 job cap", (self.root / "logs/run.log").read_text(encoding="utf-8"))
+
+    def test_nested_headers_on_same_listener(self) -> None:
+        _write_sweep(
+            self.root,
+            [
+                {
+                    "ip": "1.2.3.4",
+                    "hosts": ["www.example.com"],
+                    "ports": [{"port": 8080, "proto": "tcp", "state": "open"}],
+                }
+            ],
+        )
+        adapter = _ProbeSpyAdapter()
+        payload, _ = self._run(adapter, recon_depth=2, ffuf_depth=2)
+        headers = [c["extra"]["ffuf_host_header"] for c in adapter.calls]
+        self.assertEqual(headers, ["Host: FUZZ.example.com", "Host: FUZZ.www.example.com"])
+        self.assertEqual(payload["module"], "ffuf-4")
 
 
 class TestFfuf4Wiring(unittest.TestCase):

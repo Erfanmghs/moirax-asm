@@ -126,16 +126,9 @@ cp .env.example .env
 (The same `cp` command works in PowerShell; in the old Windows command
 prompt, use `copy` instead.)
 
-Open the new `.env` file with any text editor and set one line -- the login
-password for the dashboard:
-
-```
-DASHBOARD_TOKEN=changeme
-```
-
-Replace `changeme` with a long password of your choice. That is enough to
-start. (If you want Telegram alerts, also paste the bot token here -- see
-section 7. You can skip that for now and do it later.)
+Open the new `.env` file with any text editor. Dashboard login no longer
+requires a line in this file -- the first browser visit asks you to set a
+password. You can still set optional keys (Telegram, search APIs) here.
 
 ### 4.5 Start the platform
 
@@ -170,8 +163,9 @@ Both options end in the same place: the platform is running. Check it with
 
 ### 4.6 Open the dashboard
 
-Open **http://127.0.0.1:8080** in your browser, paste the same password you
-put in `DASHBOARD_TOKEN` into the box at the top-right, and you are in.
+Open **http://127.0.0.1:8080** in your browser. The first visit asks you to
+choose a password (12+ characters). Later visits ask you to sign in. After
+15 minutes with no click, you must sign in again.
 
 ### 4.7 Prove that everything works
 
@@ -280,7 +274,7 @@ These lines go into the `.env` file:
 
 | Line | What it is | Where to get it |
 |---|---|---|
-| `DASHBOARD_TOKEN` | The dashboard login password. | You choose it yourself. Make it long. |
+| `DASHBOARD_TOKEN` | Optional legacy API bearer (CI). Operators set a password in the first-run gate instead. | Leave empty unless you need the old env-token path. |
 | `TELEGRAM_BOT_TOKEN` | Lets the platform send Telegram messages. | In Telegram, talk to `@BotFather`, send `/newbot`, follow the two questions, and copy the long token it gives you. Extra tokens separated by commas act as automatic backups. |
 | `PROXY_POOL` (optional) | Comma-separated proxies for IP rotation. | Your proxy provider. See the HELP panel / docs/HELP.md section 10. |
 
@@ -373,6 +367,7 @@ command-line interface:
 | [docs/HANDOVER.md](docs/HANDOVER.md) | Developers | The full engineering guide: architecture, every part explained, how to extend safely. |
 | [docs/api-keys.md](docs/api-keys.md) | Users | Every optional key, where to get it, and what it unlocks. |
 | [docs/security.md](docs/security.md) | Operators | How tokens and secrets are handled, and what to do if one leaks. |
+| [docs/PRODUCT-UPGRADE-CATALOG.md](docs/PRODUCT-UPGRADE-CATALOG.md) | Developers / product | Future capabilities collected from this product and comparable tools, tagged watchman vs identity-shift. |
 
 ## 13. Legal
 

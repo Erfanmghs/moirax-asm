@@ -361,7 +361,13 @@ ALERT_CLASSES = FACT_CLASSES
 DIFF_SIDES = ("added", "removed", "changed")
 
 DEFAULT_ALERT_RULES: list[dict[str, Any]] = [
-    {"class": cls, "enabled": True, "require_new_ip": False} for cls in FACT_CLASSES
+    {
+        "class": cls,
+        "enabled": True,
+        "require_new_ip": False,
+        "sides": list(DIFF_SIDES),
+    }
+    for cls in FACT_CLASSES
 ]
 
 DIGEST_LIST_CAP = 20
@@ -495,8 +501,10 @@ def alert_worthy(
     """section 4.7 alert-filter rules -- decide whether one diff row is alert-worthy.
 
     Rule schema (dashboard-editable, section 9.2-e):
-      {"class": <fact class>, "enabled": bool, "require_new_ip": bool}
+      {"class": <fact class>, "enabled": bool, "require_new_ip": bool,
+       "sides": ["added"|"removed"|"changed", ...] optional}
     require_new_ip: added host must resolve to an IP never seen in the previous run.
+    sides: when present, only those change kinds alert; omit = all sides.
     A class with no matching rule still alerts (nothing silently dropped).
     """
     body = _row_body(asset, side)
@@ -505,6 +513,13 @@ def alert_worthy(
             continue
         if not rule.get("enabled", True):
             return False
+        sides = rule.get("sides")
+        if isinstance(sides, list):
+            if not sides:
+                return False
+            allowed = {str(s).strip().lower() for s in sides if str(s).strip()}
+            if side not in allowed:
+                return False
         if rule.get("require_new_ip") and side == "added" and cls == "hosts":
             seen = prev_index.get("ips", set())
             candidates: list[str] = []

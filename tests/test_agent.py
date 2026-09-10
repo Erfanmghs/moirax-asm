@@ -193,6 +193,8 @@ class TestJournal(unittest.TestCase):
     def test_journal_streams_via_dashboard(self):
         app_text = (_ROOT / "dashboard" / "app.py").read_text(encoding="utf-8")
         self.assertIn("/api/run/agent-journal/{target}", app_text)
+        self.assertIn("/api/run/agent-journal/{target}/export", app_text)
+        self.assertIn("/api/run/log/{target}/export", app_text)
 
 
 class TestGuardrails(unittest.TestCase):

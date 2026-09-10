@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
 import threading
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -69,7 +71,10 @@ class Adapter:
         self.breaker = breaker
         self.ceiling = ceiling
         self.clock = clock or Clock()
-        self.runner = runner or _DockerRunner(params)
+        if runner is None:
+            self.runner = _DockerRunner(params, abort_check=self.stop_requested)
+        else:
+            self.runner = runner
         self.aggressive = aggressive
         # C5 IP rotation: optional ProxyAssigner; ONE pool entry PER ATTEMPT
         # (first try + every retry rotate -- per-request law), ledgered,
@@ -77,6 +82,14 @@ class Adapter:
         self.proxy_pool = proxy_pool
         self._live: dict[str, str] = {}
         self._live_lock = threading.Lock()
+
+    def stop_requested(self) -> bool:
+        from pipeline import state as state_engine
+
+        try:
+            return state_engine.operator_stopped(self.params, self.target_dir, self.target_dir.name)
+        except Exception:  # noqa: BLE001
+            return False
 
     def spec(self, name: str) -> ToolSpec:
         tools = self.params.tools
@@ -117,6 +130,20 @@ class Adapter:
         allow_fallback: bool = True,
     ) -> InvokeResult:
         extra = extra or {}
+        if self.stop_requested():
+            return InvokeResult(
+                tool=name,
+                argv=[],
+                docker_cmd=[],
+                exit_code=130,
+                stdout="",
+                stderr="operator stop",
+                duration_sec=0.0,
+                used_fallback=False,
+                data_json=None,
+                paused=False,
+                attempts=0,
+            )
         if not self.breaker.allow(module):
             return InvokeResult(
                 tool=name,
@@ -431,27 +458,65 @@ class Completed:
 
 
 class _DockerRunner:
-    def __init__(self, params: Params) -> None:
+    def __init__(self, params: Params, abort_check=None) -> None:
         self.params = params
+        self.abort_check = abort_check or (lambda: False)
 
     def run(self, docker_cmd: list[str], timeout_sec: float | None) -> Completed:
         prefix = docker_prefix(self.params)
         binary = prefix[0] if prefix else str(self.params.require("docker_binary"))
         if shutil.which(binary) is None:
             raise AdapterError(f"{binary} is not installed on PATH")
+        if self.abort_check():
+            return Completed(130, "", "operator stop")
         try:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 docker_cmd,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=timeout_sec,
-                check=False,
+                start_new_session=True,
             )
-            return Completed(proc.returncode, proc.stdout or "", proc.stderr or "")
-        except subprocess.TimeoutExpired as exc:
-            stdout = exc.stdout.decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-            stderr = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
-            return Completed(124, stdout, stderr or "container timeout")
+        except OSError as exc:
+            return Completed(1, "", str(exc))
+        start = time.time()
+        while True:
+            if self.abort_check():
+                _kill_popen(proc)
+                return Completed(130, "", "operator stop")
+            rc = proc.poll()
+            if rc is not None:
+                stdout, stderr = proc.communicate()
+                return Completed(rc, stdout or "", stderr or "")
+            if timeout_sec is not None and (time.time() - start) >= float(timeout_sec):
+                _kill_popen(proc)
+                stdout, stderr = "", ""
+                try:
+                    out_b, err_b = proc.communicate(timeout=0.5)
+                    stdout, stderr = out_b or "", err_b or ""
+                except Exception:  # noqa: BLE001
+                    pass
+                return Completed(124, stdout, stderr or "container timeout")
+            time.sleep(0.12)
+
+
+def _kill_popen(proc: subprocess.Popen) -> None:
+    import signal as _signal
+
+    pid = proc.pid
+    if not pid:
+        return
+    try:
+        os.killpg(pid, _signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.kill()
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        proc.wait(timeout=1.0)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 class ScriptedRunner:

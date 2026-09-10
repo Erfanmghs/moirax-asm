@@ -75,10 +75,20 @@ def main() -> int:
     # ---- J1 boot + auth ---------------------------------------------------------
     health = client.get("/api/health")
     with tempfile.TemporaryDirectory() as _t:
+        auth_db = str(Path(_t) / "operator.sqlite")
         env_backup = os.environ.pop("DASHBOARD_TOKEN", None)
+        auth_backup = os.environ.get("RECON_AUTH_DB")
+        os.environ["RECON_AUTH_DB"] = auth_db
+        from dashboard import authstore as _authstore
+        _authstore.reset()
         no_token = client.get("/api/tools")
         os.environ["DASHBOARD_TOKEN"] = "ci-token"
         wrong = client.get("/api/tools", headers={"Authorization": "Bearer nope"})
+        if auth_backup is None:
+            os.environ.pop("RECON_AUTH_DB", None)
+        else:
+            os.environ["RECON_AUTH_DB"] = auth_backup
+        _authstore.reset()
     ok1 = health.status_code == 200 and health.json().get("ok") is True and no_token.status_code == 503 and wrong.status_code == 401
     check("J1", "MANDATORY", ok1,
           f"health={health.status_code} no_token={no_token.status_code} (fail-closed section 9.1) wrong_token={wrong.status_code}")

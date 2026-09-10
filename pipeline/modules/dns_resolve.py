@@ -16,6 +16,7 @@ from pipeline.resolver_forge import forge_resolvers
 from pipeline.scope import ScopeGate
 from pipeline.textio import atomic_write_text, read_lines
 from pipeline.wordlist_forge import copy_into_target, materialize_effective
+from pipeline.recon_depth import child_depth, clamp_recon_depth, recursion_parents, vhost_driven_parents
 from pipeline import httpx_probe
 
 
@@ -79,57 +80,63 @@ def run_dns_resolve(
     perm_candidates = 0
 
     chunk = int(params.require("dnsx_chunk_size"))
-    for i in range(0, len(brute_lines), chunk):
-        if not balancer.tick(resolvers_c, "logs/raw/dnsx-canary", extra_lb):
-            partial.append("load_balance_canary_pause")
-            break
-        part = brute_lines[i : i + chunk]
-        rel = f"20_dns/dnsx/brute_chunk_{i}.txt"
-        atomic_write_text(target_dir / rel, "\n".join(part) + "\n")
-        out_rel = f"20_dns/dnsx/brute_chunk_{i}.json"
-        rows = _dnsx_run(
-            params,
-            adapter,
-            target_dir,
-            target,
-            extra,
-            planned,
-            timeout_sec,
-            balancer,
-            {
-                "target_domain": apex,
-                "dnsx_wordlist": container_path(params, target, rel),
-                "dnsx_resolvers": resolvers_c,
-                "dnsx_max_qps": balancer.current_qps(),
-                "dnsx_output": container_path(params, target, out_rel),
-                "output_raw_dir": f"logs/raw/dnsx/brute_{i}",
-                "skip_parse": True,
-            },
-            tool="dnsx",
-            out_path=target_dir / out_rel,
-            brute_rel=rel,
-            apex=apex,
-        )
-        for rec in rows:
-            host = normalize_fqdn(str(rec.get("host") or ""))
-            if not host or not gate.enforce(target_dir, host):
-                continue
-            brute_valid += 1
-            _merge_resolved(resolved, rec, host, "brute")
-
-    # DNSR-2 AGGREGATE CAP + SUSPECT-NAME EXCLUSION (spec v1.9, approved
-    # Option-1 item 3): the wildcard probe is hoisted BEFORE the perm pass so
-    # wildcard-suspect and misconfig_suspect-flagged names can be EXCLUDED
-    # from the alterx seed input -- suspect-name mutations must never amplify
-    # a wildcard/misconfig artifact. The same wildcard_ip classifies the
-    # DNSR-3 phase below (one probe per run, as before).
+    depth = clamp_recon_depth(params)
+    max_level = int(params.require("max_hosts_per_level"))
+    nested_parents: list[str] = []
     wildcard_ip = None
-    if balancer.tick(resolvers_c, "logs/raw/dnsx-canary", extra_lb):
-        wildcard_ip = _wildcard_ip(
-            params, adapter, target_dir, target, extra, planned, timeout_sec, balancer, resolvers_c, apex
-        )
-    else:
-        partial.append("load_balance_canary_pause")
+    for level in range(1, depth + 1):
+        parents = recursion_parents(resolved, apex, level, wildcard_ip, max_level)
+        if level > 1:
+            if not parents:
+                break
+            nested_parents.extend(parents)
+            if len(parents) >= max_level:
+                partial.append("max_hosts_per_level")
+        for parent in parents:
+            added, pause = _brute_under_parent(
+                params,
+                gate,
+                adapter,
+                target_dir,
+                target,
+                extra,
+                planned,
+                timeout_sec,
+                balancer,
+                extra_lb,
+                resolvers_c,
+                brute_lines,
+                chunk,
+                parent,
+                level,
+                resolved,
+            )
+            brute_valid += added
+            if pause:
+                partial.append("load_balance_canary_pause")
+                break
+        if "load_balance_canary_pause" in partial:
+            break
+        if level == 1:
+            if balancer.tick(resolvers_c, "logs/raw/dnsx-canary", extra_lb):
+                wildcard_ip = _wildcard_ip(
+                    params,
+                    adapter,
+                    target_dir,
+                    target,
+                    extra,
+                    planned,
+                    timeout_sec,
+                    balancer,
+                    resolvers_c,
+                    apex,
+                )
+            else:
+                partial.append("load_balance_canary_pause")
+                break
+
+    # Wildcard probe already ran after level-1 brute (nested parents skip
+    # wildcard-IP names). Same wildcard_ip classifies the DNSR-3 phase below.
     flagged = _misconfig_flagged(params, target_dir)
     # Permute DNS-validated names (brute hits + any earlier ffuf/passive
     # artifacts), not HTTP-fuzz noise. Empty ffuf is expected when dnsx runs first.
@@ -256,6 +263,7 @@ def run_dns_resolve(
         "resolved": sorted(resolved.values(), key=lambda r: r["host"]),
         "candidates": {"brute": len(brute_lines), "perms": perm_candidates, "valid": valid},
         "wildcard_suspects": wildcard_suspects,
+        "nested_parents": nested_parents,
     }
     write_json(target_dir / str(params.require("dnsr_data_json")), payload)
     summary = target_dir / str(params.require("dnsr_summary"))
@@ -269,6 +277,8 @@ def run_dns_resolve(
                 f"candidates: {payload['candidates']}",
                 f"resolved_rows: {len(payload['resolved'])}",
                 f"wildcard_suspects: {len(wildcard_suspects)}",
+                f"recon_depth: {depth}",
+                f"nested_parents: {len(nested_parents)}",
                 f"alterx_seeds: {seed_counts}",
                 f"aggregate_cap_dropped: {dropped_aggregate}",
                 f"load_balance_qps: {balancer.current_qps()}",
@@ -278,6 +288,176 @@ def run_dns_resolve(
         encoding="utf-8",
     )
     return payload
+
+
+def expand_nested_after_vhosts(
+    params: Params,
+    gate: ScopeGate,
+    adapter: Adapter,
+    target_dir: Path,
+    target: str,
+    extra: dict[str, Any],
+    planned: int,
+    timeout_sec: float | None,
+    partial: list[str],
+) -> dict[str, Any] | None:
+    """After FFUF vhost, brute DNS under new names when recon_depth > 1.
+
+    MERGE still runs later, so new IPs enter PORT-SWEEP. Without this pass,
+    vhost-only names never become dnsx -d PARENT targets.
+    """
+    depth = clamp_recon_depth(params)
+    if depth <= 1:
+        return None
+    path = target_dir / str(params.require("dnsr_data_json"))
+    if not path.is_file():
+        return None
+    doc = read_json(path)
+    if not isinstance(doc, dict):
+        return None
+    resolved: dict[str, dict[str, Any]] = {}
+    for row in doc.get("resolved") or []:
+        if isinstance(row, dict) and row.get("host"):
+            resolved[str(row["host"])] = row
+    seeds = wildcard_seeds(gate, target)
+    apex = seeds[0] if seeds else target
+    already = set(str(x) for x in (doc.get("nested_parents") or []))
+    already.add(apex)
+    wild = {str(x) for x in (doc.get("wildcard_suspects") or [])}
+    extra_names = _ffuf_hosts(params, target_dir)
+    cap = int(params.require("max_hosts_per_level"))
+    parents = vhost_driven_parents(apex, depth, resolved, extra_names, already, wild, cap)
+    if not parents:
+        return None
+
+    forge_resolvers(params, adapter, target_dir, target)
+    resolvers_c = container_path(params, target, str(params.require("resolver_target_copy")))
+    sentinels = [str(x).strip() for x in params.require("canary_sentinel_hosts")]
+    sent_rel = str(params.require("dnsx_canary_list_rel"))
+    write_sentinel_file(target_dir / sent_rel, sentinels)
+    extra_lb = dict(extra)
+    extra_lb["dnsx_canary_hosts"] = container_path(params, target, sent_rel)
+    extra_lb["dnsx_resolvers"] = resolvers_c
+    balancer = LoadBalancer(params, adapter, target_dir, target, clock=adapter.clock, module="dns-resolve")
+    brute_src = materialize_effective(params, "DNSR-1")
+    brute_rel = str(params.require("dnsr_brute_wordlist_rel"))
+    copy_into_target(params, target_dir, brute_src, brute_rel)
+    brute_lines = [line.strip() for line in read_lines(target_dir / brute_rel) if line.strip()]
+    chunk = int(params.require("dnsx_chunk_size"))
+    nested_parents = list(doc.get("nested_parents") or [])
+    added_total = 0
+    for parent in parents:
+        extra_labels = child_depth(parent, apex)
+        level = extra_labels + 1 if extra_labels >= 1 else 2
+        added, pause = _brute_under_parent(
+            params,
+            gate,
+            adapter,
+            target_dir,
+            target,
+            extra,
+            planned,
+            timeout_sec,
+            balancer,
+            extra_lb,
+            resolvers_c,
+            brute_lines,
+            chunk,
+            parent,
+            level,
+            resolved,
+        )
+        added_total += added
+        nested_parents.append(parent)
+        if pause:
+            partial.append("load_balance_canary_pause")
+            break
+    valid = sum(1 for row in resolved.values() if row.get("resolution_status") == "resolved")
+    candidates = doc.get("candidates") if isinstance(doc.get("candidates"), dict) else {}
+    payload = {
+        "schema_version": int(params.require("schema_version")),
+        "module": "dns-resolve",
+        "resolved": sorted(resolved.values(), key=lambda r: r["host"]),
+        "candidates": {
+            "brute": int(candidates.get("brute") or len(brute_lines)),
+            "perms": int(candidates.get("perms") or 0),
+            "valid": valid,
+        },
+        "wildcard_suspects": list(doc.get("wildcard_suspects") or []),
+        "nested_parents": nested_parents,
+    }
+    write_json(path, payload)
+    log_path = target_dir / str(params.require("run_log"))
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(
+            f"expand-nested-dns\tparents={len(parents)}\tadded_hosts={added_total}\n"
+        )
+    return payload
+
+
+def _brute_under_parent(
+    params: Params,
+    gate: ScopeGate,
+    adapter: Adapter,
+    target_dir: Path,
+    target: str,
+    extra: dict[str, Any],
+    planned: int,
+    timeout_sec: float | None,
+    balancer: LoadBalancer,
+    extra_lb: dict[str, Any],
+    resolvers_c: str,
+    brute_lines: list[str],
+    chunk: int,
+    parent: str,
+    level: int,
+    resolved: dict[str, dict[str, Any]],
+) -> tuple[int, bool]:
+    """dnsx -d PARENT -w wordlist. Returns (new_valid_count, paused)."""
+    added = 0
+    tag = _safe_dns_parent(parent)
+    for i in range(0, len(brute_lines), chunk):
+        if not balancer.tick(resolvers_c, "logs/raw/dnsx-canary", extra_lb):
+            return added, True
+        part = brute_lines[i : i + chunk]
+        rel = f"20_dns/dnsx/brute_l{level}_{tag}_chunk_{i}.txt"
+        atomic_write_text(target_dir / rel, "\n".join(part) + "\n")
+        out_rel = f"20_dns/dnsx/brute_l{level}_{tag}_chunk_{i}.json"
+        rows = _dnsx_run(
+            params,
+            adapter,
+            target_dir,
+            target,
+            extra,
+            planned,
+            timeout_sec,
+            balancer,
+            {
+                "target_domain": parent,
+                "dnsx_wordlist": container_path(params, target, rel),
+                "dnsx_resolvers": resolvers_c,
+                "dnsx_max_qps": balancer.current_qps(),
+                "dnsx_output": container_path(params, target, out_rel),
+                "output_raw_dir": f"logs/raw/dnsx/brute_l{level}_{tag}_{i}",
+                "skip_parse": True,
+            },
+            tool="dnsx",
+            out_path=target_dir / out_rel,
+            brute_rel=rel,
+            apex=parent,
+        )
+        for rec in rows:
+            host = normalize_fqdn(str(rec.get("host") or ""))
+            if not host or not gate.enforce(target_dir, host):
+                continue
+            added += 1
+            _merge_resolved(resolved, rec, host, "brute")
+    return added, False
+
+
+def _safe_dns_parent(name: str) -> str:
+    return name.replace(":", "_").replace("/", "_").replace("*", "star")
 
 
 def _dnsx_run(

@@ -132,23 +132,23 @@ class TestOperatorStop(unittest.TestCase):
         log_path = tdir / str(params.require("run_log"))
         self.assertFalse(log_path.exists())
 
-    def test_dashboard_stop_calls_recon_sh(self):
+    def test_dashboard_stop_calls_stop_target(self):
         from fastapi.testclient import TestClient
 
         from dashboard import app as appmod
 
         client = TestClient(appmod.app)
         headers = {"Authorization": "Bearer stop-token-ok"}
-        fake = mock.Mock(returncode=4, stdout="stop requested for: (none); containers=0\n", stderr="")
         with mock.patch.dict(os.environ, {"DASHBOARD_TOKEN": "stop-token-ok"}, clear=False):
-            with mock.patch("dashboard.app.subprocess.run", return_value=fake) as run:
-                r = client.post("/api/run/stop", json={"target": "example.com"}, headers=headers)
+            with mock.patch("pipeline.engine.stop_target", return_value=["cid1"]) as stop_fn:
+                with mock.patch("pipeline.factory.ensure_layout", return_value=Path(tempfile.mkdtemp()) / "example.com"):
+                    r = client.post("/api/run/stop", json={"target": "example.com"}, headers=headers)
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json()["exit"], 4)
-        argv = run.call_args[0][0]
-        self.assertEqual(argv[1], "stop")
-        self.assertEqual(argv[2], "example.com")
-        self.assertTrue(str(argv[0]).endswith("recon.sh"))
+        body = r.json()
+        self.assertEqual(body["exit"], int(Params(_ROOT).require("exit_code_stopped")))
+        self.assertEqual(body["containers"], 1)
+        self.assertTrue(stop_fn.called)
+        self.assertEqual(stop_fn.call_args[0][1].name, "example.com")
 
 
 if __name__ == "__main__":

@@ -1,13 +1,16 @@
 """FastAPI dashboard backend (spec section 9.1/section 9.2). The ONLY docker.sock client.
 
-Auth: every /api route (except /api/health) requires `Authorization: Bearer
-<DASHBOARD_TOKEN>`; if DASHBOARD_TOKEN is unset the backend refuses every
-API call (fail-closed -- section 9.1 auth contract).
+Auth: HttpOnly session cookie after first-run password setup (scrypt hash in
+an isolated SQLite DB, never in recon/). Idle sessions die after 15 minutes
+without an operator click (POST /api/auth/touch). Legacy CI still accepts
+`Authorization: Bearer <DASHBOARD_TOKEN>`. If neither an operator password
+nor a long-enough DASHBOARD_TOKEN exists, API calls fail closed (503).
 Bind: 127.0.0.1:8080 (compose maps the same), SPA served from /static.
 """
 
 from __future__ import annotations
 
+import contextvars
 import json
 import os
 import secrets
@@ -15,10 +18,12 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
+from dashboard import authstore
 from dashboard.service import (
     DashboardError,
     append_audit,
@@ -26,8 +31,6 @@ from dashboard.service import (
     apply_wordlists_edit,
     coverage_analytics,
     delete_key,
-    fleet_members_view,
-    latest_fleet_ledger,
     list_keys,
     list_operator_tools,
     load_settings,
@@ -49,8 +52,13 @@ from dashboard.service import (
     wordlist_preview,
     results_rows_for,
     enrich_results_rows,
-    scan_add_target,
+    fleet_members_view,
+    latest_fleet_ledger,
+    scan_add_targets,
+    parse_scan_target_list,
+    scan_require_registered,
     scan_board_view,
+    scan_delete_target,
 )
 from pipeline.ip_rotation import gate_pool_or_legacy
 from pipeline.params import Params
@@ -74,6 +82,8 @@ _SPA_CSP = (
     "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 )
 _API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+_RATE_EXEMPT = {"/api/health", "/api/auth/status"}
+_REQUEST: contextvars.ContextVar[Request | None] = contextvars.ContextVar("dashboard_request", default=None)
 
 
 def _client_ip(request: Request) -> str:
@@ -101,9 +111,13 @@ async def _hardening_headers(request: Any, call_next: Any) -> Any:
     no caching of API data, strict CSP for the SPA (no inline script)."""
     ip = _client_ip(request) if hasattr(request, "client") else "local"
     path = request.url.path
-    if path.startswith("/api") and path != "/api/health" and _auth_locked(ip):
+    if path.startswith("/api") and path not in _RATE_EXEMPT and _auth_locked(ip):
         return JSONResponse(status_code=429, content={"detail": "too many auth failures"})
-    response = await call_next(request)
+    token = _REQUEST.set(request)
+    try:
+        response = await call_next(request)
+    finally:
+        _REQUEST.reset(token)
     if response.status_code == 401:
         _note_auth_fail(ip)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -125,7 +139,7 @@ async def _hardening_headers(request: Any, call_next: Any) -> Any:
 
 def _valid_target(value: str) -> str:
     """Pentest hardening (P-9): target names reach subprocess argv via
-    run/start|stop|resume -- enforce the same strict name law the fleet uses
+    run/start|stop|resume -- enforce a strict target-name law
     so flag-injection ('-x'), traversal ('../x') and metacharacters are
     refused BEFORE any process is spawned."""
     target = (value or "").strip()
@@ -151,20 +165,210 @@ def _params_obj() -> Params:
     return _params
 
 
+def _env_token() -> str:
+    return str(os.environ.get("DASHBOARD_TOKEN") or "").strip()
+
+
+def _env_token_ready() -> bool:
+    token = _env_token()
+    return bool(token) and len(token) >= _MIN_TOKEN_LEN
+
+
+def _const_eq(left: str, right: str) -> bool:
+    a = left.encode("utf-8")
+    b = right.encode("utf-8")
+    if len(a) != len(b):
+        secrets.compare_digest(a, a)
+        return False
+    return secrets.compare_digest(a, b)
+
+
+def _bearer_raw(authorization: str | None) -> str:
+    header = authorization or ""
+    if header.startswith("Bearer "):
+        return header[7:]
+    return ""
+
+
+def _session_raw(authorization: str | None = None) -> str:
+    request = _REQUEST.get()
+    if request is not None:
+        cookie = str(request.cookies.get(authstore.cookie_name()) or "")
+        if cookie:
+            return cookie
+    return _bearer_raw(authorization)
+
+
+def _origin_ok(request: Request) -> bool:
+    origin = (request.headers.get("origin") or "").strip()
+    if not origin:
+        return True
+    host = (request.headers.get("host") or "").strip()
+    if not host:
+        return False
+    parsed = urlparse(origin)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return False
+    return parsed.netloc == host
+
+
+def _set_session_cookie(response: JSONResponse, raw: str) -> JSONResponse:
+    response.set_cookie(
+        key=authstore.cookie_name(),
+        value=raw,
+        httponly=True,
+        samesite="strict",
+        secure=False,
+        path="/",
+    )
+    return response
+
+
+def _clear_session_cookie(response: JSONResponse) -> JSONResponse:
+    response.delete_cookie(key=authstore.cookie_name(), path="/")
+    return response
+
+
+def _issue_session() -> JSONResponse:
+    raw = authstore.create_session()
+    return _set_session_cookie(JSONResponse({"ok": True}), raw)
+
+
 def _auth(authorization: str | None) -> None:
-    token = str(os.environ.get("DASHBOARD_TOKEN") or "").strip()
-    if not token:
-        raise HTTPException(status_code=503, detail="DASHBOARD_TOKEN is not configured (fail-closed, section 9.1)")
-    if len(token) < _MIN_TOKEN_LEN:
+    request = _REQUEST.get()
+    if request is not None and request.method not in ("GET", "HEAD", "OPTIONS") and not _origin_ok(request):
+        raise HTTPException(status_code=403, detail="origin mismatch")
+    raw = _session_raw(authorization)
+    if raw and authstore.session_ok(raw):
+        return
+    token = _env_token()
+    if token and len(token) >= _MIN_TOKEN_LEN:
+        expected = f"Bearer {token}".encode("utf-8")
+        provided = (authorization or "").encode("utf-8")
+        if len(provided) == len(expected) and secrets.compare_digest(provided, expected):
+            return
+    elif token and not authstore.has_operator():
         raise HTTPException(
             status_code=503,
             detail=f"DASHBOARD_TOKEN is too short (min {_MIN_TOKEN_LEN} characters, fail-closed)",
         )
-    expected = f"Bearer {token}".encode("utf-8")
-    provided = (authorization or "").encode("utf-8")
-    if len(provided) != len(expected) or not secrets.compare_digest(provided, expected):
-        append_audit(ROOT, "auth_fail", {"path": "bearer"})
+    if not authstore.has_operator() and not _env_token_ready():
+        raise HTTPException(status_code=503, detail="DASHBOARD_TOKEN is not configured (fail-closed, section 9.1)")
+    append_audit(ROOT, "auth_fail", {"path": "session"})
+    raise HTTPException(status_code=401, detail="invalid dashboard token")
+
+
+def _password_from_body(body: dict[str, Any], key: str = "password") -> str:
+    value = body.get(key)
+    if not isinstance(value, str):
+        return ""
+    return value
+
+
+@app.get("/api/auth/status")
+def auth_status(authorization: str | None = Header(default=None)) -> Any:
+    raw = _session_raw(authorization)
+    return {
+        "ok": True,
+        "setup_required": not authstore.has_operator(),
+        "authenticated": bool(raw) and authstore.session_ok(raw),
+        "idle_seconds": authstore.idle_seconds(),
+        "operator": authstore.has_operator(),
+    }
+
+
+@app.post("/api/auth/setup")
+async def auth_setup(request: Request) -> Any:
+    if authstore.has_operator():
+        raise HTTPException(status_code=403, detail="setup already completed")
+    if not _origin_ok(request):
+        raise HTTPException(status_code=403, detail="origin mismatch")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="invalid body")
+    password = _password_from_body(body)
+    confirm = body.get("confirm")
+    if isinstance(confirm, str) and confirm != password:
+        raise HTTPException(status_code=422, detail="passwords do not match")
+    err = authstore.validate_new_password(password)
+    if err:
+        raise HTTPException(status_code=422, detail=err)
+    try:
+        authstore.create_operator(password)
+    except FileExistsError:
+        raise HTTPException(status_code=403, detail="setup already completed") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    append_audit(ROOT, "auth_setup", {"ok": True})
+    return _issue_session()
+
+
+@app.post("/api/auth/login")
+async def auth_login(request: Request) -> Any:
+    if not _origin_ok(request):
+        raise HTTPException(status_code=403, detail="origin mismatch")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="invalid body")
+    password = _password_from_body(body)
+    ok = False
+    if authstore.has_operator():
+        ok = authstore.check_operator_password(password)
+    elif _env_token_ready():
+        ok = _const_eq(password, _env_token())
+    else:
+        raise HTTPException(status_code=503, detail="DASHBOARD_TOKEN is not configured (fail-closed, section 9.1)")
+    if not ok:
+        append_audit(ROOT, "auth_fail", {"path": "login"})
         raise HTTPException(status_code=401, detail="invalid dashboard token")
+    return _issue_session()
+
+
+@app.post("/api/auth/logout")
+def auth_logout(authorization: str | None = Header(default=None)) -> Any:
+    authstore.revoke_session(_session_raw(authorization))
+    return _clear_session_cookie(JSONResponse({"ok": True}))
+
+
+@app.post("/api/auth/touch")
+def auth_touch(authorization: str | None = Header(default=None)) -> Any:
+    raw = _session_raw(authorization)
+    if not raw or not authstore.touch_session(raw):
+        raise HTTPException(status_code=401, detail="idle timeout")
+    return {"ok": True, "idle_seconds": authstore.idle_seconds()}
+
+
+@app.put("/api/auth/password")
+async def auth_password(request: Request, authorization: str | None = Header(default=None)) -> Any:
+    _auth(authorization)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="invalid body")
+    current = _password_from_body(body, "current")
+    new = _password_from_body(body, "password")
+    if authstore.has_operator():
+        if not authstore.check_operator_password(current):
+            raise HTTPException(status_code=401, detail="invalid dashboard token")
+    elif _env_token_ready():
+        if not _const_eq(current, _env_token()):
+            raise HTTPException(status_code=401, detail="invalid dashboard token")
+    else:
+        raise HTTPException(status_code=503, detail="DASHBOARD_TOKEN is not configured (fail-closed, section 9.1)")
+    try:
+        authstore.replace_operator_password(new)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    authstore.revoke_all_sessions()
+    return _issue_session()
 
 
 @app.get("/api/health")
@@ -419,16 +623,51 @@ def scan_board_route(authorization: str | None = Header(default=None)) -> Any:
 
 @app.post("/api/scan/targets")
 async def scan_add_route(body: dict[str, Any], authorization: str | None = Header(default=None)) -> Any:
-    """Add a site from SCAN: isolated workspace + profile, optional scope grant."""
+    """Add one site or a list. Does not start a scan. Empty setup inherits SETTINGS."""
     _auth(authorization)
-    target = _valid_target(str(body.get("target") or ""))
+    if not isinstance(body, dict):
+        body = {}
+    names, rejected = parse_scan_target_list(body.get("targets"))
+    extra, extra_bad = parse_scan_target_list(body.get("target"))
+    names = list(dict.fromkeys(names + extra))
+    rejected = list(dict.fromkeys(rejected + extra_bad))
+    if not names:
+        detail = "type a domain or paste a list, then ADD TARGET / ADD LIST"
+        if rejected:
+            detail += f" (rejected: {', '.join(rejected[:8])})"
+        raise HTTPException(status_code=422, detail=detail)
+    params = _params_obj()
     if body.get("authorize"):
-        _authorize_include(target)
+        for name in names:
+            _authorize_include(name)
     try:
-        row = scan_add_target(_params_obj(), target, str(body.get("description") or ""))
+        result = scan_add_targets(params, names, str(body.get("description") or ""))
+    except DashboardError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if rejected:
+        result["rejected"] = rejected
+    row = result["targets"][0]
+    return JSONResponse({"added": True, **row, **result})
+
+
+@app.post("/api/scan/targets/{target}/delete")
+def scan_delete_post_route(target: str, authorization: str | None = Header(default=None)) -> Any:
+    _auth(authorization)
+    target = _valid_target(target)
+    try:
+        return JSONResponse(scan_delete_target(_params_obj(), target))
+    except DashboardError as extra:
+        raise HTTPException(status_code=422, detail=str(extra))
+
+
+@app.delete("/api/scan/targets/{target}")
+def scan_delete_route(target: str, authorization: str | None = Header(default=None)) -> Any:
+    _auth(authorization)
+    target = _valid_target(target)
+    try:
+        return JSONResponse(scan_delete_target(_params_obj(), target))
     except DashboardError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    return JSONResponse({"added": True, **row})
 
 
 @app.get("/api/run/status/{target}")
@@ -449,15 +688,44 @@ def run_status(target: str, authorization: str | None = Header(default=None)) ->
     })
 
 
+def _target_root(target: str) -> Path:
+    return (ROOT / "recon" / target).resolve()
+
+
+def _confined_target_file(target: str, candidate: Path) -> Path | None:
+    """Refuse symlink/path escape outside recon/<target>/ (BAC / LFI guard)."""
+    root = _target_root(target)
+    try:
+        full = candidate.resolve()
+    except OSError:
+        return None
+    if not _path_is_within(root, full) or not full.is_file():
+        return None
+    return full
+
+
+def _run_log_path(target: str) -> Path | None:
+    log_dir = ROOT / "recon" / target / "logs"
+    for name in ("run.log", "dashboard-spawn.log"):
+        path = _confined_target_file(target, log_dir / name)
+        if path is not None:
+            return path
+    return None
+
+
+def _agent_journal_path(target: str) -> Path | None:
+    rel = Path(str(_params_obj().require("agent_journal_relpath")))
+    if rel.is_absolute() or ".." in rel.parts:
+        return None
+    return _confined_target_file(target, ROOT / "recon" / target / rel)
+
+
 @app.get("/api/run/log/{target}")
 def run_log(target: str, offset: int = Query(default=0, ge=0), authorization: str | None = Header(default=None)) -> Any:
     _auth(authorization)
     target = _valid_target(target)
-    log_dir = ROOT / "recon" / target / "logs"
-    path = log_dir / "dashboard-spawn.log"
-    if not path.is_file():
-        path = log_dir / "run.log"
-    if not path.is_file():
+    path = _run_log_path(target)
+    if path is None:
         return JSONResponse({"exists": False, "offset": offset, "lines": []})
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     chunk = lines[offset:offset + 400]
@@ -465,19 +733,50 @@ def run_log(target: str, offset: int = Query(default=0, ge=0), authorization: st
                          "total": len(lines), "lines": chunk})
 
 
+@app.get("/api/run/log/{target}/export")
+def run_log_export(target: str, authorization: str | None = Header(default=None)) -> Any:
+    """Full run.log (or spawn log) download -- auth required (no anonymous BAC)."""
+    _auth(authorization)
+    target = _valid_target(target)
+    path = _run_log_path(target)
+    if path is None:
+        raise HTTPException(status_code=404, detail="no log file yet for this site")
+    return FileResponse(
+        path,
+        media_type="text/plain; charset=utf-8",
+        filename=f"{target}-{path.name}",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/api/run/agent-journal/{target}")
 def agent_journal(target: str, offset: int = Query(default=0, ge=0), authorization: str | None = Header(default=None)) -> Any:
     """section 12.7: agent journal streamed live in Run Control (append-only source)."""
     _auth(authorization)
     target = _valid_target(target)
-    params = _params_obj()
-    path = ROOT / "recon" / target / str(params.require("agent_journal_relpath"))
-    if not path.is_file():
+    path = _agent_journal_path(target)
+    if path is None:
         return JSONResponse({"exists": False, "offset": offset, "rows": []})
     lines = [l for l in path.read_text(encoding="utf-8", errors="replace").splitlines() if l.strip()]
     chunk = lines[offset:offset + 200]
     return JSONResponse({"exists": True, "offset": offset, "next_offset": offset + len(chunk),
                          "total": len(lines), "rows": chunk})
+
+
+@app.get("/api/run/agent-journal/{target}/export")
+def agent_journal_export(target: str, authorization: str | None = Header(default=None)) -> Any:
+    """Full agent-journal.jsonl download -- auth required (no anonymous BAC)."""
+    _auth(authorization)
+    target = _valid_target(target)
+    path = _agent_journal_path(target)
+    if path is None:
+        raise HTTPException(status_code=404, detail="no journal file yet for this site")
+    return FileResponse(
+        path,
+        media_type="application/x-ndjson",
+        filename=f"{target}-agent-journal.jsonl",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.post("/api/run/start")
@@ -488,6 +787,10 @@ async def run_start(body: dict[str, Any], authorization: str | None = Header(def
     if not ok:
         raise HTTPException(status_code=502, detail=f"PROXY RULE fail-fast (section 9.3): {reason}")
     target = _valid_target(str(body.get("target") or ""))
+    try:
+        target = scan_require_registered(params, target)
+    except DashboardError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if body.get("authorize"):
         _authorize_include(target)
     aggressive = bool(body.get("aggressive", False))
@@ -520,18 +823,20 @@ async def run_start(body: dict[str, Any], authorization: str | None = Header(def
 async def run_stop(body: dict[str, Any], authorization: str | None = Header(default=None)) -> Any:
     _auth(authorization)
     target = _valid_target(str(body.get("target") or ""))
-    recon_sh = ROOT / "recon.sh"
-    if not recon_sh.is_file():
-        raise HTTPException(
-            status_code=500,
-            detail="recon.sh is missing inside the dashboard container. Mount the repo (see docker-compose.yml).",
-        )
-    proc = subprocess.run([str(recon_sh), "stop", target], cwd=ROOT, capture_output=True, text=True)
-    append_audit(ROOT, "run_stop", {"target": target, "exit": proc.returncode})
+    from pipeline.engine import stop_target
+    from pipeline.factory import ensure_layout
+
+    params = _params_obj()
+    target_dir = ensure_layout(params, target)
+    # In-process STOP: no subprocess round-trip -- mark stopped + kill now.
+    ids = stop_target(params, target_dir)
+    append_audit(ROOT, "run_stop", {"target": target, "containers": len(ids)})
     return JSONResponse({
-        "exit": proc.returncode,
-        "stdout": (proc.stdout or "").strip()[-2000:],
-        "stderr": (proc.stderr or "").strip()[-2000:],
+        "exit": int(params.require("exit_code_stopped")),
+        "stdout": f"stop: containers={len(ids)} target={target}",
+        "stderr": "",
+        "containers": len(ids),
+        "target": target,
     })
 
 
@@ -717,24 +1022,28 @@ def report_generate(target: str, authorization: str | None = Header(default=None
 
 
 _REPORT_VIEWABLE = {".md", ".html", ".csv", ".json", ".pdf", ".txt"}
+# Logs/journals are only via auth'd /api/run/*/export -- never /static-file.
+_STATIC_FILE_DENIED_SUFFIXES = {".log", ".jsonl", ".gz", ".sqlite", ".db", ".pid"}
 
 
 @app.get("/static-file/{target}/{relpath:path}")
 def artifact_view(target: str, relpath: str, authorization: str | None = Header(default=None)) -> Any:
     """Read-only report-artifact viewer (REPORTS panel OPEN links).
     Traversal-safe: confined to recon/<target>/ with a viewable-extension
-    allow-list; auth'd like every other API surface."""
+    allow-list; auth'd like every other API surface. Log/journal files are
+    denied here even when authenticated (use the export endpoints)."""
     _auth(authorization)
     target = _valid_target(target)
     if ".." in Path(relpath).parts:
         raise HTTPException(status_code=404, detail="not found")
-    root = (ROOT / "recon" / target).resolve()
+    root = _target_root(target)
     full = (root / relpath).resolve()
     if not _path_is_within(root, full) or not full.is_file():
         raise HTTPException(status_code=404, detail="not found")
-    if full.suffix.lower() not in _REPORT_VIEWABLE:
+    suffix = full.suffix.lower()
+    if suffix in _STATIC_FILE_DENIED_SUFFIXES or suffix not in _REPORT_VIEWABLE:
         raise HTTPException(status_code=403, detail="extension not viewable")
-    return FileResponse(full)
+    return FileResponse(full, headers={"Cache-Control": "no-store"})
 
 
 @app.exception_handler(DashboardError)

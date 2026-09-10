@@ -30,6 +30,7 @@ from dashboard.service import (
     scheduler_save,
     serialize_filters,
     set_key,
+    unique_wordlist_keys_by_path,
     validate_settings,
     validate_tools_edit,
     validate_wordlists_edit,
@@ -169,6 +170,8 @@ class TestSettingsPanelE(unittest.TestCase):
         self.assertTrue(validate_settings({"retention": {"log_max_mb": True}}))
         self.assertTrue(validate_settings({"retention": {"max_total_mb": -5}}))
         self.assertEqual(validate_settings({"retention": {"keep_runs": 5, "log_max_mb": 10, "journal_max_mb": 5, "log_keep_gz": 3, "max_total_mb": 1024}}), [])
+        self.assertEqual(validate_settings({"recon_depth": 2}), [])
+        self.assertTrue(validate_settings({"recon_depth": 0}))
 
     def test_scheduler_floor_enforced_via_panel(self):
         with self.assertRaises(DashboardError):
@@ -262,6 +265,32 @@ class TestWordlistsEditorPanelA(unittest.TestCase):
             validate_wordlists_edit(doc, {"FFUF-0": ["not_a_key"]})
         with self.assertRaises(DashboardError):
             validate_wordlists_edit(doc, {"NOPE": ["dns_fast_top5000"]})
+
+    def test_duplicate_paths_collapse_on_save(self):
+        params = _params()
+        from pipeline.yaml_util import load_yaml_file
+
+        doc = load_yaml_file(str(_ROOT / "wordlists.yaml"))
+        clean = validate_wordlists_edit(doc, {"FFUF-0": ["dns_fast_top5000", "vhost_top5000", "dns_fast_top5000"]})
+        self.assertEqual(clean["FFUF-0"], ["dns_fast_top5000"])
+
+    def test_unique_wordlist_keys_by_path_prefers_task_family(self):
+        lists = {
+            "dns_fast_top5000": {"path": "Discovery/DNS/subdomains-top1million-5000.txt"},
+            "vhost_top5000": {"path": "Discovery/DNS/subdomains-top1million-5000.txt"},
+            "sl_discovery__dns__subdomains_top1million_5000": {"path": "Discovery/DNS/subdomains-top1million-5000.txt"},
+            "dns_fast_fierce": {"path": "Discovery/DNS/fierce-hostlist.txt"},
+            "vhost_fierce": {"path": "Discovery/DNS/fierce-hostlist.txt"},
+        }
+        keys = list(lists)
+        self.assertEqual(
+            unique_wordlist_keys_by_path(lists, keys, task="DNSR-1"),
+            ["dns_fast_fierce", "dns_fast_top5000"],
+        )
+        self.assertEqual(
+            unique_wordlist_keys_by_path(lists, keys, task="FFUF-2"),
+            ["vhost_fierce", "vhost_top5000"],
+        )
 
     def test_selection_edit_roundtrip(self):
         params = _isolated_params()
@@ -365,10 +394,23 @@ class TestDashboardApi(unittest.TestCase):
     def setUp(self):
         from fastapi.testclient import TestClient
 
+        from dashboard import authstore
         from dashboard.app import app
 
+        self._auth_tmp = tempfile.TemporaryDirectory()
+        self._auth_db = str(Path(self._auth_tmp.name) / "operator.sqlite")
+        self._auth_env = mock.patch.dict(os.environ, {"RECON_AUTH_DB": self._auth_db}, clear=False)
+        self._auth_env.start()
+        authstore.reset()
         self.client = TestClient(app)
         self.token_headers = {"Authorization": "Bearer test-token"}
+
+    def tearDown(self):
+        from dashboard import authstore
+
+        authstore.reset()
+        self._auth_env.stop()
+        self._auth_tmp.cleanup()
 
     def test_health_no_auth(self):
         r = self.client.get("/api/health")
@@ -376,7 +418,10 @@ class TestDashboardApi(unittest.TestCase):
         self.assertTrue(r.json()["ok"])
 
     def test_auth_fail_closed_without_backend_token(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
+        from dashboard import authstore
+
+        with mock.patch.dict(os.environ, {"RECON_AUTH_DB": self._auth_db}, clear=True):
+            authstore.reset()
             r = self.client.get("/api/tools")
             self.assertEqual(r.status_code, 503, "unset DASHBOARD_TOKEN refuses everything (fail-closed)")
             r2 = self.client.put("/api/settings", json={})
@@ -426,6 +471,110 @@ class TestDashboardApi(unittest.TestCase):
                 self.assertEqual(r.status_code, 200)
                 r = self.client.get("/api/keys", headers=self.token_headers)
                 self.assertEqual(r.status_code, 200)
+
+    def test_log_and_journal_export_endpoints(self):
+        params = _isolated_params()
+        target = "example.com"
+        logs = params.root / "recon" / target / "logs"
+        logs.mkdir(parents=True)
+        (logs / "run.log").write_text("line-one\nline-two\n", encoding="utf-8")
+        (logs / "agent-journal.jsonl").write_text(
+            '{"ts":"2026-01-01T00:00:00Z","event":"engage"}\n',
+            encoding="utf-8",
+        )
+        params.settings["agent_journal_relpath"] = "logs/agent-journal.jsonl"
+        with mock.patch.dict(os.environ, {"DASHBOARD_TOKEN": "test-token"}, clear=False):
+            from dashboard import app as appmod
+
+            with mock.patch.object(appmod, "ROOT", params.root), mock.patch.object(
+                appmod, "_params_obj", return_value=params
+            ):
+                missing = self.client.get(
+                    "/api/run/log/missing.example/export",
+                    headers=self.token_headers,
+                )
+                self.assertEqual(missing.status_code, 404)
+                log_r = self.client.get(
+                    f"/api/run/log/{target}/export",
+                    headers=self.token_headers,
+                )
+                self.assertEqual(log_r.status_code, 200, log_r.text)
+                self.assertIn("attachment", log_r.headers.get("content-disposition", "").lower())
+                self.assertEqual(log_r.text, "line-one\nline-two\n")
+                page = self.client.get(
+                    f"/api/run/log/{target}?offset=0",
+                    headers=self.token_headers,
+                )
+                self.assertEqual(page.status_code, 200)
+                self.assertEqual(page.json()["lines"], ["line-one", "line-two"])
+                journal_r = self.client.get(
+                    f"/api/run/agent-journal/{target}/export",
+                    headers=self.token_headers,
+                )
+                self.assertEqual(journal_r.status_code, 200, journal_r.text)
+                self.assertIn("attachment", journal_r.headers.get("content-disposition", "").lower())
+                self.assertIn("engage", journal_r.text)
+                jpage = self.client.get(
+                    f"/api/run/agent-journal/{target}?offset=0",
+                    headers=self.token_headers,
+                )
+                self.assertEqual(jpage.status_code, 200)
+                self.assertTrue(jpage.json()["exists"])
+                self.assertEqual(len(jpage.json()["rows"]), 1)
+
+    def test_log_journal_export_requires_auth_no_bac(self):
+        """Anonymous / wrong-token clients must never receive log or journal bytes."""
+        params = _isolated_params()
+        target = "example.com"
+        logs = params.root / "recon" / target / "logs"
+        logs.mkdir(parents=True)
+        secret = "SECRET-LOG-LINE-SHOULD-NOT-LEAK\n"
+        (logs / "run.log").write_text(secret, encoding="utf-8")
+        (logs / "agent-journal.jsonl").write_text(
+            '{"ts":"2026-01-01T00:00:00Z","event":"secret-engage"}\n',
+            encoding="utf-8",
+        )
+        params.settings["agent_journal_relpath"] = "logs/agent-journal.jsonl"
+        export_paths = (
+            f"/api/run/log/{target}/export",
+            f"/api/run/agent-journal/{target}/export",
+            f"/api/run/log/{target}",
+            f"/api/run/agent-journal/{target}",
+            f"/static-file/{target}/logs/run.log",
+            f"/static-file/{target}/logs/agent-journal.jsonl",
+        )
+        with mock.patch.dict(os.environ, {"DASHBOARD_TOKEN": "test-token"}, clear=False):
+            from dashboard import app as appmod
+
+            with mock.patch.object(appmod, "ROOT", params.root), mock.patch.object(
+                appmod, "_params_obj", return_value=params
+            ):
+                for path in export_paths:
+                    anon = self.client.get(path)
+                    self.assertIn(anon.status_code, (401, 503), path)
+                    self.assertNotIn(b"SECRET-LOG", anon.content)
+                    self.assertNotIn(b"secret-engage", anon.content)
+                    bad = self.client.get(path, headers={"Authorization": "Bearer wrong-token"})
+                    self.assertEqual(bad.status_code, 401, path)
+                    self.assertNotIn(b"SECRET-LOG", bad.content)
+                # Even with a valid session token, /static-file must not serve logs.
+                blocked = self.client.get(
+                    f"/static-file/{target}/logs/run.log",
+                    headers=self.token_headers,
+                )
+                self.assertEqual(blocked.status_code, 403)
+                self.assertNotIn(b"SECRET-LOG", blocked.content)
+                blocked_j = self.client.get(
+                    f"/static-file/{target}/logs/agent-journal.jsonl",
+                    headers=self.token_headers,
+                )
+                self.assertEqual(blocked_j.status_code, 403)
+                for bad_target in ("../etc", "a/b.com", "--flag", ""):
+                    r = self.client.get(
+                        f"/api/run/log/{bad_target}/export",
+                        headers=self.token_headers,
+                    )
+                    self.assertIn(r.status_code, (404, 422), bad_target)
 
     def test_wordlists_expose_original_filenames(self):
         with mock.patch.dict(os.environ, {"DASHBOARD_TOKEN": "test-token"}, clear=False):

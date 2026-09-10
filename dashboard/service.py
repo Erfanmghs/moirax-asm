@@ -184,7 +184,20 @@ def _mask_settings(doc: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_settings(params: Params) -> dict[str, Any]:
-    return _mask_settings(_read_settings_doc(params))
+    doc = _mask_settings(_read_settings_doc(params))
+    try:
+        from pipeline.recon_depth import clamp_ffuf_depth, clamp_recon_depth
+
+        doc["recon_depth"] = clamp_recon_depth(params)
+        doc["ffuf_depth"] = clamp_ffuf_depth(params)
+    except Exception:
+        doc.setdefault("recon_depth", 1)
+        doc.setdefault("ffuf_depth", 1)
+    try:
+        doc["passive_recursion_depth"] = int(params.require("passive_recursion_depth"))
+    except Exception:
+        doc.setdefault("passive_recursion_depth", 1)
+    return doc
 
 
 _TELEGRAM_WRITE_KEYS = frozenset({"bot_token", "chat_id"})
@@ -202,7 +215,8 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
     # dashboard/config.json (no attacker-controlled key smuggling).
     unknown = set(patch) - {
         "proxy_url", "proxy_pool", "digest_threshold", "alert_rules", "telegram",
-        "resource_budget", "agent", "retention",
+        "resource_budget", "agent", "retention", "recon_depth", "ffuf_depth",
+        "passive_recursion_depth",
     }
     if unknown:
         errors.append(f"settings keys not allowed: {sorted(unknown)} (closed allow-list)")
@@ -235,9 +249,16 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
         if not isinstance(rules, list):
             errors.append("alert_rules must be a list (section 4.7)")
         else:
+            allowed_sides = {"added", "removed", "changed"}
             for rule in rules:
                 if not isinstance(rule, dict) or "class" not in rule or "enabled" not in rule:
                     errors.append("each alert rule needs class + enabled (section 4.7)")
+                    break
+                sides = rule.get("sides")
+                if sides is None:
+                    continue
+                if not isinstance(sides, list) or any(str(s) not in allowed_sides for s in sides):
+                    errors.append("alert_rules.sides must be a list of added|removed|changed")
                     break
     if "telegram" in patch:
         tg = patch.get("telegram")
@@ -286,6 +307,18 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
             for key in ("keep_runs", "log_max_mb", "journal_max_mb", "log_keep_gz", "max_total_mb"):
                 if key in retention and (not isinstance(retention[key], int) or isinstance(retention[key], bool) or retention[key] < 1):
                     errors.append(f"retention.{key} must be a positive integer (storage management)")
+    if "recon_depth" in patch:
+        depth = patch.get("recon_depth")
+        if not isinstance(depth, int) or isinstance(depth, bool) or depth < 1 or depth > 5:
+            errors.append("recon_depth must be an integer 1-5 (nested DNS)")
+    if "ffuf_depth" in patch:
+        depth = patch.get("ffuf_depth")
+        if not isinstance(depth, int) or isinstance(depth, bool) or depth < 1 or depth > 5:
+            errors.append("ffuf_depth must be an integer 1-5 (nested vhost)")
+    if "passive_recursion_depth" in patch:
+        depth = patch.get("passive_recursion_depth")
+        if not isinstance(depth, int) or isinstance(depth, bool) or depth < 0 or depth > 5:
+            errors.append("passive_recursion_depth must be an integer 0-5")
     return errors
 
 
@@ -321,7 +354,25 @@ def save_settings(params: Params, patch: dict[str, Any]) -> dict[str, Any]:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
     _chmod_private(path)
+    depth_keys = ("recon_depth", "ffuf_depth", "passive_recursion_depth")
+    if any(k in patch for k in depth_keys):
+        _sync_depth_tools(params, {k: int(patch[k]) for k in depth_keys if k in patch})
     return _mask_settings(merged)
+
+
+def _sync_depth_tools(params: Params, depths: dict[str, int]) -> None:
+    """Global SETTINGS writes live tools.yaml knobs the pipeline reads (independently)."""
+    from pipeline.textio import atomic_write_text
+
+    tools = params.root / "tools.yaml"
+    if not tools.is_file():
+        return
+    text = tools.read_text(encoding="utf-8")
+    for key, depth in depths.items():
+        pattern = re.compile(rf"^  {re.escape(key)}: .*$", re.M)
+        if pattern.search(text):
+            text = pattern.sub(f"  {key}: {depth}", text, count=1)
+    atomic_write_text(tools, text)
 
 
 # ---------------------------------------------------------------- tools (a)
@@ -494,8 +545,9 @@ def list_operator_tools(params: Params) -> list[dict[str, Any]]:
     return out
 
 
-def known_target_names(params: Params) -> list[str]:
-    """Registered profiles plus recon/<name>/ workspaces -- fleet is multi-target."""
+def known_target_names(params: Params, *, include_deleted: bool = False) -> list[str]:
+    """Registered profiles plus recon/<name>/ workspaces."""
+    from pipeline.deleted import is_tombstoned
     from pipeline.target_profiles import TARGET_NAME_RE, load_registry
 
     names = set(load_registry(params) or {})
@@ -503,7 +555,15 @@ def known_target_names(params: Params) -> list[str]:
     if recon.is_dir():
         for child in recon.iterdir():
             if child.is_dir() and TARGET_NAME_RE.match(child.name):
-                names.add(child.name)
+                if include_deleted or not is_tombstoned(child):
+                    names.add(child.name)
+    if not include_deleted:
+        hidden = set()
+        for name in list(names):
+            child = recon / name if recon.is_dir() else None
+            if child is not None and child.is_dir() and is_tombstoned(child):
+                hidden.add(name)
+        names -= hidden
     return sorted(names)
 
 
@@ -525,7 +585,7 @@ def _read_json_silent(path: Path) -> dict[str, Any]:
 def scan_target_row(params: Params, target: str) -> dict[str, Any]:
     """One SCAN-board row: status, modules, last run -- THIS target only."""
     from pipeline.factory import target_root
-    from pipeline.target_profiles import get_profile
+    from pipeline.target_profiles import get_profile, profile_has_overrides
 
     target_dir = target_root(params, target)
     state = _read_json_silent(target_dir / str(params.require("state_filename")))
@@ -538,10 +598,13 @@ def scan_target_row(params: Params, target: str) -> dict[str, Any]:
     profile = get_profile(params, target) or {}
     modules = state.get("modules") if isinstance(state.get("modules"), dict) else {}
     running_n = sum(1 for row in modules.values() if isinstance(row, dict) and row.get("status") == "running")
+
     return {
         "target": target,
         "registered": bool(profile),
         "description": str(profile.get("description") or ""),
+        "profile": profile,
+        "inherits_globals": not profile_has_overrides(profile),
         "workspace": target_dir.is_dir(),
         "run_status": run.get("status"),
         "reason": run.get("reason"),
@@ -558,19 +621,34 @@ def scan_target_row(params: Params, target: str) -> dict[str, Any]:
 
 def scan_board_view(params: Params) -> dict[str, Any]:
     """All known targets for the SCAN accordion -- never mixes per-target rows."""
-    rows = [scan_target_row(params, name) for name in known_target_names(params)]
+    from pipeline.deleted import purge_expired_all
+
+    try:
+        purge_expired_all(params)
+    except Exception:  # noqa: BLE001 -- purge must never blank the SCAN board
+        pass
+    names = known_target_names(params)
+    rows = []
+    seen: set[str] = set()
+    for name in names:
+        if name in seen:
+            continue
+        seen.add(name)
+        rows.append(scan_target_row(params, name))
     return {"targets": rows, "count": len(rows)}
 
 
 def scan_add_target(params: Params, target: str, description: str = "") -> dict[str, Any]:
     """Register + create the isolated recon/<target>/ workspace from SCAN."""
-    from pipeline.factory import ensure_layout
+    from pipeline.deleted import clear_tombstone
+    from pipeline.factory import ensure_layout, target_root
     from pipeline.target_profiles import ProfileError, get_profile, set_profile
 
     try:
         ensure_layout(params, target)
     except ValueError as exc:
         raise DashboardError(str(exc)) from exc
+    clear_tombstone(target_root(params, target))
     if not get_profile(params, target):
         note = (description or "added from SCAN").strip()
         if not note.isascii() or len(note) > 200:
@@ -582,11 +660,107 @@ def scan_add_target(params: Params, target: str, description: str = "") -> dict[
     return scan_target_row(params, target)
 
 
+def parse_scan_target_list(raw: Any) -> tuple[list[str], list[str]]:
+    """Split SITE box / list paste into unique hostnames. Invalid tokens are rejected."""
+    from pipeline.target_profiles import TARGET_NAME_RE
+
+    chunks: list[str] = []
+    if isinstance(raw, list):
+        chunks = [str(item) for item in raw]
+    elif isinstance(raw, str):
+        chunks = re.split(r"[\s,;]+", raw)
+    seen: set[str] = set()
+    valid: list[str] = []
+    rejected: list[str] = []
+    for chunk in chunks:
+        name = chunk.strip().lower().rstrip(".")
+        if not name:
+            continue
+        if not TARGET_NAME_RE.match(name):
+            rejected.append(chunk.strip())
+            continue
+        if name in seen:
+            continue
+        seen.add(name)
+        valid.append(name)
+    return valid, rejected
+
+
+def scan_add_targets(params: Params, names: list[str], description: str = "") -> dict[str, Any]:
+    """Register many sites. One bad name never blocks the rest of the list."""
+    added: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    for name in names:
+        try:
+            added.append(scan_add_target(params, name, description))
+        except (DashboardError, ValueError) as exc:
+            errors.append({"target": name, "error": str(exc)})
+    if not added:
+        raise DashboardError("no valid sites in the list -- ADD TARGET first with a domain like example.com")
+    return {"count": len(added), "targets": added, "errors": errors}
+
+
+def scan_require_registered(params: Params, target: str) -> str:
+    """START SCAN may only run after ADD TARGET / ADD LIST."""
+    from pipeline.factory import sanitize_target
+
+    try:
+        name = sanitize_target(target)
+    except ValueError as exc:
+        raise DashboardError(str(exc)) from exc
+    if name not in known_target_names(params):
+        raise DashboardError("ADD TARGET first -- this site is not on YOUR SITES")
+    return name
+
+
+def scan_delete_target(params: Params, target: str) -> dict[str, Any]:
+    """Hide one site from SCAN immediately. Keep its warehouse for keep_days, then purge."""
+    import os
+
+    from pipeline.deleted import keep_days, write_tombstone
+    from pipeline.factory import sanitize_target, target_root
+    from pipeline.target_profiles import ProfileError, set_profile
+
+    try:
+        name = sanitize_target(target)
+    except ValueError as exc:
+        raise DashboardError(str(exc)) from exc
+    recon = (params.root / str(params.require("recon_root"))).resolve()
+    target_dir = target_root(params, name).resolve()
+    try:
+        common = os.path.commonpath([str(recon), str(target_dir)])
+    except ValueError as exc:
+        raise DashboardError("refusing delete outside recon root") from exc
+    if common != str(recon) or target_dir == recon:
+        raise DashboardError("refusing delete outside recon root")
+    try:
+        set_profile(params, name, {})
+    except ProfileError as exc:
+        raise DashboardError(str(exc)) from exc
+    marker = write_tombstone(params, target_dir, name)
+    from pipeline.warehouse import warehouse_path
+
+    return {
+        "deleted": name,
+        "hidden": True,
+        "workspace_removed": False,
+        "kept_days": keep_days(params),
+        "purge_after": marker.get("purge_after"),
+        "warehouse_kept": warehouse_path(params, target_dir).is_file(),
+    }
+
+
 def target_profile_view(params: Params, target: str) -> dict[str, Any]:
     """C3: one target's effective profile (empty = committed defaults)."""
-    from pipeline.target_profiles import build_edit_plan, get_profile
+    from pipeline.target_profiles import build_edit_plan, get_profile, profile_has_overrides
 
-    return {"target": target, "profile": get_profile(params, target), "edit_plan": build_edit_plan(params, target)}
+    profile = get_profile(params, target)
+    return {
+        "target": target,
+        "profile": profile,
+        "edit_plan": build_edit_plan(params, target),
+        "inherits_globals": not profile_has_overrides(profile),
+    }
 
 
 def target_profile_upsert(params: Params, target: str, profile: dict[str, Any]) -> dict[str, Any]:
@@ -601,8 +775,54 @@ def target_profile_upsert(params: Params, target: str, profile: dict[str, Any]) 
 
 # ------------------------------------------------------------- wordlists (a)
 
+def _wordlist_rel_path(entry: Any, key: str = "") -> str:
+    if not isinstance(entry, dict):
+        return f"key:{key}"
+    rel = str(entry.get("path") or "").replace("\\", "/").lstrip("/").lower()
+    return rel or f"key:{key}"
+
+
+def unique_wordlist_keys_by_path(
+    lists: dict[str, Any],
+    keys: list[str],
+    *,
+    task: str = "",
+    selected: set[str] | None = None,
+) -> list[str]:
+    """One key per wordlist file. dns_* wins for DNS brute, vhost_* for FFUF-2."""
+    chosen: set[str] = set(selected or [])
+    picked: dict[str, str] = {}
+
+    def rank(key: str) -> tuple[int, int, str]:
+        name = str(key)
+        if task == "FFUF-2":
+            family = 0 if name.startswith("vhost_") else 1 if name.startswith("dns_") else 2 if not name.startswith("sl_") else 3
+        else:
+            family = 0 if name.startswith("dns_") else 1 if name.startswith("vhost_") else 2 if not name.startswith("sl_") else 3
+        return (0 if name in chosen else 1, family, name)
+
+    for key in keys:
+        name = str(key or "").strip()
+        if not name:
+            continue
+        path = _wordlist_rel_path(lists.get(name), name)
+        prev = picked.get(path)
+        if prev is None or rank(name) < rank(prev):
+            picked[path] = name
+    ordered = sorted(picked.values())
+    learned = [k for k in ordered if k == "platform_learned"]
+    rest = [k for k in ordered if k != "platform_learned"]
+    return learned + rest
+
+
 def validate_wordlists_edit(doc: dict[str, Any], patch: dict[str, Any], params: Params | None = None) -> dict[str, Any]:
     tasks = doc.get("tasks") or {}
+    lists: dict[str, Any] = dict(doc.get("lists") or {})
+    if params is not None:
+        try:
+            lists.update((wordlists_catalog(params).get("lists") or {}))
+        except Exception:  # noqa: BLE001 -- SAVE still validates against the YAML registry
+            pass
     clean: dict[str, Any] = {}
     for task, keys in patch.items():
         if task not in tasks:
@@ -613,7 +833,7 @@ def validate_wordlists_edit(doc: dict[str, Any], patch: dict[str, Any], params: 
         unknown = [k for k in keys if k not in registered]
         if unknown:
             raise DashboardError(f"unregistered wordlist keys for {task!r}: {unknown}")
-        clean[task] = sorted(set(keys))
+        clean[task] = unique_wordlist_keys_by_path(lists, [str(k) for k in keys], task=str(task), selected=set(str(k) for k in keys))
     return clean
 
 
@@ -636,6 +856,12 @@ def wordlists_catalog(params: Params) -> dict[str, Any]:
     from pipeline.seclists_sync import slug_for
     from pipeline.wordlist_forge import seclists_host_root
     from pipeline.wordlists import WordlistRegistry
+    from pipeline.custom_lists import ensure_learned_list
+
+    try:
+        ensure_learned_list(params)
+    except Exception:  # noqa: BLE001 -- catalog still useful without learned file
+        pass
 
     registry = WordlistRegistry(params)
     lists: dict[str, Any] = {}
@@ -652,6 +878,7 @@ def wordlists_catalog(params: Params) -> dict[str, Any]:
     for key, entry in registry.lists.items():
         if isinstance(entry, dict):
             lists[str(key)] = _row(str(key), entry)
+    seen_paths = {_wordlist_rel_path(entry, key) for key, entry in lists.items()}
     try:
         root = seclists_host_root(params)
     except Exception:  # noqa: BLE001 -- missing SecLists is a disclosed empty extra
@@ -664,10 +891,14 @@ def wordlists_catalog(params: Params) -> dict[str, Any]:
             rel = path.relative_to(root)
             key = slug_for(rel)
             rel_s = str(rel).replace("\\", "/")
+            path_id = rel_s.replace("\\", "/").lstrip("/").lower()
             if key in lists:
                 lists[key]["name"] = path.name
                 lists[key]["path"] = rel_s
                 continue
+            if path_id in seen_paths:
+                continue
+            seen_paths.add(path_id)
             lists[key] = {
                 "key": key,
                 "name": path.name,
@@ -939,7 +1170,7 @@ def coverage_analytics(rows: list[dict[str, Any]]) -> dict[str, Any]:
         for s in contribution
     }
     return {"assets": len(rows), "contribution": contribution, "unique_assets": unique,
-            "overlap_by_n_sources": overlap, "uniqueness_pct": uniqueness}
+            "overlap_by_n_sources": overlap,             "uniqueness_pct": uniqueness}
 
 
 # --------------------------------------------------------------- fleet (C4)

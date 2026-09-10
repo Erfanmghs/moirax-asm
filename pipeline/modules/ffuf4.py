@@ -2,10 +2,12 @@
 
 Early FFUF-2 only hits default HTTP on the hostname. After the full port
 sweep, extra listeners (8080, 8443, 3000, ...) often serve different Host
-headers. This pass binds ffuf to ip:port (the real socket) with
-Host: FUZZ.<apex> so those names surface.
+headers. This pass binds ffuf to ip:port (the real socket). Host headers follow
+ffuf_depth: depth 1 is Host: FUZZ.<apex>; depth 2 also uses each
+one-label name attributed to that IP (Host: FUZZ.api.apex).
 
 Runs post-MERGE, after PORT-SWEEP, before OWASP-PASSIVE. Not a branch member.
+Host-header parents follow ffuf_depth (independent of nested DNS recon_depth).
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from pipeline.merge import append_active_doc
 from pipeline.modules.ffuf import _ffuf_hits, _safe, _wordlist_fuzz_label
 from pipeline.params import Params
 from pipeline.scope import ScopeGate
+from pipeline.recon_depth import clamp_ffuf_depth, vhost_bases
 from pipeline.wordlist_forge import copy_into_target, materialize_effective
 
 _HTTP_HINTS = ("http", "https", "ssl/http", "http-proxy", "http-alt")
@@ -44,12 +47,6 @@ def run_ffuf4(
 
     jobs = http_vhost_jobs(params, target_dir, target)
     cap = int(params.require("ffuf4_max_jobs"))
-    capped = False
-    if cap and len(jobs) > cap:
-        capped = True
-        partial.append("ffuf4_job_cap")
-        _note(params, target_dir, f"ffuf-4 job cap: {len(jobs)} > ffuf4_max_jobs={cap}; probing first {cap}")
-        jobs = jobs[:cap]
     if not jobs:
         skipped = "no_http_ports"
         _note(params, target_dir, "ffuf-4 skipped: no HTTP-like open ports after PORT-SWEEP")
@@ -72,9 +69,19 @@ def run_ffuf4(
         apex = target
     apex = normalize_fqdn(apex) or target
 
-    _note(params, target_dir, f"ffuf-4 jobs={len(jobs)} apex={apex} wordlist={v_n} capped={capped}")
+    _note(params, target_dir, f"ffuf-4 listeners={len(jobs)} apex={apex} wordlist={v_n}")
 
+    depth = clamp_ffuf_depth(params)
+    expanded: list[dict[str, Any]] = []
     for job in jobs:
+        for base in vhost_bases(apex, job.get("hosts") or [], depth):
+            expanded.append({**job, "base": base})
+    if cap and len(expanded) > cap:
+        partial.append("ffuf4_job_cap")
+        _note(params, target_dir, f"ffuf-4 job cap: {len(expanded)} > ffuf4_max_jobs={cap}; probing first {cap}")
+        expanded = expanded[:cap]
+
+    for job in expanded:
         if request_count + v_n > max_req:
             partial.append("max_total_requests")
             _note(params, target_dir, "ffuf-4 stopped: max_total_requests")
@@ -82,8 +89,9 @@ def run_ffuf4(
         ip = job["ip"]
         port = int(job["port"])
         scheme = job["scheme"]
+        base = str(job.get("base") or apex)
         url = f"{scheme}://{_hostport(ip, port)}"
-        out_rel = f"15_vhosts/ffuf-4/{scheme}_{_safe(ip)}_{port}.json"
+        out_rel = f"15_vhosts/ffuf-4/{scheme}_{_safe(ip)}_{port}_{_safe(base)}.json"
         result = adapter.invoke(
             "ffuf-vhost",
             module="ffuf-4",
@@ -92,8 +100,8 @@ def run_ffuf4(
                 "ffuf_url": url,
                 "ffuf_wordlist": v_c,
                 "ffuf_output": container_path(params, target, out_rel),
-                "ffuf_host_header": f"Host: FUZZ.{apex}",
-                "output_raw_dir": f"logs/raw/ffuf-4/{scheme}_{_safe(ip)}_{port}",
+                "ffuf_host_header": f"Host: FUZZ.{base}",
+                "output_raw_dir": f"logs/raw/ffuf-4/{scheme}_{_safe(ip)}_{port}_{_safe(base)}",
                 "skip_parse": True,
                 "ffuf_mode": "vhost",
             },
@@ -104,11 +112,11 @@ def run_ffuf4(
         request_count += v_n
         attributed = {normalize_fqdn(h) or h for h in (job.get("hosts") or [])}
         for hit in _ffuf_hits(target_dir / out_rel, result):
-            label = _wordlist_fuzz_label(hit, apex, allowed)
+            label = _wordlist_fuzz_label(hit, base, allowed)
             if not label:
                 suppressed += 1
                 continue
-            vhost = normalize_fqdn(f"{label}.{apex}")
+            vhost = normalize_fqdn(f"{label}.{base}")
             if not vhost:
                 continue
             if not gate.enforce(target_dir, vhost):
@@ -116,7 +124,7 @@ def run_ffuf4(
             status = hit.get("status")
             length = hit.get("length")
             rec = {
-                "base_host": apex,
+                "base_host": base,
                 "vhost": vhost,
                 "ip": ip,
                 "port": port,

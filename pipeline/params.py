@@ -11,13 +11,21 @@ from pipeline.yaml_util import load_yaml_file
 class Params:
     def __init__(self, root: Path) -> None:
         self.root = root
-        data = load_yaml_file(str(root / "tools.yaml"))
+        self.settings: dict[str, Any] = {}
+        self.tools: dict[str, Any] = {}
+        self.lock: dict[str, Any] = {}
+        self.reload()
+
+    def reload(self) -> "Params":
+        """Re-read tools.yaml / tools.lock from disk (after per-target SETUP apply)."""
+        data = load_yaml_file(str(self.root / "tools.yaml"))
         if not isinstance(data, dict) or "settings" not in data:
             raise ValueError("tools.yaml must contain a settings mapping")
-        self.settings: dict[str, Any] = data["settings"]
-        self.tools: dict[str, Any] = data.get("tools") or {}
-        lock_path = root / "tools.lock"
-        self.lock: dict[str, Any] = load_yaml_file(str(lock_path)) if lock_path.exists() else {}
+        self.settings = data["settings"]
+        self.tools = data.get("tools") or {}
+        lock_path = self.root / "tools.lock"
+        self.lock = load_yaml_file(str(lock_path)) if lock_path.exists() else {}
+        return self
 
     def require(self, name: str) -> Any:
         if name not in self.settings:

@@ -68,6 +68,8 @@ class ValidationLaw(unittest.TestCase):
     def test_budget_allowlist(self):
         ok = validate_profile("example.com", {"budgets": {"passive_branch_budget_sec": 3000}})
         self.assertEqual(ok["budgets"]["passive_branch_budget_sec"], 3000)
+        ok2 = validate_profile("example.com", {"budgets": {"recon_depth": 2}})
+        self.assertEqual(ok2["budgets"]["recon_depth"], 2)
         with self.assertRaises(ProfileError):
             validate_profile("example.com", {"budgets": {"resolver_min_healthy_count": 1}})
 
@@ -76,6 +78,14 @@ class ValidationLaw(unittest.TestCase):
         self.assertEqual(ok["notifications"]["telegram_chat"], "12345")
         with self.assertRaises(ProfileError):
             validate_profile("example.com", {"notifications": {"api_key": "x"}})
+
+    def test_scheduler_allowlist(self):
+        ok = validate_profile("example.com", {"scheduler": {"enabled": True, "interval_minutes": 60}})
+        self.assertEqual(ok["scheduler"]["interval_minutes"], 60)
+        with self.assertRaises(ProfileError):
+            validate_profile("example.com", {"scheduler": {"last_run": "now"}})
+        with self.assertRaises(ProfileError):
+            validate_profile("example.com", {"scheduler": {"interval_minutes": 5}})
 
     def test_target_name_law(self):
         with self.assertRaises(ProfileError):
@@ -110,6 +120,18 @@ class RegistryRoundTrip(unittest.TestCase):
         set_profile(self.params, "example.com", {"budgets": {"passive_recursion_depth": 1}})
         set_profile(self.params, "example.com", {})
         self.assertEqual(get_profile(self.params, "example.com"), {})
+
+    def test_description_only_apply_leaves_globals_untouched(self):
+        from pipeline.target_profiles import profile_has_overrides
+
+        set_profile(self.params, "example.com", {"description": "added from SCAN"})
+        self.assertFalse(profile_has_overrides(get_profile(self.params, "example.com")))
+        tools_before = (self.root / "tools.yaml").read_bytes()
+        wl_before = (self.root / "wordlists.yaml").read_bytes()
+        applied = apply_transient(self.params, "example.com", self.root)
+        self.assertEqual((self.root / "tools.yaml").read_bytes(), tools_before)
+        self.assertEqual((self.root / "wordlists.yaml").read_bytes(), wl_before)
+        restore_transient(applied)
 
     def test_unregistered_wordlist_key_refused_at_apply(self):
         set_profile(self.params, "example.com", {"wordlist_selection": {"FFUF-0": ["not_a_real_key"]}})
@@ -162,9 +184,15 @@ class TransientApplyRestore(unittest.TestCase):
         snap_b.mkdir()
         again = apply_transient(self.params, "example.com", snap_b)
         text = (self.root / "wordlists.yaml").read_text(encoding="utf-8")
-        self.assertEqual(len(re.findall(r"^ {4}selection:", text, re.M)), 1)
-        wl_doc = load_yaml_file(str(self.root / "wordlists.yaml"))
-        self.assertEqual(wl_doc["tasks"]["DNSR-1"]["selection"], ["test_smoke_200"])
+        # Per-task law: DNSR-1 keeps exactly one selection block after re-apply.
+        m = re.search(r"^  DNSR-1:\s*(?:#.*)?$", text, re.M)
+        self.assertIsNotNone(m)
+        rest = text[m.end():]
+        nxt = re.search(r"^  [A-Za-z0-9_-]+:", rest, re.M)
+        block = rest[: nxt.start()] if nxt else rest
+        self.assertEqual(len(re.findall(r"^ {4}selection:", block, re.M)), 1)
+        wl_live = load_yaml_file(str(self.root / "wordlists.yaml"))
+        self.assertEqual(wl_live["tasks"]["DNSR-1"]["selection"], ["test_smoke_200"])
         # nested restores unwind byte-identically to the clean template
         restore_transient(again)
         restore_transient(applied)

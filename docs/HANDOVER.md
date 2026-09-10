@@ -374,6 +374,10 @@ secret manager of your choice, never in the repo (R-1 enforces).
   benefit on a private repo) -- if the repo is ever published, scrub those
   two paths with filter-repo first, then re-issue tags.
 
+Product backlog after v1.0.0 (not agreed scope, not scheduled):
+[docs/PRODUCT-UPGRADE-CATALOG.md](PRODUCT-UPGRADE-CATALOG.md). Frozen
+DO-NOT-BUILD items stay rejected unless the operator reopens them.
+
 ## 14. Glossary
 
 - **vehicle**: a workflow + assertion pair that proves one capability.

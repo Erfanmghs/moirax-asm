@@ -32,9 +32,9 @@ def _vehicle_dir() -> tuple[Params, Path]:
     (tmp / "00_assets" / "assets.json").write_text(json.dumps({
         "schema_version": 1,
         "assets": [
-            {"host": "dev.example.com", "ips": ["1.1.1.1"], "alive": True, "sources": ["subfinder", "crtsh"], "tags": ["dev"]},
+            {"host": "dev.example.com", "ips": ["1.1.1.1"], "alive": True, "length": 1234, "sources": ["subfinder", "crtsh"], "tags": ["dev"]},
             {"host": "api.example.com", "ips": ["2.2.2.2"], "alive": False, "sources": ["subfinder"], "tags": []},
-            {"host": "www.example.com", "ips": ["3.3.3.3"], "alive": True, "sources": ["crtsh"], "tags": []},
+            {"host": "www.example.com", "ips": ["3.3.3.3"], "alive": True, "length": 88, "sources": ["crtsh"], "tags": []},
         ],
     }), encoding="utf-8")
     (tmp / "10_subdomains" / "passive" / "data.json").write_text(json.dumps({
@@ -109,6 +109,10 @@ class TestPrecisionContract(unittest.TestCase):
         html = (td / "90_report" / "report.html").read_text(encoding="utf-8")
         self.assertIn("#0a0e14", html, "section 9.4 dark palette embedded")
         self.assertIn("badge", html)
+        self.assertIn("<th>length</th>", html)
+        self.assertIn(">1234<", html)
+        csv_text = (td / "90_report" / "export.csv").read_text(encoding="utf-8")
+        self.assertIn("length", csv_text.splitlines()[0])
 
     def test_diff_badge_new_host(self):
         params, td = _vehicle_dir()

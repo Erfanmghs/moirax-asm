@@ -13,7 +13,7 @@
     - latest_fleet_ledger / fleet_members_view contracts
     - FastAPI: hardening headers, openapi/docs disabled, target-name gate on
       run endpoints (flag/traversal/metachar injection refused pre-spawn),
-      /api/notify/test, /api/fleet surface, auth fail-closed on new routes
+      /api/notify/test, auth fail-closed on new routes
 """
 
 from __future__ import annotations

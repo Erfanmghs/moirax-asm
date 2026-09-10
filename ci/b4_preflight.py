@@ -52,12 +52,12 @@ def main() -> int:
     # ---- G-W1 committed defaults -------------------------------------------
     defaults = {
         "portsweep_scope": "all_resolved",
-        "portsweep_duration_hours": 24,
+        "portsweep_duration_hours": 4,
         "portsweep_duration_hours_min": 1,
         "portsweep_profile": "full",
-        "portsweep_full_rate_cap": 1000,
-        "portsweep_ramp_start_pps": 100,
-        "portsweep_ramp_step_pps": 100,
+        "portsweep_full_rate_cap": 2000,
+        "portsweep_ramp_start_pps": 200,
+        "portsweep_ramp_step_pps": 200,
         "portsweep_ramp_interval_sec": 30,
         "portsweep_retries": 2,
         "portsweep_timeout_ms": 1000,

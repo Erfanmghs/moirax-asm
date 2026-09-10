@@ -1,4 +1,4 @@
-"""Target-scoped wildcard seeds — a run for host A must not fuzz host B."""
+"""Target-scoped wildcard seeds -- a run for host A must not fuzz host B."""
 
 from __future__ import annotations
 

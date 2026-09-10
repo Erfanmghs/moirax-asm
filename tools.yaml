@@ -7,6 +7,7 @@ settings:
   state_filename: state.json
   runs_filename: runs.json
   warehouse_filename: warehouse.sqlite
+  deleted_target_keep_days: 7
   out_of_scope_log: logs/out_of_scope.log
   dashboard_bind_host: "127.0.0.1"
   dashboard_bind_port: 8080
@@ -66,6 +67,7 @@ settings:
     - merge
     - port-sweep
     - ffuf-4
+    - owasp-passive
   module_status_values:
     - pending
     - running
@@ -98,14 +100,18 @@ settings:
     - logs/raw
     - sources
     - wordlists
-  ffuf_depth: 1
+  ffuf_depth: 3
+  # Operator-facing nested recon: 1 = apex only; 2 = brute+vhost under
+  # discovered names (and so on). Drives DNSR nested dnsx -d PARENT and
+  # Nested DNS depth (independent of ffuf_depth / nested vhost).
+  recon_depth: 3
   ffuf_depth_min: 1
   ffuf_depth_max: 5
   max_hosts_per_level: 1000
   max_total_requests: 5000000
   ffuf_threads: 40
   ffuf_timeout: 10
-  ffuf_rate: 150
+  ffuf_rate: 250
   ffuf_maxtime_job: 1800
   ffuf_match_codes: all
   ffuf_auto_calibrate: true
@@ -133,12 +139,12 @@ settings:
   portcheck_top_ports: 100
   portcheck_rate: 300
   portsweep_scope: all_resolved
-  portsweep_duration_hours: 24
+  portsweep_duration_hours: 4
   portsweep_duration_hours_min: 1
   portsweep_profile: full
-  portsweep_full_rate_cap: 1000
-  portsweep_ramp_start_pps: 100
-  portsweep_ramp_step_pps: 100
+  portsweep_full_rate_cap: 2000
+  portsweep_ramp_start_pps: 200
+  portsweep_ramp_step_pps: 200
   portsweep_retries: 2
   portsweep_timeout_ms: 1000
   portsweep_filtered_reprobe_divisor: 4
@@ -835,7 +841,7 @@ tools:
     output_summary: 20_dns/dnsx/alterx-summary.md
     output_raw_dir: logs/raw/alterx
   naabu:
-    enabled: false
+    enabled: true
     branch: active
     fallback: null
     image_ref: naabu

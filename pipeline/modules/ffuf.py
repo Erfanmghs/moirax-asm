@@ -17,6 +17,7 @@ from pipeline.wordlist_forge import (
     forge_custom_subdomains,
     materialize_effective,
 )
+from pipeline.recon_depth import child_depth, clamp_ffuf_depth, vhost_bases
 from pipeline import httpx_probe
 
 
@@ -43,8 +44,7 @@ def run_ffuf(
     request_count = 0
     max_req = int(params.require("max_total_requests"))
     max_level = int(params.require("max_hosts_per_level"))
-    depth = int(params.require("ffuf_depth"))
-    depth = max(int(params.require("ffuf_depth_min")), min(depth, int(params.require("ffuf_depth_max"))))
+    depth = clamp_ffuf_depth(params)
 
     if bool(params.require("ffuf_http_subdomain_brute")):
         parents_by_level: dict[int, list[str]] = {1: list(seeds)}
@@ -112,7 +112,8 @@ def run_ffuf(
     allowed_vhost = _labels_in(vhost_src)
     v_n = len(allowed_vhost)
 
-    queue = [row["fqdn"] for row in host_list]
+    apex = seeds[0] if seeds else ""
+    queue = vhost_bases(apex, [row["fqdn"] for row in host_list], depth)
     seen_vbase = set(queue)
     if adapter.enabled("ffuf-vhost"):
         for vpass in range(1, depth + 1):
@@ -175,7 +176,7 @@ def run_ffuf(
                             "http_status": status,
                             "length": length,
                         }
-                    if vhost not in seen_vbase and vpass < depth:
+                    if vhost not in seen_vbase and child_depth(vhost, apex) < depth:
                         seen_vbase.add(vhost)
                         queue.append(vhost)
             if "max_total_requests" in partial:
@@ -324,7 +325,7 @@ def _hosts_from_dnsr(params: Params, target_dir: Path, seeds: list[str]) -> dict
                     break
             rec = {
                 "fqdn": fqdn,
-                "level": 1,
+                "level": max(1, child_depth(fqdn, seeds[0]) if seeds else 1),
                 "parent": parent,
                 "alive": row.get("alive"),
                 "http_status": row.get("http_status"),

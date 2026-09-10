@@ -287,6 +287,11 @@ def run_port_sweep(
     anomalous_threshold = int(params.require("portsweep_anomalous_open_threshold"))
     paused_by_canary = False
     for ip in sorted(ip_hosts):
+        if getattr(adapter, "stop_requested", lambda: False)():
+            remaining.extend(sorted(set(ip_hosts) - {s["ip"] for s in scans}))
+            partial.append("operator_stop")
+            _log(params, target_dir, f"operator-stop remaining={len(remaining)}")
+            break
         meta = ip_hosts[ip]
         rate = min(pacer.current_pps(cap), effective_pps) if effective_pps else pacer.current_pps(cap)
         est_sec = ports_total / max(1, rate)
@@ -340,6 +345,24 @@ def run_port_sweep(
             services.extend(
                 _nmap_services(params, adapter, target_dir, target, extra, ip, record["ports"], timeout_sec)
             )
+        # Flush after every IP so RESULTS/PORTS update mid-sweep (not only at end).
+        mid = _payload(
+            params,
+            scans=list(scans),
+            services=list(services),
+            pace=pace,
+            unique_ips_scanned=len(scans),
+            duplicates_skipped=duplicates_skipped,
+            skipped=None,
+            completed_at=_stamp_now(),
+            remaining_ips=sorted(set(ip_hosts) - {s["ip"] for s in scans}),
+            unreachable=list(unreachable),
+            skipped_no_ip=[u["host"] for u in unresolved],
+            guarantee={"hosts": len(no_ip_hosts), "resolved": resolved_now, "unresolved": unresolved},
+            sentinels_used=len(sentinels),
+            skips=list(skips),
+        )
+        _write_outputs(params, target_dir, mid, skips)
     if remaining:
         # window breach / canary pause: the remaining-IP list is disclosed --
         # the sweep is PARTIAL, never silently abandoned.

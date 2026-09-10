@@ -240,6 +240,16 @@ class TestAlertFilters(unittest.TestCase):
         self.assertTrue(any("REMOVED SUBDOMAIN" in t for t in sink))
         self.assertTrue(any("CHANGED HOST" in t for t in sink))
 
+    def test_sides_filter_suppresses_removed(self):
+        rules = [{"class": "ports", "enabled": True, "sides": ["added"]}]
+        self.assertTrue(alert_worthy(rules, "ports", {"port": 80}, {"ips": set()}, side="added"))
+        self.assertFalse(alert_worthy(rules, "ports", {"port": 80}, {"ips": set()}, side="removed"))
+        self.assertFalse(alert_worthy(rules, "ports", {"port": 80}, {"ips": set()}, side="changed"))
+
+    def test_empty_sides_suppresses_all(self):
+        rules = [{"class": "hosts", "enabled": True, "sides": []}]
+        self.assertFalse(alert_worthy(rules, "hosts", {"host": "x"}, {"ips": set()}, side="added"))
+
 
 class TestCredentials(unittest.TestCase):
     """section 4.5 dashboard-configured credentials first; .env fallback; unset -> skip."""
@@ -335,6 +345,24 @@ class TestScheduler(unittest.TestCase):
         t0 = 1767225600.0  # 2026-01-01T00:00:00Z
         self.assertFalse(due(doc, t0 + 9 * 60))
         self.assertTrue(due(doc, t0 + 10 * 60))
+
+    def test_overlay_for_target_uses_profile(self):
+        from pipeline.scheduler import overlay_for_target
+        from pipeline.target_profiles import set_profile
+
+        tmp = Path(tempfile.mkdtemp())
+        for rel in ("tools.yaml", "wordlists.yaml", "scheduler.json", "scope.yaml"):
+            src = _ROOT / rel
+            if src.is_file():
+                (tmp / rel).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+        params = Params(tmp)
+        set_profile(params, "example.com", {"scheduler": {"enabled": True, "interval_minutes": 30}})
+        merged = overlay_for_target(params, "example.com")
+        self.assertTrue(merged["enabled"])
+        self.assertEqual(merged["interval_minutes"], 30)
+        other = overlay_for_target(params, "other.example")
+        self.assertFalse(other.get("enabled"))
+        self.assertEqual(other.get("interval_minutes"), 720)
 
     def test_mark_run_writes_iso_stamp(self):
         stamped = mark_run({"enabled": True, "interval_minutes": 10, "last_run": None}, 1767225600.0)

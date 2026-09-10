@@ -2,6 +2,9 @@ recon/
 lists/
 dashboard/config.json
 dashboard/.warehouse-hmac
+dashboard/auth/*.sqlite
+dashboard/auth/*.sqlite-wal
+dashboard/auth/*.sqlite-shm
 logs/dashboard-audit.jsonl
 .env
 scope.yaml

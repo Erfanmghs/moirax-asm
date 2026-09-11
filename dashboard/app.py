@@ -800,6 +800,17 @@ async def run_start(body: dict[str, Any], authorization: str | None = Header(def
             status_code=500,
             detail="recon.sh is missing inside the dashboard container. Mount the repo (see docker-compose.yml).",
         )
+    from pipeline.dockerbin import docker_available
+
+    if not docker_available(params):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "nested Docker cannot use /var/run/docker.sock. Recreate the "
+                "dashboard image so the entrypoint can join the socket group: "
+                "docker compose --profile dashboard up -d --build --force-recreate"
+            ),
+        )
     cmd = [str(recon_sh), "run", target] + (["--aggressive"] if aggressive else [])
     log_dir = ROOT / "recon" / target / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -848,6 +859,17 @@ async def run_resume(body: dict[str, Any], authorization: str | None = Header(de
     if not ok:
         raise HTTPException(status_code=502, detail=f"PROXY RULE fail-fast (section 9.3): {reason}")
     target = _valid_target(str(body.get("target") or ""))
+    from pipeline.dockerbin import docker_available
+
+    if not docker_available(params):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "nested Docker cannot use /var/run/docker.sock. Recreate the "
+                "dashboard image so the entrypoint can join the socket group: "
+                "docker compose --profile dashboard up -d --build --force-recreate"
+            ),
+        )
     proc = subprocess.Popen(["./recon.sh", "resume", target], cwd=ROOT,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     from pipeline.state import write_run_pid

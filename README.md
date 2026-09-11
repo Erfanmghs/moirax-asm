@@ -306,7 +306,8 @@ scope gate runs before any container starts.
 |---|---|
 | `git: command not found` | Install Git, open a new terminal |
 | `docker: command not found` | Install / start Docker |
-| `permission denied ... docker.sock` | Linux: `sudo usermod -aG docker $USER`, log out/in |
+| `permission denied ... docker.sock` in LIVE LOG | Nested docker inside the dashboard cannot use the socket. Recreate: `docker compose --profile dashboard up -d --build --force-recreate`. On the host, your user must be in the `docker` group (`sudo usermod -aG docker $USER`, then log out/in). |
+| `permission denied ... docker.sock` on the host CLI | Linux: `sudo usermod -aG docker $USER`, log out/in |
 | Clone rejects password | PAT or `gh auth login` |
 | `repository not found` | Ask the owner to invite your GitHub account |
 | `pull access denied` for GHCR | `docker login ghcr.io` with `read:packages`, or build locally |

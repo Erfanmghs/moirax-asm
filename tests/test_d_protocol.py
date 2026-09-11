@@ -313,6 +313,17 @@ class TestDashboardApiHardening(unittest.TestCase):
             r = self.client.post("/api/run/stop", json={"target": "../../x"}, headers=self.headers)
             self.assertEqual(r.status_code, 422)
 
+    def test_run_start_refuses_when_nested_docker_is_dead(self):
+        patch, envpatch = self._patched()
+        with patch, envpatch, \
+             mock.patch("dashboard.app.scan_require_registered", return_value="example.com"), \
+             mock.patch("pipeline.dockerbin.docker_available", return_value=False):
+            r = self.client.post(
+                "/api/run/start", json={"target": "example.com"}, headers=self.headers,
+            )
+            self.assertEqual(r.status_code, 503, r.text)
+            self.assertIn("docker.sock", r.json().get("detail", ""))
+
     def test_fleet_run_member_token_gate(self):
         patch, envpatch = self._patched()
         with patch, envpatch:

@@ -1,7 +1,0 @@
-app.fixture-target.test
-dev.app.fixture-target.test
-mail.app.fixture-target.test
-staging.app.fixture-target.test
-vpn.app.fixture-target.test
-webmail.app.fixture-target.test
-www.fixture-target.test

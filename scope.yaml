@@ -4,13 +4,11 @@ engagement:
 includes:
   - example.com
   - "*.example.com"
-  # TEST 2 fixture entries RETAINED (fixture vehicle stays reproducible after T3):
+  # Local E2E fixture zone (docker-compose.e2e-fixture.yml).
   - fixture-target.test
   - "*.fixture-target.test"
-  # E2E fixture host-gateway (local docker bridge gateway = the runner host
-  # where the E2E fixture binds its listeners; see docker-compose.e2e-fixture.yml).
-  # Loopback/RFC1918 stay rejected everywhere else -- this is the ONLY private
-  # include, scoped to a single address, and only meaningful on a test runner.
+  # E2E fixture host-gateway. Loopback/RFC1918 stay rejected everywhere
+  # else -- this is the only private include, a single address, test-runner only.
   - 172.17.0.1/32
 excludes:
   - out.example.com

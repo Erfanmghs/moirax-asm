@@ -45,7 +45,7 @@ recon-pipeline/
   .github/workflows/       # CI vehicles (see section 11)
   tools.yaml               # master settings: params, modules, breaker, budgets
   wordlists.yaml           # per-task registry + selection
-  scope.yaml               # includes/excludes (ScopeGate law)
+  scope.yaml               # includes/excludes (fixture committed; operator estate is local)
   targets.yaml             # C3 per-target profiles (operator-managed)
   docs/                    # api-keys.md, tool-choices.md, this document
 ```

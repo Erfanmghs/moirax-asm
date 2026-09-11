@@ -1,5 +1,0 @@
-example.com
-cloudflare.com
-google.com
-wikipedia.org
-gnu.org

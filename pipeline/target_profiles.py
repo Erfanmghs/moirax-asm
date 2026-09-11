@@ -5,8 +5,8 @@ committed registry targets.yaml (frozen-loader dialect):
 
   schema_version: 1
   targets:
-    bugdasht.ir:
-      description: operator-owned estate
+    example.com:
+      description: fixture estate
       settings:
         wordlist_selection:
           FFUF-0: [test_smoke_200]

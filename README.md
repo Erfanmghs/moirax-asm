@@ -1,376 +1,325 @@
-# ATTACK VECTOR DETECTION PLATFORM
+# recon-pipeline
 
-**A security watcher for your websites.** It looks at the outside of a website
-the way a security researcher would, shows you what it found in a private
-dashboard in your browser, and sends you a Telegram message when something
-changes.
+Outside-in attack-vector detection for a DNS estate you are authorized to
+test. The platform enumerates names (passive OSINT in parallel with active
+brute), resolves them, probes virtual hosts, sweeps TCP, diffs every run
+against the last one, and emits a tamper-checked report. Telegram fires on
+real change classes, not on the whole estate. Operators drive it from a
+loopback FastAPI dashboard; the same ladder is `./recon.sh`.
 
-> This file is written for everyday users. No programming knowledge is needed
-> to read or use it. Developers: the deep technical guide is in
-> [docs/HANDOVER.md](docs/HANDOVER.md), there is a wish list for you in
-> section 10, and the step-by-step user guide is
-> [docs/HELP.md](docs/HELP.md) (also available as the HELP panel inside the
-> dashboard).
+It does not exploit. It does not send exploit payloads. The OWASP pass is
+evidence-only (zero extra packets). ScopeGate is a hard stop, not a warning.
+
+| You | Start |
+|---|---|
+| Install and first scan | [Install](#install) then [First scan](#first-scan) |
+| Architecture / laws | [How a run works](#how-a-run-works) |
+| CLI / fleet | [Command line](#command-line) |
+| Keys, bind, leak response | [docs/security.md](docs/security.md), [docs/api-keys.md](docs/api-keys.md) |
+| Every dashboard control | [docs/HELP.md](docs/HELP.md) |
+| Engineer's map | [docs/HANDOVER.md](docs/HANDOVER.md) |
+
+ASCII English only in this tree (release gate R-3). Scan only what you own
+or have written permission to test.
 
 ---
 
-## 1. What is this, in one paragraph?
+## Why this is not "nmap plus a spreadsheet"
 
-You give the platform the name of a website you own, for example
-`example.com`. It then quietly walks around the outside of that website and
-reports back: which website names belong to it (like `blog.example.com` or
-`shop.example.com`), which of them are online right now, which technical
-"doors" (ports) are open on the servers behind them, and what has changed
-since the last time it looked. Everything it learns is shown in a private
-control panel in your browser and can be turned into a clean report (web page,
-PDF, or spreadsheet). If something new appears -- a website name that did not
-exist yesterday, or a door that was closed and is now open -- the platform
-sends a Telegram alert to the person in charge.
+- **One ladder**, not a pile of unrelated binaries: passive || active ->
+  merge -> full TCP sweep -> post-port vhost -> passive OWASP.
+- **Diff** against the previous run: added / removed / changed hosts and
+  ports, with HTTP length on reports when httpx is enabled.
+- **Telegram** on change types (new host, removed host, changed host, newly
+  opened port). Above the digest threshold, one grouped DIGEST instead of
+  a flood.
+- **Tamper-checked report** (HTML / PDF / CSV / JSON / Markdown + SHA-256
+  manifest).
+- **ScopeGate**: every host is checked against `scope.yaml`. Suffix tricks
+  (`evil-target.com` pretending to be `target.com`) are refused.
+- **Never-silent**: a skipped source prints WHY. Missing optional keys skip
+  with an explicit line.
+- **Per-target profiles**: depths, wordlists, Telegram receiver, proxy pool,
+  budgets -- without mutating the committed defaults for longer than the run.
 
-Think of it as a night guard for your website's building: it does not break
-into anything, it only notes which doors and windows it can see, and it
-tells you when a new one appears.
+---
 
-## 2. What can it do?
+## Install
 
-| What you get | In plain words |
-|---|---|
-| **Find website names** | Discovers the addresses that hang under your main domain, using many public sources at once. |
-| **Check what is alive** | Tests which of those addresses really answer right now, and which are dead. |
-| **Check open doors** | Scans the server's ports and names the services behind them. |
-| **Watch for changes** | Compares every check with the previous one and highlights what is new or gone. |
-| **Telegram alerts** | Sends a message to your Telegram the moment something important changes. Each website you watch can have its own Telegram setting. |
-| **Clean reports** | One click gives you a report as a web page, PDF, CSV, or JSON -- with a built-in proof that the report was not modified afterwards. |
-| **Private dashboard** | A dark, security-themed control panel in your browser. Start checks, read results, manage settings -- all without a terminal. |
-| **Scheduled watching** | Tell it "check every night" and it does the round by itself. |
-| **Works with zero API keys** | The basic features need no accounts and no keys anywhere. Optional free keys unlock extra sources (section 8). |
-| **Tidy storage** | Old logs are compressed and pruned automatically, so the tool never fills your disk. |
+Need: Git, Docker Engine (or Docker Desktop), ~4 GB RAM, ~10 GB disk,
+network. No database. No paid keys. Python 3 on the host is required only
+for `./recon.sh`; the dashboard image carries its own runtime.
 
-## 3. What do you need before starting?
-
-- A computer with **Windows 10/11, macOS, or Linux**, about **4 GB of free
-  memory** and **10 GB of free disk space**.
-- An **internet connection**.
-- A **GitHub account that has access to this repository**. The repository is
-  private: either you are its owner, or the owner has invited your account.
-- About **10 minutes** the first time (mostly one-time downloads). Every
-  start after that takes a few seconds -- see 4.5.
-- Nothing else. No database to install, no accounts to create, no keys to
-  buy. The two free tools the platform needs (Git and Docker) are installed
-  in the next section, step by step.
-
-## 4. Install it from zero to hundred
-
-This section takes you from an empty computer to a running dashboard. Every
-step is one-time work; after step 4.6 you only use the browser.
-
-### 4.1 Install Git -- the tool that downloads the code
-
-- **Windows**: download the installer from <https://git-scm.com/downloads>,
-  run it, and keep pressing Next until it finishes.
-- **macOS**: open Terminal, type `git --version`, and press Install in the
-  window that appears.
-- **Linux (Ubuntu/Debian)**: run
-  `sudo apt update && sudo apt install -y git`.
-
-Check that it worked: open a **new** terminal and run `git --version`. It
-should print a version number.
-
-### 4.2 Install Docker -- the tool that runs the platform
-
-- **Windows / macOS**: download **Docker Desktop** from
-  <https://www.docker.com/products/docker-desktop/>, install it, start it,
-  and wait until it says it is running. (On Windows, accept the "WSL 2"
-  option if it is offered.)
-- **Linux**: run `curl -fsSL https://get.docker.com | sh`, then
-  `sudo usermod -aG docker $USER`, then log out and log back in.
-
-Check that it worked: run `docker --version` and `docker compose version`.
-Both should print version numbers. Keep Docker Desktop running while you use
-the platform.
-
-### 4.3 Download the project (clone)
-
-Open a terminal **in the folder where you want the project to live** (on
-Windows: open the folder, then open PowerShell or "Git Bash" there), and run:
+Shallow clone (this repository's default branch is `private`):
 
 ```bash
-git clone -b private https://github.com/Erfanmghs/recon-pipeline.git
+git clone --depth 1 https://github.com/Erfanmghs/recon-pipeline.git
 cd recon-pipeline
-```
-
-Because the repository is **private**, GitHub asks you to prove who you are
-during the download. Two easy ways:
-
-- **Easiest -- GitHub CLI**: install it from <https://cli.github.com/>, run
-  `gh auth login` once, then repeat the clone command. No passwords after
-  that.
-- **With a Personal Access Token**: on GitHub open Settings -> Developer
-  settings -> Personal access tokens -> **Tokens (classic)**, generate a
-  token with the `repo` and `read:packages` ticks, and when the clone asks
-  for a password, paste that token (not your GitHub password). Keep the
-  token handy -- step 4.5 option A reuses it.
-
-> You can also download the code as a ZIP from the green **Code** button on
-> the repository page -- but cloning with Git makes every future update a
-> one-command job (see 4.8).
-
-### 4.4 Create your settings file
-
-Inside the `recon-pipeline` folder, run:
-
-```bash
 cp .env.example .env
 ```
 
-(The same `cp` command works in PowerShell; in the old Windows command
-prompt, use `copy` instead.)
+GitHub will not accept an account password. Use `gh auth login` or a PAT
+with `repo` (and `read:packages` if you pull the published image).
 
-Open the new `.env` file with any text editor. Dashboard login no longer
-requires a line in this file -- the first browser visit asks you to set a
-password. You can still set optional keys (Telegram, search APIs) here.
+Optional installer lines in `.env` (everything else can wait):
 
-### 4.5 Start the platform
-
-**Read this once:** the slow part (downloading or building the app's
-package) happens **only on the first start of each machine**. Every start
-after that takes **a few seconds**, and after a reboot the platform starts
-itself -- you just open the browser.
-
-**Option A -- the fast way, nothing is built (recommended).** The
-ready-made app is downloaded from the platform's package store. It reuses
-the token from step 4.3:
-
-```bash
-docker login ghcr.io -u YOUR-GITHUB-USERNAME   # paste the token as the password
-docker pull ghcr.io/erfanmghs/recon-pipeline:dashboard
-docker tag ghcr.io/erfanmghs/recon-pipeline:dashboard recon-pipeline-dashboard
-docker compose --profile dashboard up -d
+```
+TELEGRAM_BOT_TOKEN=          # @BotFather /newbot; comma-separated backups ok
+RECON_HOST_UID=              # Linux: id -u
+RECON_HOST_GID=              # Linux: id -g
+DOCKER_GID=                  # Linux: getent group docker | cut -d: -f3
 ```
 
-The download is one small app-sized package -- usually well under a minute.
+Do not put the dashboard password in `.env`. The first browser visit asks
+you to choose it (12+ characters, scrypt hash in `dashboard/auth/`, never
+inside `recon/`).
 
-**Option B -- build on your machine instead.** One command, no login. This
-is the only slow step you will ever do (5-15 minutes on a slow internet),
-and it too happens once:
+Optional SecLists mount (compose bind-mounts `~/seclists` read-only). If
+that directory is missing, Docker creates an empty one; curated lists in
+the repo still work:
+
+```bash
+git clone --depth 1 https://github.com/danielmiessler/SecLists.git ~/seclists
+```
+
+**Start the dashboard** (slow on the first build; later starts are seconds).
+Compose `restart: unless-stopped` brings it back after reboot.
+
+Build locally (no GHCR login):
 
 ```bash
 docker compose --profile dashboard up -d --build
 ```
 
-Both options end in the same place: the platform is running. Check it with
-`docker compose ps` -- the status should say `Up`.
+Or pull the published image if your GitHub account can read packages:
 
-### 4.6 Open the dashboard
+```bash
+docker login ghcr.io -u YOUR-GITHUB-USERNAME   # PAT as password
+docker pull ghcr.io/erfanmghs/recon-pipeline:dashboard
+docker tag ghcr.io/erfanmghs/recon-pipeline:dashboard recon-pipeline-dashboard
+docker compose --profile dashboard up -d
+```
 
-Open **http://127.0.0.1:8080** in your browser. The first visit asks you to
-choose a password (12+ characters). Later visits ask you to sign in. After
-15 minutes with no click, you must sign in again.
+Check: `docker compose --profile dashboard ps` -- status **Up**.
+If 8080 is taken, set `DASHBOARD_BIND_PORT=9090` in `.env` and recreate.
+Bind defaults to `127.0.0.1`; the SPA is not meant to be on the public net.
 
-### 4.7 Prove that everything works
-
-1. On **SETTINGS**, type your Telegram username and press **SEND TEST** --
-   a test message should arrive (section 5, step 1).
-2. On **TARGETS**, add the website you own.
-3. On **RUN CONTROL**, press **START** and watch the check run live.
-
-The complete walk-through is in section 5 and inside the dashboard's HELP
-panel.
-
-### 4.8 Everyday commands (cheat sheet)
+Open **http://127.0.0.1:8080** -- Set operator password -> Register.
 
 | I want to ... | Command |
 |---|---|
-| Start it (everyday, a few seconds) | `docker compose --profile dashboard up -d` |
-| Never type that again | Docker Desktop starts on login and the platform restarts itself -- after a reboot, just open the browser |
-| Stop everything | `docker compose --profile dashboard down` |
-| Update to the newest version | `git pull`, then `docker compose --profile dashboard up -d --build` |
-| Watch what it is doing right now | `docker compose logs -f dashboard` |
-| Check that it is running | `docker compose ps` |
+| Start | `docker compose --profile dashboard up -d` |
+| Stop | `docker compose --profile dashboard down` |
+| Update | `git pull` then `docker compose --profile dashboard up -d --build` |
+| Live log | `docker compose logs -f dashboard` |
 
-### 4.9 If something goes wrong
+---
 
-| What you see | Why | What to do |
-|---|---|---|
-| `git: command not found` | Git is not installed, or the terminal was already open during install | Install it (4.1) and open a new terminal |
-| `docker: command not found` | Docker is not installed, or Docker Desktop is not running | Install it (4.2) / start Docker Desktop and wait until it is running |
-| `permission denied ... docker.sock` (Linux) | Your user is not in the docker group | `sudo usermod -aG docker $USER`, then log out and back in |
-| Clone rejects my password | GitHub no longer accepts account passwords | Use a Personal Access Token or `gh auth login` (4.3) |
-| Clone says `repository not found` | Your account has no access to this private repository, or the address has a typo | Ask the owner to invite your account and re-check the address |
-| First start says `pull access denied` or `unauthorized` | The ready-made image needs your GitHub login, or the token lacks `read:packages` | Do the login from 4.5 option A, or run option B (`--build`) once |
-| `port is already allocated` | Another program is using port 8080 | Add `DASHBOARD_BIND_PORT=9090` to `.env`, restart, and open http://127.0.0.1:9090 |
-| The dashboard page does not open | It is still building, or it stopped | Run `docker compose ps`; wait until the status says `Up`, then reload the page |
-| First start seems frozen | It is downloading, not frozen | Wait, or run `docker compose logs -f dashboard` to see the progress |
+## First scan
 
-That is the whole installation. From now on, you only need the browser -- and
-the cheat sheet above.
+1. **SETTINGS** -- Telegram username (`@handle` or a numeric id) -> SAVE ->
+   SEND TEST. Personal bots: open the bot in Telegram, press Start, retry.
+2. **SCAN** -- SITE `example.com` (a name **you** are allowed to test) ->
+   tick Authorize if it is not yet on the allow-list -> **ADD TARGET**.
+3. Optional **SETUP** on that row: DNS depth, vhost depth, wordlists,
+   Telegram override. Empty SETUP inherits SETTINGS / TOOLS / WORDLISTS.
+4. **START**. Watch LIVE LOG. Minutes to ~an hour depending on estate size
+   and wordlists.
+5. **RESULTS** -- pick the site -> LOAD. **REPORTS** -> GENERATE NOW ->
+   OPEN `report.html` or the PDF.
 
-## 5. Using it day to day (the whole journey)
+Committed `scope.yaml` is a fixture allow-list (`example.com` plus the
+local e2e zone). ADD TARGET appends your apex and `*.apex`. Do not commit
+those edits; the C1 gate rejects non-fixture includes.
 
-### Step 1 -- Tell it where to send alerts (one time)
+Do not delete a site you still care about; DELETE hides it from SCAN and
+keeps warehouse history for the retention window.
 
-Open the **SETTINGS** page. There is one box that asks for **your Telegram
-username or numeric id**. Type `jackjohns` (or `@jackjohns`, or a number like
-`123456789`) and save. That is the only thing you ever have to enter: no bot
-creation, no chat setup, just your own handle.
+---
 
-Personal usernames deliver after you open your bot in Telegram and press
-START once -- the platform learns your chat automatically. Public channel
-handles (`@teamname`) work immediately.
+## Day-to-day
 
-### Step 2 -- Add the website you want to watch
+**SCAN** is the board: status, modules, last run, SETUP, START, STOP,
+RESUME, DELETE. ADD LIST accepts one name per line or comma-separated names.
 
-Open the **TARGETS** page and add your website, for example `example.com`.
+**RESULTS** is independent of SCAN's selected row. Filters, coverage (which
+source uniquely found a host), and DIFF badges are the change signal.
+COMPARE / REBUILD uses warehouse history.
 
-This page is also where **each website gets its own Telegram setting**. For
-every website you can choose:
+**REPORTS** GENERATE NOW rebuilds the B7 bundle. VERIFIED means the SHA-256
+manifest still matches the files on disk.
 
-- **inherit global** -- use the Telegram ID from Settings (the usual choice);
-- **its own ID** -- send this website's alerts to a different Telegram number
-  (useful when different people are responsible for different websites);
-- **muted** -- no Telegram alerts for this website at all.
+**TOOLS / WORDLISTS** change the next run, not the current one. dnsx is the
+active subdomain brute. ffuf vhost rows are Host-header probes, not the DNS
+brute. Full TCP 1-65535 (naabu-full) stays on after MERGE; optional
+top-ports preview is off by default.
 
-Every website is independent. Changing one website's alert setting never
-touches the others.
+Independent depths (SETTINGS and per-site SETUP / TARGETS):
 
-### Step 3 -- Press START
+- **DNS depth** (`recon_depth`) -- label levels under the apex dnsx will brute.
+- **vhost depth** (`ffuf_depth`) -- how far Host-header enumeration walks.
+- **Passive recursion** -- how far passive OSINT follows related names.
 
-Open **RUN CONTROL**, type the website name, and press **START**. You watch
-the progress live in the browser, step by step. A full check takes from a few
-minutes to about an hour depending on how big the website is.
+**Fleet:** register each site, then
+`./recon.sh fleet run --targets all --concurrency 3`. One member failing
+does not stop the others. Dashboard: `GET /api/fleet`,
+`GET /api/fleet/ledger`, `POST /api/fleet/run`.
 
-### Step 4 -- Read what it found
+**Scheduler:** SCAN, interval minutes (minimum 10), enabled, SAVE.
+Example: `720` = twice a day.
 
-- **RESULTS** shows everything that was discovered, with filters and
-  "new since last time" badges.
-- **REPORTS** has a **GENERATE NOW** button. One press gives you a tidy
-  report as a web page or PDF, listing everything with proof that the report
-  file has not been modified.
+Idle sessions die after 15 minutes without an operator click. **LOCK**
+signs you out. APIs also accept a legacy `Authorization: Bearer` token for
+CI (`DASHBOARD_TOKEN` in `.env`).
 
-### Step 5 -- Let it watch for you (optional)
+---
 
-In **RUN CONTROL** you can set a schedule, for example "every night at 3".
-From then on the platform checks the website by itself and, if something
-changed, a Telegram message is waiting for you in the morning.
+## How a run works
 
-## 6. Telegram alerts -- the short version
-
-- **You** set **only your Telegram username or numeric id**. Nothing else.
-- The **bot token** -- the one-time key that lets the platform talk to
-  Telegram -- is pasted into the `.env` file once by the person who installed
-  the platform (section 7). Everyday users never see or touch it.
-- **Backup tokens**: list extra tokens in `.env`, separated by commas. If a
-  token stops working, the platform **rotates to the next one automatically**
-  during the very same send -- no human needed.
-- **Each website can override the default**: its own username, or "no alerts
-  for this one". The website's own setting always wins over the global one.
-- Press **SEND TEST** on the SETTINGS page and a test message should arrive
-  within seconds. If it does not, the platform shows a human next-step hint
-  instead of failing silently.
-
-## 7. For the person who installs the platform (one-time, 5 minutes)
-
-These lines go into the `.env` file:
-
-| Line | What it is | Where to get it |
-|---|---|---|
-| `DASHBOARD_TOKEN` | Optional legacy API bearer (CI). Operators set a password in the first-run gate instead. | Leave empty unless you need the old env-token path. |
-| `TELEGRAM_BOT_TOKEN` | Lets the platform send Telegram messages. | In Telegram, talk to `@BotFather`, send `/newbot`, follow the two questions, and copy the long token it gives you. Extra tokens separated by commas act as automatic backups. |
-| `PROXY_POOL` (optional) | Comma-separated proxies for IP rotation. | Your proxy provider. See the HELP panel / docs/HELP.md section 10. |
-
-That is the whole installation surface. Everything else -- settings, keys,
-targets, schedules -- is managed later from the dashboard pages by normal
-users, without touching any file again.
-
-## 8. API keys -- not needed, but nice
-
-The platform is built to work **with no keys at all**. A few public
-information sources give deeper results if you create a free key on their
-website. Without a key those sources are skipped, and the platform **says so
-openly** in the results -- it never hides that something was skipped. You can
-add or remove keys any time on the **API KEYS** page; the change takes effect
-on the next check, with no restart. The full list of optional keys and what
-each one unlocks: [docs/api-keys.md](docs/api-keys.md).
-
-## 9. Rules you must follow
-
-- Only point the platform at websites **you own** or have **written
-  permission** to test.
-- The platform enforces this itself: it refuses to scan anything that is not
-  on its allow-list, and it re-checks the allow-list before every step.
-  Out-of-scope targets are a hard stop, not a warning.
-- Scanning other people's websites without permission is illegal in most
-  countries. The tool is built to make the honest path the easy path -- use
-  it that way.
-
-## 10. Ideas for developers -- what would make this platform even better
-
-If you are a developer looking for something useful to build, any item on
-this wish list would be a real improvement. The items are ordered by how much
-value they would add for the least work. The technical guide
-([docs/HANDOVER.md](docs/HANDOVER.md)) explains how every part works today,
-so you can see exactly where a new piece would plug in.
-
-1. **Spreading requests over several outgoing IPs** -- big websites sometimes
-   block a scanner that asks too much from one address. Rotating outgoing
-   addresses (a proxy or IP pool) would keep long checks running smoothly.
-   **DELIVERED** (C5 + refinements): per-target proxy pools with fail-fast
-   preflight, rotation on EVERY attempt (not just per step), automatic
-   health tracking that benches failing addresses and lets healthy ones
-   carry on, a masked rotation ledger, and dashboard editing.
-2. **Built-in common-weakness checks** -- after finding the doors, the
-   platform could automatically try the industry-standard list of the most
-   common well-known weaknesses (the OWASP Top 10 for websites and for APIs)
-   and attach a short, readable explanation of each hit to the report.
-   **DELIVERED (passive form)** (C6): after every merge the platform now
-   analyzes already-collected evidence and writes OWASP Top 10 (2021) + API
-   Top 10 (2023) findings with plain-language explanations to
-   `recon/<target>/70_owasp/`. It sends zero packets to the target, caps
-   severity at medium, and marks every item for human review -- active
-   exploitation stays out of scope by design.
-3. **Automatic watch-list growth** -- when the platform discovers a new
-   website name under your domain, it could offer to add it to future checks
-   with one click, so the watch list grows by itself.
-4. **Risk scores** -- rank the findings from "just interesting" to "fix this
-   today", so the owner knows what to do first without reading everything.
-5. **Charts over time** -- draw the history week by week: how many website
-   names, how many open doors, what appeared and when. Change-over-time
-   pictures make problems obvious at a glance.
-6. **More alert channels** -- Slack, Discord, plain email, or generic
-   webhooks, next to the existing Telegram alerts.
-7. **More languages for the dashboard** -- the interface is English today; a
-   language switch (for example Persian) would open it to more teams.
-8. **Several user accounts** -- separate logins with roles (viewer, operator,
-   admin) and a record of who started which check and changed which setting.
-9. **One-file installer** -- a single script that prepares a fresh server
-   from zero to a running dashboard with no manual steps.
-
-Small fixes and ideas of your own are welcome too -- the code is organized so
-that a new feature is usually one new module plus one dashboard panel.
-
-## 11. Advanced: the command line
-
-The dashboard can do everything, but for scripting there is also a
-command-line interface:
-
-```bash
-./recon.sh run example.com        # run one full check now
-./recon.sh status example.com     # show what the last check did
-./recon.sh report example.com     # rebuild the report bundle
+```
+START (SCAN or ./recon.sh run TARGET)
+  |  ScopeGate -- refuse out-of-scope / suffix trick
+  |  apply per-target SETUP (transient, restored after)
+  |  layout recon/TARGET + run.pid + state=running
+  |
+  +-- PASSIVE (OSINT / CT / search-forge)  ||  ACTIVE
+  |                                         dns-resolve (dnsx brute + IPs
+  |                                           + optional httpx length/tech)
+  |                                         then in parallel:
+  |                                           ffuf -> nested vhost expand
+  |                                             -> ffuf-3 (DNS-dead names)
+  |                                           port-check (optional top ports)
+  |
+  MERGE -> 00_assets/assets.json
+  port-sweep  TCP 1-65535 on unique resolved IPs
+  ffuf-4      vhost on open HTTP ports
+  owasp-passive  evidence-only Top 10 (zero extra packets)
+  report bundle + warehouse ingest + Telegram on diff
 ```
 
-## 12. Where to look next
+Each module runs in its own Docker image. The orchestrator talks to docker
+through `pipeline/dockerbin.py`. Module status is `done | failed | pending`
+plus `disclosed` for sanctioned anomalies. STOP kills the run PID and
+related containers.
 
-| File | For whom | What is inside |
+Config dialects (closed allow-lists -- unknown keys are refused):
+
+- `tools.yaml` -- modules, images, breaker, budgets
+- `wordlists.yaml` -- per-task selection (curated wins; SecLists index +
+  custom + platform-learned lists merge in)
+- `scope.yaml` -- includes / excludes (fixture committed; operator estate
+  is local)
+- `targets.yaml` -- per-site profiles
+- `dashboard/config.json` -- gitignored global dashboard settings
+
+Layout:
+
+```
+recon.sh                 CLI entry (python -m pipeline.cli)
+pipeline/                engine, adapters, modules, notify, reporting, fleet
+dashboard/               FastAPI app.py (thin) + service.py + static SPA
+tests/                   atomic unittest contract
+ci/                      acceptance vehicles + pentest + UI journey
+.github/workflows/       C1 release gate (secrets, SAST, ASCII, PII, scope)
+```
+
+Non-negotiable laws (CI enforces them): never-silent, ScopeGate, frozen
+acceptance vehicles, closed allow-lists, no secrets in tree, ASCII
+English, new behavior = new test. Details: [docs/HANDOVER.md](docs/HANDOVER.md).
+
+Artifacts land under `recon/<target>/` (gitignored):
+
+```
+  00_assets/assets.json     merged host index (RESULTS table)
+  10_subdomains/passive/    OSINT / CT / search-forge
+  15_vhosts/ffuf/           Host-header vhost hits
+  20_dns/dnsx/              brute + resolve
+  30_ports/                 naabu-full (1-65535)
+  70_owasp/                 passive OWASP Top 10 + API Top 10
+  90_report/                html pdf csv json md + report_manifest.json
+  diff.json                 added / removed / changed vs previous run
+  state.json                live module status
+  runs.json                 run ledger
+  logs/run.log              SCAN live log
+```
+
+Auth DB is separate from warehouse SQLite -- never store operator login in
+`recon/<target>/warehouse.sqlite`.
+
+---
+
+## Telegram, keys, proxies
+
+**Telegram.** Operator sets username or id only. Bot token stays in `.env`.
+Precedence: per-target profile > SETTINGS > `.env` TELEGRAM_CHAT_ID.
+`telegram_enabled: false` on a profile mutes that site. Comma-separated
+`TELEGRAM_BOT_TOKEN` values are a backup pool: a 401 rotates to the next
+token in the same send. Tokens are never echoed.
+
+**API keys** are optional. Keyless sources always run (crt.sh, HackerTarget,
+Anubis, OTX, urlscan, ...). Optional keys (Chaos, GitHub, SecurityTrails,
+VirusTotal, search engines, ...) add coverage. Paste on **API KEYS**; the
+next run picks them up with no restart. Inventory:
+[docs/api-keys.md](docs/api-keys.md).
+
+**Proxy pool.** SETTINGS PROXY POOL, comma-separated HTTP/SOCKS5 URLs.
+Preflight health-checks every entry (fail-fast, passwords masked). Attempts
+round-robin; unhealthy entries are benched. Per-site pool on TARGETS wins.
+Port-sweep and the dedicated DNS resolver lane stay direct and say so in
+the log.
+
+One-time `.env` knobs:
+
+| Variable | Who | Purpose |
 |---|---|---|
-| [docs/HELP.md](docs/HELP.md) | Everyone | The complete step-by-step user guide, with examples -- also built into the dashboard's HELP panel. |
-| [docs/HANDOVER.md](docs/HANDOVER.md) | Developers | The full engineering guide: architecture, every part explained, how to extend safely. |
-| [docs/api-keys.md](docs/api-keys.md) | Users | Every optional key, where to get it, and what it unlocks. |
-| [docs/security.md](docs/security.md) | Operators | How tokens and secrets are handled, and what to do if one leaks. |
-| [docs/PRODUCT-UPGRADE-CATALOG.md](docs/PRODUCT-UPGRADE-CATALOG.md) | Developers / product | Future capabilities collected from this product and comparable tools, tagged watchman vs identity-shift. |
+| `TELEGRAM_BOT_TOKEN` | Installer | Bot API token; comma-separated backups |
+| `TELEGRAM_CHAT_ID` | Optional fallback | Numeric id if SETTINGS is empty |
+| `DASHBOARD_TOKEN` | CI / legacy API | Bearer for scripts; operators use the password gate |
+| `PROXY_POOL` | Optional | Global proxy list if not set in SETTINGS |
+| `RECON_HOST_UID` / `GID` / `DOCKER_GID` | Linux | Nested docker + file ownership |
+| Provider keys | Optional | See `docs/api-keys.md` |
 
-## 13. Legal
+---
 
-Run only against targets you are authorized to test. Unauthorized scanning of
-systems you do not own or do not have permission to test is illegal. The
-platform's allow-list enforcement exists to protect you; do not fight it.
+## Command line
+
+```bash
+./recon.sh run example.com
+./recon.sh stop example.com
+./recon.sh resume example.com
+./recon.sh status example.com
+./recon.sh report example.com
+./recon.sh fleet run --targets all --concurrency 3
+./recon.sh fleet status
+./recon.sh wordlist-sync
+./recon.sh target-profile get example.com
+```
+
+Full usage: `./recon.sh` with no args. Host Python 3 is required; the
+scope gate runs before any container starts.
+
+---
+
+## Troubleshooting
+
+| What you see | What to do |
+|---|---|
+| `git: command not found` | Install Git, open a new terminal |
+| `docker: command not found` | Install / start Docker |
+| `permission denied ... docker.sock` | Linux: `sudo usermod -aG docker $USER`, log out/in |
+| Clone rejects password | PAT or `gh auth login` |
+| `repository not found` | Ask the owner to invite your GitHub account |
+| `pull access denied` for GHCR | `docker login ghcr.io` with `read:packages`, or build locally |
+| `port is already allocated` | `DASHBOARD_BIND_PORT=9090` in `.env` |
+| First start looks frozen | Pulling layers -- `docker compose logs -f dashboard` |
+| Sign-in loop after 15 min | Idle timeout -- sign in again |
+| START returns "ADD TARGET first" | Register the site on SCAN before START |
+| START 422 illegal target name | Lowercase DNS name, not flags or paths |
+
+---
+
+## Legal
+
+Run only against targets you are authorized to test. Unauthorized scanning
+of systems you do not own or do not have permission to test is illegal.
+The allow-list exists to protect you; do not disable it.

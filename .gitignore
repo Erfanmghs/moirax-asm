@@ -7,7 +7,6 @@ dashboard/auth/*.sqlite-wal
 dashboard/auth/*.sqlite-shm
 logs/dashboard-audit.jsonl
 .env
-scope.yaml
 compose.env
 *.tmp
 __pycache__/
@@ -22,6 +21,13 @@ wordlists/forge/custom-subdomains.txt
 wordlists/forge/counts.log
 resolvers/forge/*
 !resolvers/forge/.gitkeep
+dorks/forge/*.txt
+!dorks/forge/.gitkeep
+
+# Local agent / operator working files (never publish)
+.cursor/
+history/
+PHASE-REPORT.md
 
 # CI/REM4-R runtime artifacts (regenerated per run; never commit)
 ci/rem4r_verdict.txt

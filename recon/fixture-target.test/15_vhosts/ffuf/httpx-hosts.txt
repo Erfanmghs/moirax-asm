@@ -1,2 +1,0 @@
-app.fixture-target.test
-www.fixture-target.test

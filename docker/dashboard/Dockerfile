@@ -13,7 +13,7 @@ RUN apt-get update \
 COPY dashboard/ ./dashboard/
 COPY pipeline/ ./pipeline/
 COPY recon.sh ./
-COPY tools.yaml tools.lock views.yaml wordlists.yaml search_engines.yaml dorks.yaml scheduler.json scope.yaml ./
+COPY tools.yaml tools.lock views.yaml wordlists.yaml search_engines.yaml dorks.yaml scheduler.json scope.yaml targets.yaml ./
 RUN chmod +x /app/recon.sh
 
 ENV PYTHONPATH=/app

@@ -7,10 +7,11 @@
 #   R-1 secrets (precise provider patterns; placeholders allowed)
 #   R-2 SAST bandit over pipeline/ dashboard/ ci/ (HIGH hard-fail, MEDIUM disclosed)
 #   R-3 English-only/ASCII tree (waivers: frozen verify_b1.py, frozen spec
-#       .cursor/rules/**, historical evidence recon/**)
+#       .cursor/rules/**, recon/** if any leftover evidence is present)
 #   R-4 personal data (author email fragments, personal mail domains,
 #       operator estate IPs, phone shapes)
 #   R-5 Arabic/Persian script defense (belt-and-braces under R-3)
+#   R-6 committed scope.yaml / targets.yaml are fixture-only
 # Atomic units: tests/test_c1_release.py (18 tests) run with the shared suite.
 
 name: c1-release-gate

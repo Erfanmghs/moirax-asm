@@ -20,7 +20,7 @@ the runtime GITHUB_TOKEN with least permissions. The PAT is only used when
 a human or automation drives GitHub from outside (dispatch, polling,
 artifact fetch, push).
 
-## 2. PAT frugality rules (the token is expiring -- make it last)
+## 2. PAT frugality rules
 
 1. One push per work batch (batch commits; do not push per commit).
 2. Dispatch-only vehicles: nothing burns minutes or API calls on push

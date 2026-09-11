@@ -1,4 +1,0 @@
-
-[2K.htaccessmijEKmir       [Status: 200, Size: 18, Words: 1, Lines: 2, Duration: 1ms][0m
-
-[2Kapp                     [Status: 200, Size: 18, Words: 1, Lines: 2, Duration: 0ms][0m

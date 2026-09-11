@@ -4,5 +4,8 @@ engagement:
 includes:
   - example.com
   - "*.example.com"
+  - fixture-target.test
+  - "*.fixture-target.test"
+  - 172.17.0.1/32
 excludes:
   - out.example.com

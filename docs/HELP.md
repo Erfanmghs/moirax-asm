@@ -1,6 +1,8 @@
 # The Complete User Guide
 
-**Attack Vector Detection Platform -- step-by-step help for everyday users.**
+**Attack Vector Detection Platform -- in-app operator guide.**
+Install and architecture live in the repository README. This file is the
+button-by-button walkthrough (also served on the HELP tab).
 
 This guide explains every feature, how to use it correctly, and shows real
 examples you can follow along with. No programming knowledge is needed.
@@ -76,7 +78,7 @@ Check: `docker compose version` prints a version number.
 Open a terminal in the folder where you want the project to live, then:
 
 ```bash
-git clone -b private https://github.com/Erfanmghs/recon-pipeline.git
+git clone --depth 1 https://github.com/Erfanmghs/recon-pipeline.git
 cd recon-pipeline
 ```
 

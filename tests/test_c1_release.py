@@ -119,6 +119,24 @@ class R5ScriptDefense(unittest.TestCase):
         self.assertEqual(gate.scan_arabic_script("marks \u2713 and math \u2211 stay outside script ranges"), [])
 
 
+class R6FixtureScope(unittest.TestCase):
+    def test_fixture_includes_are_clean(self):
+        self.assertEqual(
+            gate.extra_scope_includes(["example.com", "*.example.com", "fixture-target.test"]),
+            [],
+        )
+
+    def test_operator_estate_is_rejected(self):
+        hits = gate.extra_scope_includes(["example.com", "owned.example"])
+        self.assertEqual(hits, ["owned.example"])
+
+    def test_empty_target_registry_is_clean(self):
+        self.assertEqual(gate.extra_target_names([]), [])
+
+    def test_non_fixture_target_key_is_rejected(self):
+        self.assertEqual(gate.extra_target_names(["owned.example"]), ["owned.example"])
+
+
 class BanditBridge(unittest.TestCase):
     def test_bandit_bridge_returns_counts(self):
         high, med, ids = gate.run_bandit()

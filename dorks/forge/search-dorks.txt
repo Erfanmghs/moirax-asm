@@ -1,4 +1,0 @@
-site:*.bugdasht.ir
-site:*.*.bugdasht.ir
-site:bugdasht.ir -inurl:www
-site:*.bugdasht.ir -site:www.bugdasht.ir

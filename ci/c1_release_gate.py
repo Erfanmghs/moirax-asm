@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""C1 RELEASE SECURITY GATE (R-1..R-5) -- attacker-proofing the repository.
+"""C1 RELEASE SECURITY GATE (R-1..R-6) -- attacker-proofing the repository.
 
 Release directive: the platform publishes in ENGLISH ONLY, free of
 personal/sensitive data, with an attacker-resistance mindset: an outsider
@@ -20,6 +20,9 @@ scanning the public repository must find nothing usable.
        no operator estate IPs, no phone-number shapes in tracked files.
   R-5  SCRIPT DEFENSE (belt-and-braces under R-3): no Arabic/Persian script
        codepoints (U+0600-U+06FF, U+FB50-U+FEFF) outside the waivers.
+  R-6  FIXTURE SCOPE: committed scope.yaml includes are the public fixture
+       allow-list only (example.com, fixture-target.test, e2e gateway).
+       Operator estates must stay in the working copy, never in git.
 
 Exit 0 only when every hard gate passes; every check prints PASS/FAIL plus
 a disclosure line. Atomic units for the gate functions live in
@@ -36,6 +39,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+
+from pipeline.yaml_util import load_yaml  # noqa: E402
 
 WAIVE_PREFIXES = ("pipeline/verify_b1.py", ".cursor/rules/", "recon/")
 
@@ -63,6 +68,17 @@ PERSONAL_PATTERNS = [
 
 ARABIC_SCRIPT_RE = re.compile(r"[\u0600-\u06FF\uFB50-\uFEFF]")
 
+# Committed allow-list only. ADD TARGET may edit the working copy; C1 fails
+# if a real estate is staged into HEAD.
+SCOPE_INCLUDE_ALLOW = frozenset({
+    "example.com",
+    "*.example.com",
+    "fixture-target.test",
+    "*.fixture-target.test",
+    "172.17.0.1/32",
+})
+TARGET_NAME_ALLOW = frozenset({"example.com", "fixture-target.test"})
+
 
 def tracked_files(root: Path = ROOT) -> list[str]:
     out = subprocess.run(["git", "ls-files"], cwd=root, capture_output=True, text=True, check=True).stdout
@@ -77,6 +93,21 @@ def read_tracked_text(root: Path, rel: str) -> str | None:
         return p.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         return None
+
+
+def read_index_text(root: Path, rel: str) -> str | None:
+    """Blob staged for HEAD (index), not the working copy.
+
+    Operator ADD TARGET may dirty scope.yaml locally; R-6 must judge what
+    git would publish, not the live dashboard allow-list.
+    """
+    proc = subprocess.run(
+        ["git", "show", f":{rel}"],
+        cwd=root, capture_output=True, text=True, check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    return proc.stdout
 
 
 def scan_secrets(text: str) -> list[tuple[str, str]]:
@@ -104,6 +135,16 @@ def scan_non_ascii(text: str) -> set[str]:
 
 def scan_arabic_script(text: str) -> list[str]:
     return ARABIC_SCRIPT_RE.findall(text)
+
+
+def extra_scope_includes(includes: list[str]) -> list[str]:
+    """Return committed includes that are not on the fixture allow-list."""
+    return [item for item in includes if str(item).strip() not in SCOPE_INCLUDE_ALLOW]
+
+
+def extra_target_names(names: list[str]) -> list[str]:
+    """Return committed target-profile keys that are not fixture names."""
+    return [item for item in names if str(item).strip() not in TARGET_NAME_ALLOW]
 
 
 def run_bandit(root: Path = ROOT) -> tuple[int, int, list[str]]:
@@ -187,6 +228,26 @@ def main() -> int:
     print(("R-5 PASS" if not r5_files else "R-5 FAIL") + " no-arabic-persian-script-outside-waivers")
     if r5_files:
         failures.append("R-5")
+
+    r6_hits: list[str] = []
+    if "scope.yaml" in files:
+        scope_text = read_index_text(root, "scope.yaml") or ""
+        includes = [str(i) for i in ((load_yaml(scope_text) or {}).get("includes") or [])]
+        for item in extra_scope_includes(includes):
+            r6_hits.append(f"scope.yaml include {item}")
+    else:
+        r6_hits.append("scope.yaml missing from the tracked tree")
+    if "targets.yaml" in files:
+        targets_text = read_index_text(root, "targets.yaml") or ""
+        names = list(((load_yaml(targets_text) or {}).get("targets") or {}).keys())
+        for item in extra_target_names(names):
+            r6_hits.append(f"targets.yaml key {item}")
+    print(f"R-6 fixture-scope hits={len(r6_hits)}")
+    for h in r6_hits[:10]:
+        print(f"   SCOPE {h}")
+    print(("R-6 PASS" if not r6_hits else "R-6 FAIL") + " committed-scope-is-fixture-only")
+    if r6_hits:
+        failures.append("R-6")
 
     verdict = "PASS" if not failures else "FAIL:" + ",".join(failures)
     line = f"C1 RELEASE GATE VERDICT: {verdict}"

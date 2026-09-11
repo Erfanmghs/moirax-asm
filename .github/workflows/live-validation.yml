@@ -1,7 +1,7 @@
-# LIVE VALIDATION VEHICLE -- full pipeline vs the OPERATOR-OWNED domain
-# bugdasht.ir. The operator deployed the apex, its subdomains and vhosts
-# themselves and directed the validation against that real estate with the
-# FROZEN 200-record smoke wordlist only (no synthetic test network).
+# LIVE VALIDATION VEHICLE -- full pipeline vs an authorized live domain.
+# Dispatch-only. The working copy is rewritten at runtime (scope, wordlists,
+# resolvers) and never committed. Wordlist is the frozen 200-record smoke
+# list (no synthetic test network).
 #
 # REM29 (run #42 evidence): the committed 24h sweep window paced naabu-full
 # to 1pps on a REAL target (18h/IP) and the job hit the 150-min ceiling.
@@ -22,9 +22,8 @@
 # passive counts printed to the console) -> evidence upload (full vehicle
 # tree recon/bugdasht.ir).
 #
-# Authorization: bugdasht.ir is owned and operated by the repo owner
-# (Erfanmghs); the engagement is the operator validating their own estate
-# with a bounded 200-record wordlist and the pipeline's built-in pacing.
+# Authorization: dispatch this vehicle only against a domain the operator
+# owns. The runtime target is written into the working copy, not into git.
 
 name: live-validation
 

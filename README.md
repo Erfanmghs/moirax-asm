@@ -7,7 +7,6 @@
 <p align="center">
   <b>moirax-ASM</b> -- outside-in inventory of a DNS estate you are authorized to test.<br>
   Enumerate, resolve, probe, sweep, diff, alert, report. Operators drive a loopback dashboard.<br>
-  The same ladder is <code>./recon.sh</code>.
 </p>
 
 <p align="center">

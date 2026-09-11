@@ -22,9 +22,6 @@
   OWASP pass is evidence-only (zero extra packets). ScopeGate is a hard stop, not a warning.
 </p>
 
-```
-  PASSIVE OSINT  ||  ACTIVE BRUTE  ->  MERGE  ->  TCP 1-65535  ->  VHOST  ->  OWASP  ->  DIFF / TELEGRAM / REPORT
-```
 
 | You | Start |
 |---|---|

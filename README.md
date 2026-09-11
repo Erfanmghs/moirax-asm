@@ -1,14 +1,34 @@
-# recon-pipeline
+<p align="center">
+  <img src="docs/assets/asm-poster.png" alt="Attack Surface Management -- recon-pipeline" width="920">
+</p>
 
-Outside-in attack-surface management for a DNS estate you are authorized to
-test. The platform enumerates names (passive OSINT in parallel with active
-brute), resolves them, probes virtual hosts, sweeps TCP, diffs every run
-against the last one, and emits a tamper-checked report. Telegram fires on
-real change classes, not on the whole estate. Operators drive it from a
-loopback FastAPI dashboard; the same ladder is `./recon.sh`.
+<p align="center">
+  <img src="dashboard/static/logo.svg" width="72" height="72" alt="ASM shield">
+</p>
 
-It does not exploit. It does not send exploit payloads. The OWASP pass is
-evidence-only (zero extra packets). ScopeGate is a hard stop, not a warning.
+<h1 align="center">Attack Surface Management</h1>
+
+<p align="center">
+  <b>recon-pipeline</b> -- outside-in inventory of a DNS estate you are authorized to test.<br>
+  Enumerate, resolve, probe, sweep, diff, alert, report. Operators drive a loopback dashboard.<br>
+  The same ladder is <code>./recon.sh</code>.
+</p>
+
+<p align="center">
+  <a href="#install"><img src="https://img.shields.io/badge/install-Docker_Compose-22d3ee?style=for-the-badge&labelColor=0c1420" alt="Install"></a>
+  <a href="#first-scan"><img src="https://img.shields.io/badge/console-127.0.0.1:8080-34d399?style=for-the-badge&labelColor=0c1420" alt="Dashboard"></a>
+  <a href="#how-a-run-works"><img src="https://img.shields.io/badge/ladder-passive_||_active-fbbf24?style=for-the-badge&labelColor=0c1420" alt="Run ladder"></a>
+  <a href="docs/HELP.md"><img src="https://img.shields.io/badge/guide-HELP.md-7dd3fc?style=for-the-badge&labelColor=0c1420" alt="Help"></a>
+</p>
+
+<p align="center">
+  It does <b>not</b> exploit. It does <b>not</b> send exploit payloads.<br>
+  OWASP pass is evidence-only (zero extra packets). ScopeGate is a hard stop, not a warning.
+</p>
+
+```
+  PASSIVE OSINT  ||  ACTIVE BRUTE  ->  MERGE  ->  TCP 1-65535  ->  VHOST  ->  OWASP  ->  DIFF / TELEGRAM / REPORT
+```
 
 | You | Start |
 |---|---|
@@ -26,21 +46,15 @@ or have written permission to test.
 
 ## Why this is not "nmap plus a spreadsheet"
 
-- **One ladder**, not a pile of unrelated binaries: passive || active ->
-  merge -> full TCP sweep -> post-port vhost -> passive OWASP.
-- **Diff** against the previous run: added / removed / changed hosts and
-  ports, with HTTP length on reports when httpx is enabled.
-- **Telegram** on change types (new host, removed host, changed host, newly
-  opened port). Above the digest threshold, one grouped DIGEST instead of
-  a flood.
-- **Tamper-checked report** (HTML / PDF / CSV / JSON / Markdown + SHA-256
-  manifest).
-- **ScopeGate**: every host is checked against `scope.yaml`. Suffix tricks
-  (`evil-target.com` pretending to be `target.com`) are refused.
-- **Never-silent**: a skipped source prints WHY. Missing optional keys skip
-  with an explicit line.
-- **Per-target profiles**: depths, wordlists, Telegram receiver, proxy pool,
-  budgets -- without mutating the committed defaults for longer than the run.
+| Law | What you get |
+|---|---|
+| One ladder | Passive \|\| active -> merge -> full TCP sweep -> post-port vhost -> passive OWASP. Not a pile of unrelated binaries. |
+| Diff | Added / removed / changed hosts and ports vs the last run (HTTP length on reports when httpx is on). |
+| Telegram | New host, removed host, changed host, newly opened port. Above the digest threshold: one grouped DIGEST, not a flood. |
+| Tamper-checked report | HTML / PDF / CSV / JSON / Markdown + SHA-256 manifest. |
+| ScopeGate | Every host is checked against `scope.yaml`. Suffix tricks (`evil-target.com` pretending to be `target.com`) are refused. |
+| Never-silent | A skipped source prints WHY. Missing optional keys skip with an explicit line. |
+| Per-target profiles | Depths, wordlists, Telegram receiver, proxy pool, budgets -- without mutating committed defaults for longer than the run. |
 
 ---
 
@@ -175,6 +189,25 @@ CI (`DASHBOARD_TOKEN` in `.env`).
 ---
 
 ## How a run works
+
+```mermaid
+flowchart TD
+  S[START SCAN or recon.sh] --> G[ScopeGate]
+  G --> P[Per-target SETUP]
+  P --> L[Layout recon/TARGET]
+  L --> PAR{passive || active}
+  PAR --> PAS[PASSIVE OSINT / CT / search-forge]
+  PAR --> ACT[dnsx brute + resolve]
+  ACT --> F[ffuf vhost + ffuf-3]
+  ACT --> PC[optional port-check]
+  PAS --> M[MERGE assets.json]
+  F --> M
+  PC --> M
+  M --> SW[TCP 1-65535]
+  SW --> F4[ffuf-4 on HTTP ports]
+  F4 --> OW[OWASP evidence-only]
+  OW --> R[report + warehouse + Telegram]
+```
 
 ```
 START (SCAN or ./recon.sh run TARGET)

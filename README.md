@@ -1,8 +1,4 @@
 <p align="center">
-  <img src="docs/assets/asm-poster.png" alt="Attack Surface Management -- moirax-ASM" width="920">
-</p>
-
-<p align="center">
   <img src="dashboard/static/logo.svg" width="72" height="72" alt="ASM shield">
 </p>
 

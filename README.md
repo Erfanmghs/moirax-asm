@@ -195,7 +195,7 @@ flowchart TD
   S[START SCAN or recon.sh] --> G[ScopeGate]
   G --> P[Per-target SETUP]
   P --> L[Layout recon/TARGET]
-  L --> PAR{passive || active}
+  L --> PAR[passive parallel active]
   PAR --> PAS[PASSIVE OSINT / CT / search-forge]
   PAR --> ACT[dnsx brute + resolve]
   ACT --> F[ffuf vhost + ffuf-3]

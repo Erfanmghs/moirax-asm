@@ -861,7 +861,7 @@ def _psv7_github(params, gate, adapter, target_dir, target, extra, planned, forg
                 "curl -sS -D - --max-time 60 "
                 "-H " + _q(f"Authorization: Bearer {key}") + " "
                 "-H " + _q("Accept: application/vnd.github+json") + " "
-                "-H " + _q("User-Agent: recon-pipeline") + " " + _q(url)
+                "-H " + _q("User-Agent: moirax-ASM") + " " + _q(url)
             )
             result = _bounded(adapter, "curl-fetch", "curl-fetch",
                               {**extra, "fetch_cmd": cmd, "fetch_max_time": "60", "skip_parse": True},

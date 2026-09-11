@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-MARKER = "# recon-pipeline e2e-fixture"
+MARKER = "# moirax-ASM e2e-fixture"
 HOSTS = Path("/etc/hosts")
 
 FLAT = ("www", "app", "dev", "api", "mail")

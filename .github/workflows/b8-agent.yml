@@ -79,7 +79,7 @@ jobs:
       - name: "Build pinned local passive-tools image (REM6 pattern)"
         run: |
           set -e
-          docker build -t recon-pipeline/passive-tools:v1 -f docker/passive-tools/Dockerfile docker/passive-tools
+          docker build -t moirax-asm/passive-tools:v1 -f docker/passive-tools/Dockerfile docker/passive-tools
 
       - name: Reconcile stale live state (frozen stop path; expect EXIT 4 or usage)
         run: |

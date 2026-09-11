@@ -2,7 +2,7 @@
 # REM13 naming fix after run #18: tomnomnom/hacks and puredns/puredns do NOT
 # exist on Docker Hub - "pull access denied ... repository does not exist").
 #
-# Pinned in tools.lock as recon-pipeline/passive-tools:v1 (empty digest):
+# Pinned in tools.lock as moirax-asm/passive-tools:v1 (empty digest):
 #   gau         github.com/lc/gau/v2/cmd/gau   (package lives under cmd/gau)
 #   puredns     github.com/d3mondev/puredns/v2 (main package at module root)
 #   assetfinder github.com/tomnomnom/hacks/assetfinder (no go.mod in repo ->

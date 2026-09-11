@@ -49,7 +49,7 @@ jobs:
         run: |
           docker compose -f docker-compose.yml -f docker-compose.vhost-fixture.yml --profile vhost-fixture up -d --build
           sudo -n python3 docker/vhost-fixture/hosts.py install
-          grep -n "recon-pipeline vhost-fixture" /etc/hosts
+          grep -n "moirax-ASM vhost-fixture" /etc/hosts
           python3 - <<'PY'
           import socket
           for name in ("fixture-target.test", "app.fixture-target.test", "www.fixture-target.test"):
@@ -59,8 +59,8 @@ jobs:
       - name: "Build pinned local tool images (REM6: ffuf v2.1.0)"
         run: |
           set -e
-          docker build -t recon-pipeline/ffuf:v2.1.0 -f docker/ffuf/Dockerfile docker/ffuf
-          docker image inspect recon-pipeline/ffuf:v2.1.0 --format 'ffuf-image-ok {{.Id}}'
+          docker build -t moirax-asm/ffuf:v2.1.0 -f docker/ffuf/Dockerfile docker/ffuf
+          docker image inspect moirax-asm/ffuf:v2.1.0 --format 'ffuf-image-ok {{.Id}}'
 
       - name: Preflight gates (anchor, FFUF-3 wiring, DNSR-2, verify_b1)
         run: PYTHONPATH=. python3 ci/b3_preflight.py

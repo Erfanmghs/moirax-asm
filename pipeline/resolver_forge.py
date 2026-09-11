@@ -75,7 +75,7 @@ def _collect(params: Params, registry: dict[str, Any]) -> list[str]:
         if not url:
             continue
         try:
-            req = urllib.request.Request(url, method="GET", headers={"User-Agent": "recon-pipeline"})
+            req = urllib.request.Request(url, method="GET", headers={"User-Agent": "moirax-ASM"})
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 body = resp.read().decode("utf-8", errors="replace")
         except (urllib.error.URLError, TimeoutError, OSError):

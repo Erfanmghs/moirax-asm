@@ -373,7 +373,7 @@ async def auth_password(request: Request, authorization: str | None = Header(def
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "service": "recon-pipeline-dashboard"}
+    return {"ok": True, "service": "moirax-asm-dashboard"}
 
 
 @app.get("/api/views")

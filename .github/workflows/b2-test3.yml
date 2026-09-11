@@ -65,8 +65,8 @@ jobs:
       - name: "Build pinned local tool images (REM6: ffuf v2.1.0)"
         run: |
           set -e
-          docker build -t recon-pipeline/ffuf:v2.1.0 -f docker/ffuf/Dockerfile docker/ffuf
-          docker image inspect recon-pipeline/ffuf:v2.1.0 --format 'ffuf-image-ok {{.Id}}'
+          docker build -t moirax-asm/ffuf:v2.1.0 -f docker/ffuf/Dockerfile docker/ffuf
+          docker image inspect moirax-asm/ffuf:v2.1.0 --format 'ffuf-image-ok {{.Id}}'
 
       - name: "T3-0 residual dissection (offline, on committed stale tree)"
         run: |

@@ -103,7 +103,7 @@ class SearchForge:
         self.isolate_window = float(settings.get("isolate_window_sec") or 60)
         self.isolate_ratio = float(settings.get("isolate_error_ratio") or 0.2)
         self.ttl = float(settings.get("dork_cache_ttl_sec") or 3600)
-        self.user_agent = str(settings.get("http_user_agent") or "recon-pipeline/1.0")
+        self.user_agent = str(settings.get("http_user_agent") or "moirax-ASM/1.0")
         self.engines: list[dict[str, Any]] = []
         for name, cfg in (registry.get("engines") or {}).items():
             if not isinstance(cfg, dict) or not cfg.get("enabled", True):

@@ -84,14 +84,14 @@ jobs:
       - name: "Build pinned local images (passive-tools; REM6 pattern + dashboard)"
         run: |
           set -e
-          docker build -t recon-pipeline/passive-tools:v1 -f docker/passive-tools/Dockerfile docker/passive-tools
-          docker build -t recon-pipeline/dashboard:v1 -f docker/dashboard/Dockerfile .
-          docker image inspect recon-pipeline/dashboard:v1 --format 'dashboard-image-ok {{.Id}}'
+          docker build -t moirax-asm/passive-tools:v1 -f docker/passive-tools/Dockerfile docker/passive-tools
+          docker build -t moirax-asm/dashboard:v1 -f docker/dashboard/Dockerfile .
+          docker image inspect moirax-asm/dashboard:v1 --format 'dashboard-image-ok {{.Id}}'
 
       - name: "Dashboard image smoke (auth fail-closed + health, no host network)"
         run: |
           set -e
-          docker run -d --name dash-smoke -e DASHBOARD_TOKEN=ci-smoke -p 127.0.0.1:8081:8080 recon-pipeline/dashboard:v1 >/dev/null
+          docker run -d --name dash-smoke -e DASHBOARD_TOKEN=ci-smoke -p 127.0.0.1:8081:8080 moirax-asm/dashboard:v1 >/dev/null
           for i in $(seq 1 20); do
             if curl -s http://127.0.0.1:8081/api/health | grep -q '"ok":true'; then echo "health-ok"; break; fi
             sleep 1

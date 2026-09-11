@@ -9,7 +9,7 @@
 #     20260904T223501Z A3 anomaly = stale public resolver tail x runner egress
 #     -> breaker latency cascade -> canary 2-bad-windows pause. Machinery
 #     conformant; accommodation is environment-only, disclosed in PHASE-REPORT.
-# v4 (REM6): build the pinned LOCAL tool image recon-pipeline/ffuf:v2.1.0 before
+# v4 (REM6): build the pinned LOCAL tool image moirax-asm/ffuf:v2.1.0 before
 #     the run (fresh runner has no local images; runs #4/#5 ffuf invocations died
 #     exit 125 'pull access denied' -> breaker pause -> anomaly). Assertions now
 #     carry stale-evidence guards: A4/A5/A7 evidence files must be NEWER than
@@ -49,7 +49,7 @@ jobs:
         run: |
           docker compose -f docker-compose.yml -f docker-compose.vhost-fixture.yml --profile vhost-fixture up -d --build
           sudo -n python3 docker/vhost-fixture/hosts.py install
-          grep -n "recon-pipeline vhost-fixture" /etc/hosts
+          grep -n "moirax-ASM vhost-fixture" /etc/hosts
           getent hosts app.fixture-target.test || resolveip_confirmed=1
           python3 - <<'PY'
           import socket
@@ -77,8 +77,8 @@ jobs:
       - name: "Build pinned local tool images (REM6: ffuf v2.1.0)"
         run: |
           set -e
-          docker build -t recon-pipeline/ffuf:v2.1.0 -f docker/ffuf/Dockerfile docker/ffuf
-          docker image inspect recon-pipeline/ffuf:v2.1.0 --format 'ffuf-image-ok {{.Id}}'
+          docker build -t moirax-asm/ffuf:v2.1.0 -f docker/ffuf/Dockerfile docker/ffuf
+          docker image inspect moirax-asm/ffuf:v2.1.0 --format 'ffuf-image-ok {{.Id}}'
 
       - name: Preflight gates (forge anchor, selection, scope, verify_b1)
         run: PYTHONPATH=. python3 ci/rem4r_preflight.py

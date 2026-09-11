@@ -60,7 +60,7 @@ jobs:
         run: |
           set -e
           sudo -n python3 docker/e2e-fixture/hosts.py install
-          grep -n "recon-pipeline e2e-fixture" /etc/hosts
+          grep -n "moirax-ASM e2e-fixture" /etc/hosts
           python3 - <<'PY'
           import json, socket, struct, urllib.request
 
@@ -105,8 +105,8 @@ jobs:
       - name: "Build pinned local tool image (REM6: ffuf v2.1.0)"
         run: |
           set -e
-          docker build -t recon-pipeline/ffuf:v2.1.0 -f docker/ffuf/Dockerfile docker/ffuf
-          docker image inspect recon-pipeline/ffuf:v2.1.0 --format 'ffuf-image-ok {{.Id}}'
+          docker build -t moirax-asm/ffuf:v2.1.0 -f docker/ffuf/Dockerfile docker/ffuf
+          docker image inspect moirax-asm/ffuf:v2.1.0 --format 'ffuf-image-ok {{.Id}}'
 
       - name: "Install suite deps (REM22/REM23 parity: fastapi + uvicorn + httpx + reportlab)"
         run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5"

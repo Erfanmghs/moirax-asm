@@ -1,4 +1,4 @@
-/* recon-pipeline SPA -- panels a-e (section 9.2), URL-shareable global filters (section 9.2-b),
+/* moirax-ASM SPA -- panels a-e (section 9.2), URL-shareable global filters (section 9.2-b),
    sortable tables + badges + collapsible JSON inspector (section 9.4). Zero-build
    vanilla JS; the API contract (section 9.1) is the stable surface. */
 "use strict";

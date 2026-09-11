@@ -78,8 +78,8 @@ Check: `docker compose version` prints a version number.
 Open a terminal in the folder where you want the project to live, then:
 
 ```bash
-git clone --depth 1 https://github.com/Erfanmghs/recon-pipeline.git
-cd recon-pipeline
+git clone --depth 1 https://github.com/Erfanmghs/moirax-ASM.git
+cd moirax-ASM
 ```
 
 The repository is **private**, so GitHub asks you to prove who you are:
@@ -110,8 +110,8 @@ token from step 3.2):
 
 ```bash
 docker login ghcr.io -u YOUR-GITHUB-USERNAME   # paste the token as the password
-docker pull ghcr.io/erfanmghs/recon-pipeline:dashboard
-docker tag ghcr.io/erfanmghs/recon-pipeline:dashboard recon-pipeline-dashboard
+docker pull ghcr.io/erfanmghs/moirax-asm:dashboard
+docker tag ghcr.io/erfanmghs/moirax-asm:dashboard moirax-asm-dashboard
 docker compose --profile dashboard up -d
 ```
 

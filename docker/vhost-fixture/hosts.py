@@ -6,7 +6,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-MARKER = "# recon-pipeline vhost-fixture"
+MARKER = "# moirax-ASM vhost-fixture"
 LINE = "172.28.100.10 fixture-target.test app.fixture-target.test www.fixture-target.test " + MARKER
 HOSTS = Path("/etc/hosts")
 

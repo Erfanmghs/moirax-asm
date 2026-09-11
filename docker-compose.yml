@@ -1,11 +1,11 @@
-name: recon-pipeline
+name: moirax-asm
 
 services:
   dashboard:
     build:
       context: .
       dockerfile: docker/dashboard/Dockerfile
-    image: recon-pipeline-dashboard
+    image: moirax-asm-dashboard
     command: ["uvicorn", "dashboard.app:app", "--host", "0.0.0.0", "--port", "8080"]
     working_dir: /app
     # Starts as root so entrypoint can attach the docker.sock GID, then drops

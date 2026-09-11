@@ -1,5 +1,5 @@
 # Publishes the ready-made dashboard image so installs can start without
-# building (compose service pins the local name recon-pipeline-dashboard;
+# building (compose service pins the local name moirax-asm-dashboard;
 # users tag the pulled image with that name -- README section 4.5 option A).
 name: docker-publish
 
@@ -32,7 +32,7 @@ jobs:
           file: docker/dashboard/Dockerfile
           push: true
           tags: |
-            ghcr.io/erfanmghs/recon-pipeline:dashboard
-            ghcr.io/erfanmghs/recon-pipeline:sha-${{ github.sha }}
+            ghcr.io/erfanmghs/moirax-asm:dashboard
+            ghcr.io/erfanmghs/moirax-asm:sha-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=min

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/asm-poster.png" alt="Attack Surface Management -- recon-pipeline" width="920">
+  <img src="docs/assets/asm-poster.png" alt="Attack Surface Management -- moirax-ASM" width="920">
 </p>
 
 <p align="center">
@@ -9,7 +9,7 @@
 <h1 align="center">Attack Surface Management</h1>
 
 <p align="center">
-  <b>recon-pipeline</b> -- outside-in inventory of a DNS estate you are authorized to test.<br>
+  <b>moirax-ASM</b> -- outside-in inventory of a DNS estate you are authorized to test.<br>
   Enumerate, resolve, probe, sweep, diff, alert, report. Operators drive a loopback dashboard.<br>
   The same ladder is <code>./recon.sh</code>.
 </p>
@@ -67,8 +67,8 @@ for `./recon.sh`; the dashboard image carries its own runtime.
 Shallow clone (this repository's default branch is `private`):
 
 ```bash
-git clone --depth 1 https://github.com/Erfanmghs/recon-pipeline.git
-cd recon-pipeline
+git clone --depth 1 https://github.com/Erfanmghs/moirax-ASM.git
+cd moirax-ASM
 cp .env.example .env
 ```
 
@@ -109,8 +109,8 @@ Or pull the published image if your GitHub account can read packages:
 
 ```bash
 docker login ghcr.io -u YOUR-GITHUB-USERNAME   # PAT as password
-docker pull ghcr.io/erfanmghs/recon-pipeline:dashboard
-docker tag ghcr.io/erfanmghs/recon-pipeline:dashboard recon-pipeline-dashboard
+docker pull ghcr.io/erfanmghs/moirax-asm:dashboard
+docker tag ghcr.io/erfanmghs/moirax-asm:dashboard moirax-asm-dashboard
 docker compose --profile dashboard up -d
 ```
 

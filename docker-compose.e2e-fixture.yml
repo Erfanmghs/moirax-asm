@@ -18,7 +18,7 @@
 # (SecLists top-5000 labels) + 5 nested (dotted fixture wordlist, registered
 # as e2e_nested_fixture), every answer -> 172.17.0.1.
 
-name: recon-pipeline
+name: moirax-asm
 
 services:
   e2e-fixture:
@@ -26,7 +26,7 @@ services:
     build:
       context: ./docker/e2e-fixture
       dockerfile: Dockerfile
-    image: recon-pipeline/e2e-fixture:v2
+    image: moirax-asm/e2e-fixture:v2
     ports:
       - "53:53/udp"
       - "80:80"

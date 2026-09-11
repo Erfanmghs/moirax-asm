@@ -10,7 +10,7 @@
 # compose tool *services* apply to compose-run containers; host-network docker run
 # needs the hosts.py mapping to the fixture IP (same names/IP as extra_hosts).
 
-name: recon-pipeline
+name: moirax-asm
 
 networks:
   fixture_net:
@@ -25,7 +25,7 @@ services:
     build:
       context: ./docker/vhost-fixture
       dockerfile: Dockerfile
-    image: recon-pipeline/vhost-fixture:b2-smoke
+    image: moirax-asm/vhost-fixture:b2-smoke
     hostname: vhost-fixture
     networks:
       fixture_net:

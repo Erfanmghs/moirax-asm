@@ -21,11 +21,11 @@ images:
     tag: "1.36.1"
     digest: ""
   vhost-fixture:
-    image: recon-pipeline/vhost-fixture
+    image: moirax-asm/vhost-fixture
     tag: "b2-smoke"
     digest: "sha256:a89838992141cb33491cbfd3fe0c252dab80376a39b49ccec16530725fa51a2e"
   ffuf:
-    image: recon-pipeline/ffuf
+    image: moirax-asm/ffuf
     tag: "v2.1.0"
     digest: ""
   dnsx:
@@ -72,15 +72,15 @@ images:
   # passive-tools image (docker/passive-tools). chaos lives at
   # projectdiscovery/chaos-client; findomain at the author's repo image.
   assetfinder:
-    image: recon-pipeline/passive-tools
+    image: moirax-asm/passive-tools
     tag: "v1"
     digest: ""
   waybackurls:
-    image: recon-pipeline/passive-tools
+    image: moirax-asm/passive-tools
     tag: "v1"
     digest: ""
   puredns:
-    image: recon-pipeline/passive-tools
+    image: moirax-asm/passive-tools
     tag: "v1"
     digest: ""
   chaos:
@@ -92,6 +92,6 @@ images:
     tag: "latest"
     digest: ""
   passive-tools:
-    image: recon-pipeline/passive-tools
+    image: moirax-asm/passive-tools
     tag: "v1"
     digest: ""

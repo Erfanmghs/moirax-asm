@@ -17,7 +17,7 @@ settings:
   isolate_window_sec: 60
   isolate_error_ratio: 0.2
   dork_cache_ttl_sec: 3600
-  http_user_agent: "Mozilla/5.0 (compatible; recon-pipeline/1.0)"
+  http_user_agent: "Mozilla/5.0 (compatible; moirax-ASM/1.0)"
 engines:
   duckduckgo:
     kind: html

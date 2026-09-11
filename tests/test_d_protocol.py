@@ -312,6 +312,8 @@ class TestDashboardApiHardening(unittest.TestCase):
                 self.assertEqual(r.status_code, 422, f"{bad!r} must be refused pre-spawn")
             r = self.client.post("/api/run/stop", json={"target": "../../x"}, headers=self.headers)
             self.assertEqual(r.status_code, 422)
+            r = self.client.post("/api/run/restart", json={"target": "../../x"}, headers=self.headers)
+            self.assertEqual(r.status_code, 422)
 
     def test_run_start_refuses_when_nested_docker_is_dead(self):
         patch, envpatch = self._patched()

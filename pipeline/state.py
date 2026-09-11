@@ -175,6 +175,25 @@ def clear_run_pid(target_dir: Path) -> None:
         return
 
 
+def run_pid_is_live(target_dir: Path) -> bool:
+    """True only when run.pid names a process that still exists.
+
+    A stale pid after a crash must not block START; RESTART still stop+spawns.
+    """
+    pid = read_run_pid(target_dir)
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
 def operator_stopped(params: Params, target_dir: Path, target: str) -> bool:
     state = load_state(params, target_dir, target)
     return str((state.get("run") or {}).get("status") or "") == str(

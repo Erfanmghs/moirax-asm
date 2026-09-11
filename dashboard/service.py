@@ -80,7 +80,11 @@ def _read_env_map(path: Path) -> dict[str, str]:
     env: dict[str, str] = {}
     if not path.is_file():
         return env
-    for raw in path.read_text(encoding="utf-8").splitlines():
+    try:
+        raw_text = path.read_text(encoding="utf-8")
+    except OSError:
+        return env
+    for raw in raw_text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue

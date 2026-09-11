@@ -61,7 +61,7 @@ def main() -> int:
         "/api/health", "/api/tools", "/api/wordlists", "/api/results/{target}",
         "/api/results/{target}/diff", "/api/results/{target}/coverage",
         "/api/run/status/{target}", "/api/run/log/{target}", "/api/run/start",
-        "/api/run/stop", "/api/run/resume", "/api/scheduler", "/api/keys",
+        "/api/run/stop", "/api/run/resume", "/api/run/restart", "/api/scheduler", "/api/keys",
         "/api/settings", "/api/proxy/check",
     )
     missing = [r for r in routes if f'"{r}"' not in app_text]

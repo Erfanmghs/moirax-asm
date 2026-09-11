@@ -32,6 +32,32 @@ class OperatorStop(Exception):
     """Operator requested stop; branches must not start the next module."""
 
 
+def _engage_agent(
+    params: Params,
+    target_dir: Path,
+    module: str,
+    branch: str,
+    reason: str,
+    hooks: dict[str, Any] | None = None,
+    holder: dict[str, Any] | None = None,
+) -> None:
+    """Opt-in supervisor hook. Never raises -- a NameError here used to abort
+    the whole PASSIVE branch because the helper lived inside run_pipeline."""
+    try:
+        from pipeline.agent import Supervisor
+
+        box = holder if holder is not None else {}
+        if "supervisor" not in box:
+            box["supervisor"] = Supervisor(params, target_dir)
+        supervisor = box["supervisor"]
+        if not supervisor.enabled():
+            return
+        verdict = supervisor.on_module_failure(module, branch, str(reason), hooks=hooks)
+        print(f"agent: {module} verdict={ {k: v for k, v in verdict.items() if k != 'engaged'} }")
+    except Exception as exc:  # noqa: BLE001 -- agent must never fail the module path
+        print(f"agent: engage failed (disclosed, ignored): {exc}")
+
+
 def _tuned_budgets(params: Params, target_dir: Path) -> tuple[float, float, str]:
     """C7 start-of-run hook: base branch budgets scaled by persisted selftune
     multipliers (bounded; corrupt state ignored, disclosed, never fail)."""
@@ -53,6 +79,35 @@ def _tuned_budgets(params: Params, target_dir: Path) -> tuple[float, float, str]
 
 
 def run_pipeline(
+    params: Params,
+    gate: ScopeGate,
+    target: str,
+    aggressive: bool = False,
+    clock: Clock | None = None,
+    runner: Any | None = None,
+    resume: bool = False,
+) -> int:
+    """Public entry: a crash inside the ladder still marks the run failed
+    and clears the PID so the dashboard never sits on a zombie 'running'."""
+    try:
+        return _run_pipeline_impl(
+            params, gate, target, aggressive=aggressive, clock=clock, runner=runner, resume=resume
+        )
+    except OperatorStop:
+        clock = clock or Clock()
+        target_dir = ensure_layout(params, target)
+        return _finalize_stopped(params, gate, target_dir, target, clock, clock.time(), None)
+    except Exception as exc:  # noqa: BLE001 -- last-chance: never abort without a terminal status
+        traceback.print_exc()
+        try:
+            target_dir = ensure_layout(params, target)
+            return _finalize_crash(params, target_dir, target, exc)
+        except Exception as inner:  # noqa: BLE001
+            print(f"engine crash: {exc}; finalize failed: {inner}")
+            return 1
+
+
+def _run_pipeline_impl(
     params: Params,
     gate: ScopeGate,
     target: str,
@@ -87,7 +142,7 @@ def run_pipeline(
     pool_ok, proxy_reason, assigner = gate_pool_or_legacy(params)
     if not pool_ok:
         print(f"PROXY RULE fail-fast (section 9.3): {proxy_reason}")
-        return _exit_code(params, str(params.require("run_status_failed")))
+        return _finalize_crash(params, target_dir, target, RuntimeError(proxy_reason))
     if proxy_reason != "proxy unset -- direct connection (section 9.3)":
         print(f"proxy: {proxy_reason}")
     if assigner is not None:
@@ -99,18 +154,6 @@ def run_pipeline(
     # section 12 opt-in supervisor: lazily created ONLY when enabled (section 12.1/section 12.4 --
     # event-driven, zero cost and zero LLM calls on healthy runs).
     agent_holder: dict[str, Any] = {}
-
-    def _engage_agent(module: str, branch: str, reason: str, hooks: dict[str, Any] | None = None) -> None:
-        from pipeline.agent import Supervisor
-
-        if "supervisor" not in agent_holder:
-            agent_holder["supervisor"] = Supervisor(params, target_dir)
-        supervisor = agent_holder["supervisor"]
-        if not supervisor.enabled():
-            return
-        verdict = supervisor.on_module_failure(module, branch, str(reason), hooks=hooks)
-        print(f"agent: {module} verdict={ {k: v for k, v in verdict.items() if k != 'engaged'} }")
-
 
     def _on_anomaly(status: str, module: str, reason: str) -> None:
         alerts.append((status, module, reason))
@@ -275,7 +318,7 @@ def run_pipeline(
                 state_engine.set_status(params, target_dir, sweep_name, "failed")
                 partial.append(f"portsweep:{exc}")
                 _append_log(params, target_dir, sweep_name, sweep_name, 1, str(exc))
-                _engage_agent(sweep_name, "active", str(exc))
+                _engage_agent(params, target_dir, sweep_name, "active", str(exc), holder=agent_holder)
                 traceback.print_exc()
 
     # FFUF-4: vhost enum on HTTP-like ports found by PORT-SWEEP (ip:port + Host).
@@ -311,7 +354,7 @@ def run_pipeline(
                 state_engine.set_status(params, target_dir, ffuf4_name, "failed")
                 partial.append(f"ffuf4:{exc}")
                 _append_log(params, target_dir, ffuf4_name, ffuf4_name, 1, str(exc))
-                _engage_agent(ffuf4_name, "post-merge", str(exc))
+                _engage_agent(params, target_dir, ffuf4_name, "post-merge", str(exc), holder=agent_holder)
                 traceback.print_exc()
 
     # C6 OWASP-PASSIVE (operator roadmap): post-MERGE zero-packet artifact
@@ -339,19 +382,21 @@ def run_pipeline(
                 state_engine.set_status(params, target_dir, owasp_name, "failed")
                 partial.append(f"owasp:{exc}")
                 _append_log(params, target_dir, owasp_name, owasp_name, 1, str(exc))
-                _engage_agent(owasp_name, "post-merge", str(exc))
+                _engage_agent(params, target_dir, owasp_name, "post-merge", str(exc), holder=agent_holder)
                 traceback.print_exc()
 
     # C5 IP rotation ledger: every module's pool assignment is always visible
     # (never-fail, credentials masked) -- honesty law for the rotation feature.
     if assigner is not None:
-        assigner.write_ledger(target_dir)
-        # C5 v2: flush per-IP health telemetry next to the rotation ledger.
-        assigner.write_health(target_dir)
-        for line in assigner.pool.summary_lines():
-            print(line)
-        for line in assigner.pool.health_lines():
-            print(line)
+        try:
+            assigner.write_ledger(target_dir)
+            assigner.write_health(target_dir)
+            for line in assigner.pool.summary_lines():
+                print(line)
+            for line in assigner.pool.health_lines():
+                print(line)
+        except Exception as exc:  # noqa: BLE001 -- rotation ledger never flips the run
+            print(f"rotation ledger: disclosed write failure: {exc}")
 
     if state_engine.operator_stopped(params, target_dir, target):
         return _finalize_stopped(params, gate, target_dir, target, clock, run_started, assigner)
@@ -364,11 +409,14 @@ def run_pipeline(
     state_engine.set_run_status(params, target_dir, target, status, reason=reason, failing_module=failing_module)
     if state_engine.operator_stopped(params, target_dir, target):
         return _finalize_stopped(params, gate, target_dir, target, clock, run_started, assigner)
-    ingest_if_completed(params, gate, target_dir, target, status)
-    snapshot(params, target_dir, stamp)
-    prev = previous_timestamp(params, target_dir, stamp)
-    append_run(params, target_dir, stamp, status, counts)
-    write_diff(params, target_dir, prev, stamp)
+    try:
+        ingest_if_completed(params, gate, target_dir, target, status)
+        snapshot(params, target_dir, stamp)
+        prev = previous_timestamp(params, target_dir, stamp)
+        append_run(params, target_dir, stamp, status, counts)
+        write_diff(params, target_dir, prev, stamp)
+    except Exception as exc:  # noqa: BLE001 -- history is derived; never leave status unset
+        print(f"history: disclosed failure (run verdict kept): {exc}")
     try:
         from pipeline.warehouse import ingest_run_end
 
@@ -507,7 +555,7 @@ def run_module(
         except Exception as exc:
             state_engine.set_status(params, target_dir, tool_name, "failed")
             _append_log(params, target_dir, tool_name, tool_name, 1, str(exc))
-            _engage_agent(tool_name, "active", str(exc))
+            _engage_agent(params, target_dir, tool_name, "active", str(exc))
             print(f"module {tool_name} failed: {exc}")
             return 1
         state_engine.set_status(params, target_dir, tool_name, "done")
@@ -564,18 +612,25 @@ def stop_target(params: Params, target_dir: Path) -> list[str]:
 
     prefix = docker_prefix(params)
     label = str(params.require("docker_label_target"))
-    listed = subprocess.run(
-        [*prefix, "ps", "-q", "--filter", f"label={label}={target}"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    ids = [line.strip() for line in listed.stdout.splitlines() if line.strip()]
+    ids: list[str] = []
+    try:
+        listed = subprocess.run(
+            [*prefix, "ps", "-q", "--filter", f"label={label}={target}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        ids = [line.strip() for line in listed.stdout.splitlines() if line.strip()]
+    except OSError as exc:
+        print(f"stop: docker list failed (status already stopped): {exc}")
 
     def _kill_one(cid: str) -> None:
         # kill = immediate SIGKILL in the container runtime (no graceful wait).
-        subprocess.run([*prefix, "kill", cid], capture_output=True, text=True, check=False)
-        subprocess.run([*prefix, "rm", "-f", cid], capture_output=True, text=True, check=False)
+        try:
+            subprocess.run([*prefix, "kill", cid], capture_output=True, text=True, check=False)
+            subprocess.run([*prefix, "rm", "-f", cid], capture_output=True, text=True, check=False)
+        except OSError:
+            return
 
     if ids:
         workers = min(16, len(ids))
@@ -613,8 +668,10 @@ def _pids_for_cli_run(target: str) -> list[int]:
     needles = (
         f"pipeline.cli run {target}".encode(),
         f"pipeline.cli resume {target}".encode(),
+        f"pipeline.cli restart {target}".encode(),
         f"recon.sh run {target}".encode(),
         f"recon.sh resume {target}".encode(),
+        f"recon.sh restart {target}".encode(),
     )
     for entry in proc.iterdir():
         if not entry.name.isdigit():
@@ -661,6 +718,42 @@ def _terminate_pid(pid: int) -> bool:
     return True
 
 
+def _finalize_crash(params: Params, target_dir: Path, target: str, exc: BaseException) -> int:
+    """Mark the run failed and drop the PID. Used when the ladder throws."""
+    try:
+        if state_engine.operator_stopped(params, target_dir, target):
+            state_engine.clear_run_pid(target_dir)
+            return _exit_code(params, str(params.require("run_status_stopped")))
+    except Exception as inner:  # noqa: BLE001
+        print(f"crash finalize: stop check failed: {inner}")
+    status = str(params.require("run_status_failed"))
+    reason = f"engine crash (disclosed): {type(exc).__name__}: {exc}"
+    print(reason)
+    try:
+        state_engine.fail_running_modules(params, target_dir, target)
+    except Exception as inner:  # noqa: BLE001
+        print(f"crash finalize: fail_running_modules: {inner}")
+    try:
+        state_engine.set_run_status(
+            params,
+            target_dir,
+            target,
+            status,
+            reason=reason[:500],
+            failing_module=None,
+        )
+    except Exception as inner:  # noqa: BLE001
+        print(f"crash finalize: set_run_status: {inner}")
+    try:
+        state_engine.clear_run_pid(target_dir)
+    except Exception as inner:  # noqa: BLE001
+        print(f"crash finalize: clear_run_pid: {inner}")
+    try:
+        return _exit_code(params, status)
+    except Exception:
+        return 1
+
+
 def _finalize_stopped(
     params: Params,
     gate: ScopeGate,
@@ -682,11 +775,14 @@ def _finalize_stopped(
             assigner.write_health(target_dir)
         except Exception:  # noqa: BLE001
             pass
-    ingest_if_completed(params, gate, target_dir, target, status)
-    snapshot(params, target_dir, stamp)
-    prev = previous_timestamp(params, target_dir, stamp)
-    append_run(params, target_dir, stamp, status, counts)
-    write_diff(params, target_dir, prev, stamp)
+    try:
+        ingest_if_completed(params, gate, target_dir, target, status)
+        snapshot(params, target_dir, stamp)
+        prev = previous_timestamp(params, target_dir, stamp)
+        append_run(params, target_dir, stamp, status, counts)
+        write_diff(params, target_dir, prev, stamp)
+    except Exception as exc:  # noqa: BLE001 -- STOP still returns stopped even if history fails
+        print(f"history: disclosed failure on stop (status kept): {exc}")
     try:
         from pipeline.warehouse import ingest_run_end
 
@@ -835,7 +931,7 @@ def _run_passive_modules(
             state_engine.set_status(params, target_dir, name, "failed")
             _append_log(params, target_dir, name, name, 1, str(exc))
             partial.append(f"passive:{name}:{exc}")
-            _engage_agent(name, "passive", str(exc))
+            _engage_agent(params, target_dir, name, "passive", str(exc))
             traceback.print_exc()
             continue
     return docs
@@ -938,6 +1034,7 @@ def _run_active_modules(
             state_engine.set_status(params, target_dir, name, "failed")
             _append_log(params, target_dir, name, name, 1, str(exc))
             partial.append(f"active:{name}:{exc}")
+            _engage_agent(params, target_dir, name, "active", str(exc))
             traceback.print_exc()
             return None
 
@@ -1100,29 +1197,35 @@ def _echo_fixture_mode(params: Params) -> bool:
 
 
 def _append_log(params: Params, target_dir: Path, module: str, tool: str, code: int, detail: str) -> None:
-    if state_engine.operator_stopped(params, target_dir, target_dir.name):
-        return
-    path = target_dir / str(params.require("run_log"))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tail_n = int(params.require("stderr_tail_lines"))
-    tail = " | ".join(detail.splitlines()[-tail_n:])
-    from datetime import datetime, timezone
+    try:
+        if state_engine.operator_stopped(params, target_dir, target_dir.name):
+            return
+        path = target_dir / str(params.require("run_log"))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tail_n = int(params.require("stderr_tail_lines"))
+        tail = " | ".join(detail.splitlines()[-tail_n:])
+        from datetime import datetime, timezone
 
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(f"{stamp}\t{module}\t{tool}\t{code}\tfail\t{tail}\n")
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(f"{stamp}\t{module}\t{tool}\t{code}\tfail\t{tail}\n")
+    except Exception as exc:  # noqa: BLE001 -- log write never fails a module
+        print(f"run.log write failed (disclosed): {exc}")
 
 
 def _append_note(params: Params, target_dir: Path, module: str, detail: str) -> None:
-    if state_engine.operator_stopped(params, target_dir, target_dir.name):
-        return
-    path = target_dir / str(params.require("run_log"))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    from datetime import datetime, timezone
+    try:
+        if state_engine.operator_stopped(params, target_dir, target_dir.name):
+            return
+        path = target_dir / str(params.require("run_log"))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        from datetime import datetime, timezone
 
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(f"{stamp}\t{module}\t-\t0\tok\t{detail}\n")
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(f"{stamp}\t{module}\t-\t0\tok\t{detail}\n")
+    except Exception as exc:  # noqa: BLE001 -- notes never fail a branch
+        print(f"run.log note failed (disclosed): {exc}")
 
 
 def _counts(
@@ -1137,7 +1240,10 @@ def _counts(
     }
     assets_path = target_dir / str(params.require("assets_relpath"))
     if assets_path.is_file():
-        doc = read_json(assets_path)
-        counts["assets"] = len(doc.get("assets") or [])
-        counts["quarantine"] = len(doc.get("quarantine") or [])
+        try:
+            doc = read_json(assets_path)
+            counts["assets"] = len(doc.get("assets") or [])
+            counts["quarantine"] = len(doc.get("quarantine") or [])
+        except Exception as exc:  # noqa: BLE001 -- counts are informational
+            print(f"counts: disclosed assets read failure: {exc}")
     return counts

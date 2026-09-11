@@ -5,9 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Attack Surface Management | moirax-ASM</title>
 <link rel="icon" href="/static/favicon.svg?v=asm1" type="image/svg+xml" sizes="any">
-<link rel="stylesheet" href="/static/theme.css?v=asm1">
+<link rel="stylesheet" href="/static/theme.css?v=asm4">
 </head>
 <body>
+<canvas id="fx-field" aria-hidden="true"></canvas>
 <div id="auth-gate" class="auth-gate" hidden>
   <div class="auth-card">
     <p class="auth-kicker">operator console</p>
@@ -23,7 +24,8 @@
 </div>
 <a class="skip" href="#main">Skip to content</a>
 <header class="topbar">
-  <div class="hero-banner">
+  <div class="hero-banner" id="hero-banner">
+    <span class="hero-glow" aria-hidden="true"></span>
     <a class="brand" href="#scan" id="brand-home">
       <img class="logo" src="/static/logo.svg?v=asm1" width="56" height="56" alt="Attack Surface Management">
       <span class="brand-copy">
@@ -123,9 +125,9 @@
         <li><span class="ui">ADD TARGET</span> registers one domain (isolated folder + profile) without starting a check.</li>
         <li><span class="ui">ADD LIST</span> registers many domains at once (one per line, or comma-separated).</li>
         <li><span class="ui">Authorize this target</span> -- adds each new domain to <span class="ui">scope.yaml</span> if missing.</li>
-        <li>On that site's row, press <span class="ui">START</span> to begin a check. Add the site first.</li>
+        <li>On that site's row, press <span class="ui">START</span> to begin a check when the site is idle. Add the site first. <span class="ui">START</span> does not kill a live scan.</li>
         <li>SETUP is optional. If you skip it, this site uses global SETTINGS / TOOLS / WORDLISTS. Uncheck inherit to pick tools (each row says what it does) and tick wordlist filenames on this same page. SHOW NAMES previews entries in a file. Automatic checks for this site are also in SETUP.</li>
-        <li>START / RESUME / STOP / DELETE on a row apply only to that site. DELETE hides it from SCAN immediately; warehouse records stay for 7 days, then that site's files are removed.</li>
+        <li>START / RESUME / RESTART / STOP / DELETE on a row apply only to that site. START begins a new ladder when idle. RESUME continues done modules. RESTART stops a live scan for this site, then starts from the first module. DELETE hides it from SCAN immediately; warehouse records stay for 7 days, then that site's files are removed.</li>
       </ol>
       <h4>SCHEDULER</h4>
       <p>Global defaults live in <span class="ui">SETTINGS</span> (automatic checks on/off and interval, minimum 10 minutes). Each site can enable, change the interval, or turn checks off in <span class="ui">SETUP</span> / TARGETS. Empty per-site fields inherit SETTINGS. Example: 720 minutes is about twice a day.</p>
@@ -434,7 +436,7 @@
     <div class="howto">
       <ol>
         <li>Sign in if the gate is visible.</li>
-        <li>Type a domain, press ADD TARGET. Or paste several names and press ADD LIST. Then START on that row. Authorize adds them to the allow-list.</li>
+        <li>Type a domain, press ADD TARGET. Or paste several names and press ADD LIST. Then START on that row (idle) or RESTART to kill a live scan and begin from the first module. Authorize adds them to the allow-list.</li>
         <li>SETUP on a row is optional. Empty setup uses global SETTINGS / TOOLS / WORDLISTS for that site. SAVE SETUP only if this site needs different alerts, schedule, modules, budgets, proxy, or wordlists.</li>
       </ol>
     </div>
@@ -452,12 +454,12 @@
         <label class="scan-list-label">LIST (one per line or comma-separated)
           <textarea id="scan-list" class="mono" rows="3" placeholder="a.example&#10;b.example, c.example"></textarea>
         </label>
-        <div class="row" id="run-modules"></div>
+        <div class="row hidden" id="run-modules" hidden></div>
       </div>
     </div>
-    <h2 class="mt">YOUR SITES <span class="hint">SETUP customizes this site -- logs and modules stay on that site only</span></h2>
+    <h2 class="mt">YOUR SITES <span class="hint">each row is one site -- START idle, RESUME continues, RESTART kills then from module 1</span></h2>
     <div id="scan-board" class="scan-board"><p class="dim">sign in, then sites you add appear here</p></div>
-    <h2 class="mt">LIVE LOG <span class="hint">Readable for humans, or Raw for the exact file -- Export saves the full file</span></h2>
+    <h2 class="mt">LIVE LOG <span class="hint">one site at a time -- the SITE box / last expanded row, not a mix of all targets</span></h2>
     <div class="term" id="live-term">
       <div class="term-bar">
         <i></i><i></i><i></i>
@@ -576,6 +578,7 @@
 
 <div id="toast" class="toast hidden"></div>
 <div id="help-pop" class="help-pop hidden" role="tooltip"></div>
-<script src="/static/app.js?v=asm1"></script>
+<script src="/static/motion.js?v=asm4"></script>
+<script src="/static/app.js?v=asm4"></script>
 </body>
 </html>

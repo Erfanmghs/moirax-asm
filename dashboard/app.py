@@ -21,7 +21,9 @@ from typing import Any
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from dashboard import authstore
 from dashboard.service import (
@@ -116,30 +118,35 @@ async def _hardening_headers(request: Any, call_next: Any) -> Any:
     token = _REQUEST.set(request)
     try:
         response = await call_next(request)
-    finally:
+    except Exception:
         _REQUEST.reset(token)
-    if response.status_code == 401:
-        _note_auth_fail(ip)
-    response.headers.setdefault("X-Content-Type-Options", "nosniff")
-    response.headers.setdefault("X-Frame-Options", "DENY")
-    response.headers.setdefault("Referrer-Policy", "no-referrer")
-    response.headers.setdefault("Cache-Control", "no-store")
-    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
-    response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
-    response.headers.setdefault(
-        "Permissions-Policy",
-        "geolocation=(), camera=(), microphone=(), payment=()",
-    )
-    if path.startswith("/static") or path == "/":
-        response.headers.setdefault("Content-Security-Policy", _SPA_CSP)
-    else:
-        response.headers.setdefault("Content-Security-Policy", _API_CSP)
+        raise
+    _REQUEST.reset(token)
+    try:
+        if response.status_code == 401:
+            _note_auth_fail(ip)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("Cache-Control", "no-store")
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+        response.headers.setdefault(
+            "Permissions-Policy",
+            "geolocation=(), camera=(), microphone=(), payment=()",
+        )
+        if path.startswith("/static") or path == "/":
+            response.headers.setdefault("Content-Security-Policy", _SPA_CSP)
+        else:
+            response.headers.setdefault("Content-Security-Policy", _API_CSP)
+    except Exception:
+        pass
     return response
 
 
 def _valid_target(value: str) -> str:
     """Pentest hardening (P-9): target names reach subprocess argv via
-    run/start|stop|resume -- enforce a strict target-name law
+    run/start|stop|resume|restart -- enforce a strict target-name law
     so flag-injection ('-x'), traversal ('../x') and metacharacters are
     refused BEFORE any process is spawned."""
     target = (value or "").strip()
@@ -163,6 +170,42 @@ def _params_obj() -> Params:
     if _params is None:
         _params = Params(ROOT)
     return _params
+
+
+def _spawn_detached(cmd: list[str], spawn_log: Path | None = None) -> Any:
+    """Start a child process. OSError becomes an HTTP 503, never a worker crash."""
+    handle = None
+    try:
+        if spawn_log is not None:
+            spawn_log.parent.mkdir(parents=True, exist_ok=True)
+            handle = spawn_log.open("ab")
+            proc = subprocess.Popen(
+                cmd,
+                cwd=ROOT,
+                stdout=handle,
+                stderr=handle,
+                start_new_session=True,
+            )
+        else:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=ROOT,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"failed to start process: {exc}",
+        ) from exc
+    finally:
+        if handle is not None:
+            try:
+                handle.close()
+            except OSError:
+                pass
+    return proc
 
 
 def _env_token() -> str:
@@ -230,7 +273,10 @@ def _clear_session_cookie(response: JSONResponse) -> JSONResponse:
 
 
 def _issue_session() -> JSONResponse:
-    raw = authstore.create_session()
+    try:
+        raw = authstore.create_session()
+    except Exception as exc:  # noqa: BLE001 -- never 500 the login cookie path
+        raise HTTPException(status_code=503, detail="auth store unavailable") from exc
     return _set_session_cookie(JSONResponse({"ok": True}), raw)
 
 
@@ -379,7 +425,11 @@ def health() -> dict[str, Any]:
 @app.get("/api/views")
 def views(authorization: str | None = Header(default=None)) -> Any:
     _auth(authorization)
-    return JSONResponse(load_yaml_file(str(ROOT / "views.yaml")))
+    path = ROOT / "views.yaml"
+    try:
+        return JSONResponse(load_yaml_file(str(path)))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=f"views unavailable: {exc}") from exc
 
 
 # --------------------------------------------------------------- panel a: Tools
@@ -588,9 +638,12 @@ def _authorize_include(target: str) -> None:
         pass
     existing: list[str] = []
     if path.is_file():
-        doc = load_yaml_file(str(path)) or {}
-        existing = [str(x).strip() for x in (doc.get("includes") or [])]
-        text = path.read_text(encoding="utf-8")
+        try:
+            doc = load_yaml_file(str(path)) or {}
+            existing = [str(x).strip() for x in (doc.get("includes") or [])]
+            text = path.read_text(encoding="utf-8")
+        except (OSError, ValueError) as exc:
+            raise HTTPException(status_code=503, detail=f"could not read scope.yaml: {exc}") from exc
     else:
         text = (
             "engagement:\n  name: dashboard-engagement\n  authorization_date: \"2026-09-08\"\n"
@@ -610,7 +663,10 @@ def _authorize_include(target: str) -> None:
         text = text.replace("includes:", "includes:\n" + "\n".join(lines_to_add), 1)
     else:
         text += "\nincludes:\n" + "\n".join(lines_to_add) + "\n"
-    path.write_text(text, encoding="utf-8")
+    try:
+        path.write_text(text, encoding="utf-8")
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail=f"could not update scope.yaml: {exc}") from exc
 
 
 # --------------------------------------------------------------- panel c: Run Control
@@ -618,7 +674,10 @@ def _authorize_include(target: str) -> None:
 @app.get("/api/scan/board")
 def scan_board_route(authorization: str | None = Header(default=None)) -> Any:
     _auth(authorization)
-    return JSONResponse(scan_board_view(_params_obj()))
+    try:
+        return JSONResponse(scan_board_view(_params_obj()))
+    except Exception as exc:  # noqa: BLE001 -- SCAN board must never 500-crash the SPA
+        raise HTTPException(status_code=422, detail=f"scan board unavailable: {exc}") from exc
 
 
 @app.post("/api/scan/targets")
@@ -727,7 +786,10 @@ def run_log(target: str, offset: int = Query(default=0, ge=0), authorization: st
     path = _run_log_path(target)
     if path is None:
         return JSONResponse({"exists": False, "offset": offset, "lines": []})
-    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return JSONResponse({"exists": False, "offset": offset, "lines": []})
     chunk = lines[offset:offset + 400]
     return JSONResponse({"exists": True, "offset": offset, "next_offset": offset + len(chunk),
                          "total": len(lines), "lines": chunk})
@@ -757,7 +819,10 @@ def agent_journal(target: str, offset: int = Query(default=0, ge=0), authorizati
     path = _agent_journal_path(target)
     if path is None:
         return JSONResponse({"exists": False, "offset": offset, "rows": []})
-    lines = [l for l in path.read_text(encoding="utf-8", errors="replace").splitlines() if l.strip()]
+    try:
+        lines = [l for l in path.read_text(encoding="utf-8", errors="replace").splitlines() if l.strip()]
+    except OSError:
+        return JSONResponse({"exists": False, "offset": offset, "rows": []})
     chunk = lines[offset:offset + 200]
     return JSONResponse({"exists": True, "offset": offset, "next_offset": offset + len(chunk),
                          "total": len(lines), "rows": chunk})
@@ -779,6 +844,47 @@ def agent_journal_export(target: str, authorization: str | None = Header(default
     )
 
 
+_LIVE_RUN_START = (
+    "scan already running for this site -- use RESTART to stop it and begin "
+    "from the first module (START does not kill a live run)"
+)
+_LIVE_RUN_RESUME = (
+    "scan already running for this site -- STOP first, or RESTART to begin "
+    "from the first module (RESUME does not kill a live run)"
+)
+
+
+def _require_docker_for_spawn(params: Any) -> None:
+    from pipeline.dockerbin import docker_available
+
+    if not docker_available(params):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "nested Docker cannot use /var/run/docker.sock. Recreate the "
+                "dashboard image so the entrypoint can join the socket group: "
+                "docker compose --profile dashboard up -d --build --force-recreate"
+            ),
+        )
+
+
+def _spawn_recon_run(target: str, aggressive: bool) -> Any:
+    """Spawn ./recon.sh run -- always a fresh ladder (new_run_state), never resume."""
+    recon_sh = ROOT / "recon.sh"
+    if not recon_sh.is_file():
+        raise HTTPException(
+            status_code=500,
+            detail="recon.sh is missing inside the dashboard container. Mount the repo (see docker-compose.yml).",
+        )
+    cmd = [str(recon_sh), "run", target] + (["--aggressive"] if aggressive else [])
+    spawn_log = ROOT / "recon" / target / "logs" / "dashboard-spawn.log"
+    proc = _spawn_detached(cmd, spawn_log)
+    from pipeline.state import write_run_pid
+
+    write_run_pid(ROOT / "recon" / target, proc.pid)
+    return proc
+
+
 @app.post("/api/run/start")
 async def run_start(body: dict[str, Any], authorization: str | None = Header(default=None)) -> Any:
     _auth(authorization)
@@ -794,38 +900,12 @@ async def run_start(body: dict[str, Any], authorization: str | None = Header(def
     if body.get("authorize"):
         _authorize_include(target)
     aggressive = bool(body.get("aggressive", False))
-    recon_sh = ROOT / "recon.sh"
-    if not recon_sh.is_file():
-        raise HTTPException(
-            status_code=500,
-            detail="recon.sh is missing inside the dashboard container. Mount the repo (see docker-compose.yml).",
-        )
-    from pipeline.dockerbin import docker_available
+    _require_docker_for_spawn(params)
+    from pipeline.state import run_pid_is_live
 
-    if not docker_available(params):
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "nested Docker cannot use /var/run/docker.sock. Recreate the "
-                "dashboard image so the entrypoint can join the socket group: "
-                "docker compose --profile dashboard up -d --build --force-recreate"
-            ),
-        )
-    cmd = [str(recon_sh), "run", target] + (["--aggressive"] if aggressive else [])
-    log_dir = ROOT / "recon" / target / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    spawn_log = log_dir / "dashboard-spawn.log"
-    handle = spawn_log.open("ab")
-    proc = subprocess.Popen(
-        cmd,
-        cwd=ROOT,
-        stdout=handle,
-        stderr=handle,
-        start_new_session=True,
-    )
-    from pipeline.state import write_run_pid
-
-    write_run_pid(ROOT / "recon" / target, proc.pid)
+    if run_pid_is_live(ROOT / "recon" / target):
+        raise HTTPException(status_code=409, detail=_LIVE_RUN_START)
+    proc = _spawn_recon_run(target, aggressive)
     append_audit(ROOT, "run_start", {"target": target, "aggressive": aggressive})
     return JSONResponse({"started": True, "pid": proc.pid, "cmd": ["./recon.sh", "run", target], "proxy": reason, "target": target})
 
@@ -839,8 +919,10 @@ async def run_stop(body: dict[str, Any], authorization: str | None = Header(defa
 
     params = _params_obj()
     target_dir = ensure_layout(params, target)
-    # In-process STOP: no subprocess round-trip -- mark stopped + kill now.
-    ids = stop_target(params, target_dir)
+    try:
+        ids = stop_target(params, target_dir)
+    except Exception as exc:  # noqa: BLE001 -- STOP must still answer the operator
+        raise HTTPException(status_code=503, detail=f"stop failed: {exc}") from exc
     append_audit(ROOT, "run_stop", {"target": target, "containers": len(ids)})
     return JSONResponse({
         "exit": int(params.require("exit_code_stopped")),
@@ -859,24 +941,62 @@ async def run_resume(body: dict[str, Any], authorization: str | None = Header(de
     if not ok:
         raise HTTPException(status_code=502, detail=f"PROXY RULE fail-fast (section 9.3): {reason}")
     target = _valid_target(str(body.get("target") or ""))
-    from pipeline.dockerbin import docker_available
+    _require_docker_for_spawn(params)
+    from pipeline.state import run_pid_is_live, write_run_pid
 
-    if not docker_available(params):
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "nested Docker cannot use /var/run/docker.sock. Recreate the "
-                "dashboard image so the entrypoint can join the socket group: "
-                "docker compose --profile dashboard up -d --build --force-recreate"
-            ),
-        )
-    proc = subprocess.Popen(["./recon.sh", "resume", target], cwd=ROOT,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-    from pipeline.state import write_run_pid
-
+    if run_pid_is_live(ROOT / "recon" / target):
+        raise HTTPException(status_code=409, detail=_LIVE_RUN_RESUME)
+    proc = _spawn_detached(["./recon.sh", "resume", target])
     write_run_pid(ROOT / "recon" / target, proc.pid)
     append_audit(ROOT, "run_resume", {"target": target})
     return JSONResponse({"resumed": True, "pid": proc.pid, "proxy": reason})
+
+
+@app.post("/api/run/restart")
+async def run_restart(body: dict[str, Any], authorization: str | None = Header(default=None)) -> Any:
+    """Kill this site's live scan (if any), then spawn a fresh ./recon.sh run.
+
+    Distinct from START (does not overlap a live pid) and RESUME (keeps done modules).
+    """
+    _auth(authorization)
+    params = _params_obj()
+    ok, reason, _assigner = gate_pool_or_legacy(params)
+    if not ok:
+        raise HTTPException(status_code=502, detail=f"PROXY RULE fail-fast (section 9.3): {reason}")
+    target = _valid_target(str(body.get("target") or ""))
+    try:
+        target = scan_require_registered(params, target)
+    except DashboardError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if body.get("authorize"):
+        _authorize_include(target)
+    aggressive = bool(body.get("aggressive", False))
+    _require_docker_for_spawn(params)
+    from pipeline.engine import stop_target
+    from pipeline.factory import ensure_layout
+
+    target_dir = ensure_layout(params, target)
+    try:
+        ids = stop_target(params, target_dir)
+    except Exception as exc:  # noqa: BLE001 -- restart still tries to spawn after a stop error
+        ids = []
+        print(f"restart: stop disclosed failure: {exc}")
+    proc = _spawn_recon_run(target, aggressive)
+    append_audit(ROOT, "run_restart", {
+        "target": target,
+        "aggressive": aggressive,
+        "containers": len(ids),
+    })
+    return JSONResponse({
+        "restarted": True,
+        "started": False,
+        "resumed": False,
+        "pid": proc.pid,
+        "cmd": ["./recon.sh", "run", target],
+        "proxy": reason,
+        "target": target,
+        "containers": len(ids),
+    })
 
 
 @app.get("/api/scheduler")
@@ -1002,8 +1122,7 @@ async def fleet_run_route(body: dict[str, Any], authorization: str | None = Head
         except (TypeError, ValueError):
             raise HTTPException(status_code=422, detail="concurrency must be an integer")
         cmd += ["--concurrency", str(conc)]
-    proc = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL, start_new_session=True)
+    proc = _spawn_detached(cmd)
     append_audit(ROOT, "fleet_run", {"members": members})
     return JSONResponse({"started": True, "pid": proc.pid, "members": members})
 
@@ -1039,8 +1158,8 @@ def report_generate(target: str, authorization: str | None = Header(default=None
         raise HTTPException(status_code=404, detail=f"no recon data for {target}")
     try:
         return JSONResponse(generate_all(_params_obj(), target_dir))
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 -- operator gets a JSON error, never a stack dump
+        raise HTTPException(status_code=500, detail=f"report generate failed: {type(exc).__name__}") from exc
 
 
 _REPORT_VIEWABLE = {".md", ".html", ".csv", ".json", ".pdf", ".txt"}
@@ -1071,6 +1190,16 @@ def artifact_view(target: str, relpath: str, authorization: str | None = Header(
 @app.exception_handler(DashboardError)
 def dashboard_error_handler(_request: Any, exc: DashboardError) -> JSONResponse:
     return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+@app.exception_handler(Exception)
+async def unhandled_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+    """Last-chance API fence: one bad panel must not take down the worker.
+    HTTPException / validation errors keep their own handlers. Internals are
+    not echoed (D-protocol)."""
+    if isinstance(exc, (HTTPException, StarletteHTTPException, RequestValidationError, DashboardError)):
+        raise exc
+    return JSONResponse(status_code=500, content={"detail": "internal error"})
 
 
 @app.get("/static/{path:path}")

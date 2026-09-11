@@ -153,9 +153,12 @@ def validate_new_password(password: str) -> str | None:
 
 
 def has_operator() -> bool:
-    with _lock:
-        row = _connect().execute("SELECT 1 FROM operator WHERE id = 1").fetchone()
-    return row is not None
+    try:
+        with _lock:
+            row = _connect().execute("SELECT 1 FROM operator WHERE id = 1").fetchone()
+        return row is not None
+    except (OSError, sqlite3.Error):
+        return False
 
 
 def create_operator(password: str) -> None:
@@ -188,8 +191,11 @@ def create_operator(password: str) -> None:
 
 
 def check_operator_password(password: str) -> bool:
-    with _lock:
-        row = _connect().execute("SELECT password_hash FROM operator WHERE id = 1").fetchone()
+    try:
+        with _lock:
+            row = _connect().execute("SELECT password_hash FROM operator WHERE id = 1").fetchone()
+    except (OSError, sqlite3.Error):
+        return False
     if not row:
         return False
     return verify_password(password, str(row[0]))
@@ -228,11 +234,14 @@ def session_ok(raw: str) -> bool:
         return False
     now = time.time()
     digest = _token_hash(raw)
-    with _lock:
-        row = _connect().execute(
-            "SELECT last_seen FROM sessions WHERE token_hash = ?",
-            (digest,),
-        ).fetchone()
+    try:
+        with _lock:
+            row = _connect().execute(
+                "SELECT last_seen FROM sessions WHERE token_hash = ?",
+                (digest,),
+            ).fetchone()
+    except (OSError, sqlite3.Error):
+        return False
     if not row:
         return False
     last_seen = float(row[0])
@@ -243,19 +252,25 @@ def touch_session(raw: str) -> bool:
     if not session_ok(raw):
         return False
     now = time.time()
-    with _lock:
-        cur = _connect().execute(
-            "UPDATE sessions SET last_seen = ? WHERE token_hash = ?",
-            (now, _token_hash(raw)),
-        )
-        return cur.rowcount == 1
+    try:
+        with _lock:
+            cur = _connect().execute(
+                "UPDATE sessions SET last_seen = ? WHERE token_hash = ?",
+                (now, _token_hash(raw)),
+            )
+            return cur.rowcount == 1
+    except (OSError, sqlite3.Error):
+        return False
 
 
 def revoke_session(raw: str) -> None:
     if not raw:
         return
-    with _lock:
-        _connect().execute("DELETE FROM sessions WHERE token_hash = ?", (_token_hash(raw),))
+    try:
+        with _lock:
+            _connect().execute("DELETE FROM sessions WHERE token_hash = ?", (_token_hash(raw),))
+    except (OSError, sqlite3.Error):
+        return
 
 
 def revoke_all_sessions() -> None:

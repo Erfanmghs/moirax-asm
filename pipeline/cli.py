@@ -1,4 +1,4 @@
-"""CLI: run | resume | stop | status | report | module | reset-breaker | info-gather -- no network before a valid scope."""
+"""CLI: run | resume | restart | stop | status | report | module | reset-breaker | info-gather -- no network before a valid scope."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from pipeline import state as state_engine
 USAGE = """Usage:
   ./recon.sh run <target> [--aggressive]
   ./recon.sh resume <target> [--aggressive]
+  ./recon.sh restart <target> [--aggressive]
   ./recon.sh stop <target>
   ./recon.sh status [target]
   ./recon.sh report <target>
@@ -38,6 +39,22 @@ def repo_root() -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _main(argv)
+    except SystemExit as exc:
+        if isinstance(exc.code, int):
+            return exc.code
+        if exc.code:
+            sys.stderr.write(str(exc.code) if not str(exc.code).endswith("\n") else str(exc.code))
+            if not str(exc.code).endswith("\n"):
+                sys.stderr.write("\n")
+        return 2
+    except Exception as exc:  # noqa: BLE001 -- CLI never dumps a worker; exit 1 with a line
+        print(f"fatal: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+
+
+def _main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
         sys.stderr.write(USAGE)
@@ -53,6 +70,9 @@ def main(argv: list[str] | None = None) -> int:
     if command == "resume":
         target, aggressive = _target_and_aggressive(args, 1)
         return cmd_resume(params, target, aggressive)
+    if command == "restart":
+        target, aggressive = _target_and_aggressive(args, 1)
+        return cmd_restart(params, target, aggressive)
     if command == "stop":
         return cmd_stop(params, _need(args, 1))
     if command == "report":
@@ -124,7 +144,14 @@ def cmd_status(params: Params, target: str | None) -> int:
         if not state_file.exists():
             continue
         found = True
-        data = json.loads(state_file.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(state_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, ValueError):
+            print(f"{child.name}: unreadable state.json")
+            continue
+        if not isinstance(data, dict):
+            print(f"{child.name}: unreadable state.json")
+            continue
         modules = data.get("modules") or {}
         summary = ", ".join(f"{name}={row.get('status')}" for name, row in modules.items())
         run = data.get("run") or {}
@@ -153,7 +180,11 @@ def _run_with_target_profile(params: Params, target: str, runner: Callable[[], i
         # Disk edits land in tools.yaml; in-memory Params must refresh or
         # recon_depth / module order stay at the pre-SETUP globals.
         params.reload()
-        return runner()
+        try:
+            return runner()
+        except Exception as exc:  # noqa: BLE001 -- profile restore still runs in finally
+            print(f"run failed: {type(exc).__name__}: {exc}")
+            return 1
     finally:
         if applied:
             restore_transient(applied)
@@ -196,6 +227,36 @@ def cmd_resume(params: Params, target: str, aggressive: bool = False) -> int:
         params,
         target,
         lambda: run_pipeline(params, gate, target, aggressive=aggressive, resume=True),
+    )
+
+
+def cmd_restart(params: Params, target: str, aggressive: bool = False) -> int:
+    """Stop a live scan for this target, then run the ladder from module 1.
+
+    Not START: START leaves a live process alone (dashboard returns 409).
+    Not RESUME: RESUME keeps done modules; RESTART resets rows via new_run_state.
+    """
+    target = sanitize_target(target)
+    try:
+        gate = _load_gate(params)
+    except ScopeError as exc:
+        return _fail_scope(exc)
+    allowed, reason = gate.validate_candidate(target)
+    if not allowed:
+        target_dir = ensure_layout(params, target)
+        log_rel = Path(str(params.require("out_of_scope_log")))
+        gate.log_rejection(target_dir / log_rel, target, reason)
+        print(f"out of scope: {target} ({reason})")
+        print(f"logged: {target_dir / log_rel}")
+        return 1
+    target_dir = ensure_layout(params, target)
+    from pipeline.engine import run_pipeline, stop_target
+
+    stop_target(params, target_dir)
+    return _run_with_target_profile(
+        params,
+        target,
+        lambda: run_pipeline(params, gate, target, aggressive=aggressive, resume=False),
     )
 
 

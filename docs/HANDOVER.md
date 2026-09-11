@@ -206,7 +206,7 @@ clean (partial counts as success-with-disclosure).
 
 Laws: scheme allow-list http/https/socks5 (parse_pool, ValueError names the
 bad entry); fail-fast gate health-checks EVERY entry before the first module
-(engine + /api/run/start|resume through `gate_pool_or_legacy`) and sanitizes
+(engine + /api/run/start|resume|restart through `gate_pool_or_legacy`) and sanitizes
 the checker's own reason (raw entry with credentials must never surface);
 PER-REQUEST rotation (C5 v2): assignment happens inside Adapter._attempt_loop,
 one pool entry PER ATTEMPT (the first try AND every retry take the next entry
@@ -239,7 +239,7 @@ Panels: TOOLS (enable/disable + flag overrides + wordlist registry),
 TARGETS (per-target profiles incl. per-target Telegram id), FLEET (members,
 concurrency, run + ledger), RESULTS (filters, coverage analytics, diff),
 REPORTS (bundle generate + tamper check + viewer links), RUN CONTROL
-(start/stop/resume, scheduler, live log, agent journal), API KEYS (masked
+(start/stop/resume/restart, scheduler, live log, agent journal), API KEYS (masked
 .env management), SETTINGS (proxy, Telegram user id, digest, alert rules,
 agent autonomy, retention, resource budget).
 
@@ -248,7 +248,7 @@ Hardening baked in (proven by the pentest battery):
   no-store; strict CSP (script-src 'self', frame-ancestors 'none') on the
   SPA. No inline script/style -- the CSP is real, not decorative.
 - OpenAPI/docs/redoc DISABLED (no attacker map).
-- Target names on run/start|stop|resume and fleet/notify routes must pass
+- Target names on run/start|stop|resume|restart and fleet/notify routes must pass
   the strict name law BEFORE any spawn (flag/traversal/metachar injection
   refused with 422).
 - Settings writes: closed key allow-list (P-10), typed validation.

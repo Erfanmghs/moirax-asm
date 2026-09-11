@@ -323,8 +323,9 @@ function toast(msg, err) {
   if (!el) return;
   el.textContent = msg;
   el.className = "toast" + (err ? " err" : "");
-  setTimeout(() => el.classList.add("hidden"), 3500);
   el.classList.remove("hidden");
+  if (window.asmMotion) window.asmMotion.bump(el);
+  setTimeout(() => el.classList.add("hidden"), 3500);
 }
 
 function apiDetail(doc, res) {
@@ -438,7 +439,10 @@ function activatePanel(name, push) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t === btn));
   document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
   const panel = $("#panel-" + name);
-  if (panel) panel.classList.remove("hidden");
+  if (panel) {
+    panel.classList.remove("hidden");
+    if (window.asmMotion) window.asmMotion.enterPanel(panel);
+  }
   try { localStorage.setItem("recon_last_panel", name); } catch (_e) { /* ignore */ }
   if (push) {
     const params = new URLSearchParams(location.search);
@@ -1451,19 +1455,8 @@ async function loadRun() {
   }
   await loadScanBoard();
   if (target && !SCAN.expanded.size) setScanExpanded(target, true);
-  try {
-    const st = await api("GET", "/api/run/status/" + encodeURIComponent(target));
-    const box = $("#run-modules");
-    if (box) {
-      const mods = st.modules || {};
-      box.innerHTML = Object.keys(mods).length
-        ? Object.entries(mods).map(([m, s]) => {
-            const status = (s && s.status) || "?";
-            return `<span class="mod-chip ${esc(status)}">${esc(m)} <b>${esc(status)}</b></span>`;
-          }).join("")
-        : "";
-    }
-  } catch (_e) { /* modules optional */ }
+  const stray = $("#run-modules");
+  if (stray) stray.innerHTML = "";
 }
 
 function startLogStream() {
@@ -1486,6 +1479,8 @@ function startLogStream() {
       if (rawEl) rawEl.textContent = "";
       if (prettyEl) prettyEl.innerHTML = "";
       window.__livePretty = { prettyKey: "" };
+      const title = document.querySelector("#live-term .term-title");
+      if (title) title.textContent = "live output -- " + target;
     }
     try {
       const doc = await api("GET", `/api/run/log/${encodeURIComponent(target)}?offset=${offset}`);
@@ -1503,14 +1498,27 @@ function startLogStream() {
   }, 2000);
 }
 
+function scanModulesHtml(target, modules) {
+  const entries = Object.entries(modules || {});
+  const chips = entries.map(([m, s]) => {
+    const st = (s && s.status) || "?";
+    return `<span class="mod-chip ${esc(st)}">${esc(m)} <b>${esc(st)}</b></span>`;
+  }).join("");
+  return `<span class="scan-mods-label">${esc(target)} steps</span>` +
+    (chips || '<span class="dim">no module state yet for this site</span>');
+}
+
+function paintCardModules(card, target, modules) {
+  if (!card) return;
+  const host = card.querySelector("[data-scan-mods]");
+  if (host) host.innerHTML = scanModulesHtml(target, modules);
+}
+
 function scanCardHtml(row) {
   const t = row.target;
   const status = row.run_status || "idle";
   const open = SCAN.expanded.has(t);
-  const modules = Object.entries(row.modules || {}).map(([m, s]) => {
-    const st = (s && s.status) || "?";
-    return `<span class="mod-chip ${esc(st)}">${esc(m)} <b>${esc(st)}</b></span>`;
-  }).join("") || '<span class="dim">no module state yet</span>';
+  const modules = scanModulesHtml(t, row.modules);
   const counts = row.last_counts || {};
   const countBits = Object.keys(counts).length
     ? Object.entries(counts).map(([k, v]) => `${esc(k)}=${esc(v)}`).join(" ")
@@ -1526,13 +1534,14 @@ function scanCardHtml(row) {
         <button type="button" data-setup-open="${esc(t)}">SETUP</button>
         <button data-scan-start="${esc(t)}">START</button>
         <button data-scan-resume="${esc(t)}">RESUME</button>
+        <button class="warn" data-scan-restart="${esc(t)}" title="stop this site then begin from the first module">RESTART</button>
         <button class="danger" data-scan-stop="${esc(t)}">STOP</button>
         <button class="danger" data-scan-delete="${esc(t)}">DELETE</button>
       </div>
+      <div class="scan-mods" data-scan-mods="${esc(t)}" aria-label="pipeline steps for ${esc(t)}">${modules}</div>
     </div>
     <div class="scan-body">
       ${scanSetupHtml(t)}
-      <div class="scan-modules">${modules}</div>
       <div class="scan-jumps">
         <button data-jump="results" data-jt="${esc(t)}">RESULTS</button>
         <button data-jump="reports" data-jt="${esc(t)}">REPORTS</button>
@@ -1593,7 +1602,7 @@ function markScanStopping(target) {
     pretty.appendChild(row);
     pretty.scrollTop = pretty.scrollHeight;
   }
-  card.querySelectorAll("[data-scan-start],[data-scan-resume],[data-scan-stop]").forEach((btn) => {
+  card.querySelectorAll("[data-scan-start],[data-scan-resume],[data-scan-restart],[data-scan-stop]").forEach((btn) => {
     btn.disabled = true;
   });
 }
@@ -1609,7 +1618,7 @@ function markScanStopped(target) {
     badge.textContent = "stopped";
     badge.className = "badge " + statusBadgeClass("stopped");
   }
-  card.querySelectorAll("[data-scan-start],[data-scan-resume],[data-scan-stop]").forEach((btn) => {
+  card.querySelectorAll("[data-scan-start],[data-scan-resume],[data-scan-restart],[data-scan-stop]").forEach((btn) => {
     btn.disabled = false;
   });
 }
@@ -1763,14 +1772,7 @@ async function loadScanBoard() {
             badge.className = "badge " + statusBadgeClass(status);
           }
         }
-        const mods = card.querySelector(".scan-modules");
-        if (mods) {
-          const html = Object.entries(row.modules || {}).map(([m, s]) => {
-            const st = (s && s.status) || "?";
-            return `<span class="mod-chip ${esc(st)}">${esc(m)} <b>${esc(st)}</b></span>`;
-          }).join("") || '<span class="dim">no module state yet</span>';
-          mods.innerHTML = html;
-        }
+        paintCardModules(card, row.target, row.modules);
       }
       for (const t of [...SCAN.expanded]) {
         if (!SCAN.halted.has(t) && !SCAN.stopping.has(t)) startTargetStream(t);
@@ -1916,6 +1918,27 @@ async function startScanFor(target) {
   try {
     const r = await api("POST", "/api/run/start", { target, authorize });
     toast("scan started for " + target + " (pid=" + r.pid + ")");
+    SCAN.expanded.add(target);
+    if ($("#run-target")) $("#run-target").value = target;
+    rememberTarget(target);
+    setScanExpanded(target, true);
+    await loadRun();
+    startScanBoardTimer();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function restartScanFor(target) {
+  if (!target) {
+    toast("ADD TARGET first, then RESTART on that site's row", true);
+    return;
+  }
+  clearScanHalt(target);
+  const authorize = $("#run-authorize") ? $("#run-authorize").checked : true;
+  try {
+    const r = await api("POST", "/api/run/restart", { target, authorize });
+    toast("restarted " + target + " from the first module (pid=" + r.pid + ")");
     SCAN.expanded.add(target);
     if ($("#run-target")) $("#run-target").value = target;
     rememberTarget(target);
@@ -2631,6 +2654,7 @@ if (scanBoard) {
     const expand = ev.target.closest("[data-expand]");
     const start = ev.target.closest("[data-scan-start]");
     const resume = ev.target.closest("[data-scan-resume]");
+    const restart = ev.target.closest("[data-scan-restart]");
     const stop = ev.target.closest("[data-scan-stop]");
     const del = ev.target.closest("[data-scan-delete]");
     const jump = ev.target.closest("[data-jump]");
@@ -2675,8 +2699,17 @@ if (scanBoard) {
       try {
         const r = await api("POST", "/api/run/resume", { target: t });
         toast("resumed " + t + " pid=" + r.pid);
+        clearScanHalt(t);
         setScanExpanded(t, true);
       } catch (e) { toast(e.message, true); }
+      return;
+    }
+    if (restart) {
+      const t = restart.getAttribute("data-scan-restart");
+      setVal("#run-target", t);
+      rememberTarget(t);
+      SCAN.expanded.add(t);
+      await restartScanFor(t);
       return;
     }
     if (stop) {

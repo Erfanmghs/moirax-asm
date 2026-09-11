@@ -381,7 +381,10 @@ would. It does not log in, does not submit forms, does not write anything.
 Twice a day is a good start for a normal company site. Use the scheduler.
 
 **Q: A check failed halfway -- do I start over?**
-No. Press RESUME; the platform continues where it stopped.
+Press RESUME to continue where it stopped (done modules stay done).
+Press START only when the site is idle to begin a new ladder; START will not
+kill a live scan. Press RESTART on that site to stop a live scan and begin
+from the first module.
 
 **Q: I found a website name I do not recognize in my results.**
 That is the platform doing its job. Check whether it should exist. If not,

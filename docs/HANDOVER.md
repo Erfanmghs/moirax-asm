@@ -4,7 +4,7 @@ Version: 1.0 (D-protocol). Audience: the next engineer taking ownership of
 this repository. Everything here is ASCII English; the release gate (R-3)
 enforces that discipline for the whole tree.
 
-The one-paragraph pitch: recon-pipeline is an attack-vector detection
+The one-paragraph pitch: recon-pipeline is an attack-surface management
 platform. It enumerates a target's DNS estate (passive OSINT + active
 bruteforce), resolves hosts, probes virtual hosts, sweeps ports, diffs every
 run against the previous one, raises Telegram alerts on genuinely new

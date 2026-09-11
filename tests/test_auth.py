@@ -39,7 +39,7 @@ class TestOperatorAuth(unittest.TestCase):
     def test_setup_hashes_password_and_sets_httponly_cookie(self):
         r = self.client.post("/api/auth/setup", json={"password": "operator-pass-1", "confirm": "operator-pass-1"})
         self.assertEqual(r.status_code, 200, r.text)
-        cookie = r.cookies.get("avdp_session")
+        cookie = r.cookies.get("asm_session")
         self.assertTrue(cookie)
         header = r.headers.get("set-cookie", "")
         self.assertIn("HttpOnly", header)

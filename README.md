@@ -1,6 +1,6 @@
 # recon-pipeline
 
-Outside-in attack-vector detection for a DNS estate you are authorized to
+Outside-in attack-surface management for a DNS estate you are authorized to
 test. The platform enumerates names (passive OSINT in parallel with active
 brute), resolves them, probes virtual hosts, sweeps TCP, diffs every run
 against the last one, and emits a tamper-checked report. Telegram fires on

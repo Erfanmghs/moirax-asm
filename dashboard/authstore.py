@@ -19,7 +19,7 @@ from pathlib import Path
 IDLE_SECONDS = 15 * 60
 MIN_PASSWORD_LEN = 12
 MAX_PASSWORD_LEN = 256
-_COOKIE = "avdp_session"
+_COOKIE = "asm_session"
 _SCRYPT_N = 2**14
 _SCRYPT_R = 8
 _SCRYPT_P = 1

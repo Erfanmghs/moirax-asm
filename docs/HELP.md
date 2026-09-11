@@ -1,6 +1,6 @@
 # The Complete User Guide
 
-**Attack Vector Detection Platform -- in-app operator guide.**
+**Attack Surface Management -- in-app operator guide.**
 Install and architecture live in the repository README. This file is the
 button-by-button walkthrough (also served on the HELP tab).
 

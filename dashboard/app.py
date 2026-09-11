@@ -71,7 +71,7 @@ STATIC = Path(__file__).resolve().parent / "static"
 
 # Pentest hardening (D-protocol): OpenAPI/docs are disabled -- the API contract
 # is internal surface, never an attacker map.
-app = FastAPI(title="recon-pipeline dashboard", docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title="Attack Surface Management", docs_url=None, redoc_url=None, openapi_url=None)
 
 _AUTH_FAILS: dict[str, list[float]] = {}
 _AUTH_WINDOW_SEC = 60.0

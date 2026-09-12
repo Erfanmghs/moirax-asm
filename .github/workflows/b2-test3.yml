@@ -122,7 +122,7 @@ jobs:
           if [ -f ci/wordlists_runtime_before.yaml ]; then cp ci/wordlists_runtime_before.yaml wordlists.yaml && echo "selection accommodation restored"; fi
       - name: Upload evidence artifacts (always)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test3-evidence
           path: |

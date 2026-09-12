@@ -281,7 +281,7 @@ class PortSweepTest(unittest.TestCase):
         xml = (
             "<nmaprun><host><ports>"
             '<port protocol="tcp" portid="443"><state state="open"/>'
-            '<service product="nginx" version="1.25.3"/></port>'
+            '<service name="https" product="nginx" version="1.25.3" extrainfo="Ubuntu"/></port>'
             "</ports></host></nmaprun>"
         )
         outcomes = {
@@ -291,7 +291,18 @@ class PortSweepTest(unittest.TestCase):
         adapter, _clock = _adapter(params, gate, outcomes)
         td = _target_dir(params, [{"host": "www.example.com", "ips": ["93.184.215.14"], "alive": True, "sources": ["dnsr"]}])
         payload, _partial = _run(params, gate, adapter, td)
-        self.assertEqual(payload["services"], [{"ip": "93.184.215.14", "port": 443, "proto": "tcp", "product": "nginx", "version": "1.25.3"}])
+        self.assertEqual(
+            payload["services"],
+            [{
+                "ip": "93.184.215.14",
+                "port": 443,
+                "proto": "tcp",
+                "name": "https",
+                "product": "nginx",
+                "version": "1.25.3",
+                "extrainfo": "Ubuntu",
+            }],
+        )
 
     def test_out_of_scope_ip_rejected(self):
         # Private ranges stay REJECTED even when attributed to an in-scope

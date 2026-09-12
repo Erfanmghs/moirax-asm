@@ -25,8 +25,20 @@ settings:
   circuit_breaker_bad_windows: 2
   resource_budget_ram_mb: 2048
   resource_budget_cpu_cores: 2
-  resource_budget_ram_mb_max: 4096
-  canary_interval_sec: 30
+  resource_budget_ram_mb_max: 8192
+  resource_budget_auto: true
+  resource_budget_cpu_reserve: 1
+  resource_budget_ram_reserve_mb: 1024
+  resource_budget_cpu_cores_max: 12
+  container_cpu_floor: 0.5
+  container_ram_floor_mb: 256
+  fast_dns_enabled: true
+  fast_dns_fallback_docker: true
+  resolver_cache_ttl_sec: 21600
+  resolver_health_cache: resolvers/forge/health-cache.json
+  resolver_native_concurrency: 64
+  resolver_probe_udp_timeout_sec: 1.5
+  canary_interval_sec: 45
   canary_sentinel_count: 3
   canary_latency_multiplier: 2
   resolver_min_success_ratio: 0.8
@@ -100,11 +112,11 @@ settings:
     - logs/raw
     - sources
     - wordlists
-  ffuf_depth: 3
+  ffuf_depth: 1
   # Operator-facing nested recon: 1 = apex only; 2 = brute+vhost under
   # discovered names (and so on). Drives DNSR nested dnsx -d PARENT and
   # Nested DNS depth (independent of ffuf_depth / nested vhost).
-  recon_depth: 3
+  recon_depth: 2
   ffuf_depth_min: 1
   ffuf_depth_max: 5
   max_hosts_per_level: 1000
@@ -128,6 +140,12 @@ settings:
   dnsx_ramp_start_qps: 1000
   dnsx_ramp_step_qps: 1000
   dnsx_ramp_interval_sec: 30
+  # Nested dnsx -d PARENT jobs share dnsx_max_qps (4 workers -> 1250 QPS each at cap).
+  dnsx_parallel_parents: 5
+  dnsx_parallel_parents_min: 1
+  dnsx_parallel_parents_max: 8
+  # Skip L2+ brute when L1 resolved this fraction of the wordlist (catch-all / wildcard).
+  dnsx_wildcard_hit_rate: 0.8
   # REM9 (TEST 3 named-config pin, disclosed; PHASE-REPORT): 50 -> 100.
   # naabu v2.3.5 rejects any -top-ports value except 100 | 1000 | full
   # ("could not parse ports: invalid top ports option", run9 run.log 10:11Z)
@@ -204,7 +222,7 @@ settings:
   # subfinder-seed per-source timeout (seconds) -- bounds the container so a
   # dead third-party source can never hang it into a breaker window.
   subfinder_seed_timeout: 20
-  passive_recursion_depth: 2
+  passive_recursion_depth: 1
   max_seeds_per_iteration: 100
   httpx_threads: 200
   httpx_disable_update_check: "-duc"
@@ -284,13 +302,13 @@ settings:
   # FFUF-3 explosion guard (REM11, run #15 evidence): max dead-name probe
   # jobs per run; over-cap truncates with an explicit ffuf3_dead_probe_cap
   # partial marker (never silent). Named section 5.6 dashboard-editable parameter.
-  ffuf3_max_dead_probes: 1000
+  ffuf3_max_dead_probes: 1
   # FFUF-4: Host-header vhost on HTTP-like ports discovered by PORT-SWEEP.
   # Not a branch member -- engine runs it after port-sweep, before OWASP.
   ffuf4_module: ffuf-4
   ffuf4_data_json: 15_vhosts/ffuf-4/data.json
   ffuf4_summary: 15_vhosts/ffuf-4/summary.md
-  ffuf4_max_jobs: 200
+  ffuf4_max_jobs: 1
   vhost_http_ports: "80,81,3000,3001,4000,4173,5000,5001,5601,5985,7001,8000,8008,8080,8081,8088,8880,8888,9000,9090,9200,10000"
   vhost_https_ports: "443,8443,9443,10443"
   tool_retry_count: 2
@@ -393,7 +411,7 @@ settings:
   resolver_source_timeout_sec: 30
   resolver_source_cap: 250
   resolver_probe_timeout_sec: 20
-  resolver_validate_concurrency: 4
+  resolver_validate_concurrency: 32
   resolver_validate_domains:
     - example.com
     - cloudflare.com
@@ -673,6 +691,7 @@ tools:
     network_host: false
     argv_template:
       - dnsx
+      - -silent
       - -d
       - "{target_domain}"
       - -w

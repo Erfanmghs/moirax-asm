@@ -113,5 +113,39 @@ class TestDnsxListFreshness(unittest.TestCase):
             self.assertEqual([r.get("host") for r in rows], ["www.example.com"])
 
 
+class TestSkipDoneChunk(unittest.TestCase):
+    def test_done_marker_skips_invoke(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            out_rel = "20_dns/dnsx/brute_chunk_0.json"
+            out_path = root / out_rel
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(
+                json.dumps({"host": "keep.example.com", "a": ["192.0.2.8"]}) + "\n",
+                encoding="utf-8",
+            )
+            (out_path.parent / (out_path.name + ".done")).write_text("ok\n", encoding="utf-8")
+
+            class _Boom:
+                def invoke(self, *args, **kwargs):
+                    raise AssertionError("must not re-invoke a completed chunk")
+
+            rows = _dnsx_list(
+                params=_FakeParams("/recon"),
+                adapter=_Boom(),
+                target_dir=root,
+                target="example.com",
+                extra={},
+                planned=1,
+                timeout_sec=None,
+                balancer=_NoopBalancer(),
+                hosts_rel="20_dns/dnsx/in.txt",
+                out_rel=out_rel,
+                resolvers_c="/recon/resolvers.txt",
+                source="unittest",
+            )
+            self.assertEqual([r.get("host") for r in rows], ["keep.example.com"])
+
+
 if __name__ == "__main__":
     unittest.main()

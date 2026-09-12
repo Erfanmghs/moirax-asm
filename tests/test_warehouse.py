@@ -242,6 +242,48 @@ class TestRunDiffAndTimeline(unittest.TestCase):
         for cls in FACT_CLASSES:
             self.assertEqual(st["facts"][cls], 1)
 
+    def test_live_ingest_updates_same_stamp(self):
+        from pipeline.jsonio import write_json
+        from pipeline.warehouse import ingest_live, list_runs
+
+        params = _params()
+        td = ensure_layout(params, "site.example")
+        dnsr = td / str(params.require("dnsr_data_json"))
+        dnsr.parent.mkdir(parents=True, exist_ok=True)
+        write_json(
+            dnsr,
+            {
+                "schema_version": 1,
+                "module": "dns-resolve",
+                "resolved": [
+                    {"host": "a.site.example", "ips": ["1.2.3.4"], "resolution_status": "resolved"},
+                    {"host": "dead.site.example", "ips": [], "resolution_status": "unresolved"},
+                ],
+            },
+        )
+        first = ingest_live(params, td, "site.example")
+        self.assertTrue(first["ok"])
+        self.assertEqual(first["facts"], 1)
+        stamp = first["stamp"]
+        write_json(
+            dnsr,
+            {
+                "schema_version": 1,
+                "module": "dns-resolve",
+                "resolved": [
+                    {"host": "a.site.example", "ips": ["1.2.3.4"], "resolution_status": "resolved"},
+                    {"host": "b.site.example", "ips": ["1.2.3.5"], "resolution_status": "resolved"},
+                ],
+            },
+        )
+        second = ingest_live(params, td, "site.example")
+        self.assertEqual(second["stamp"], stamp)
+        self.assertEqual(second["facts"], 2)
+        runs = list_runs(params, td, "site.example")
+        self.assertEqual(len(runs), 1)
+        names = {r["host"] for r in facts_as_assets(params, td, "site.example", stamp)}
+        self.assertEqual(names, {"a.site.example", "b.site.example"})
+
 
 class TestDashboardServiceWarehouse(unittest.TestCase):
     def test_service_views_stay_on_one_target(self):

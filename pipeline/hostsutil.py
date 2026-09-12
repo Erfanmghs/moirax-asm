@@ -88,6 +88,56 @@ def wildcard_seeds(gate: ScopeGate, target: str | None = None) -> list[str]:
     return []
 
 
+def is_wildcard_only(ips: list[str] | None, wildcard_ips: set[str] | None) -> bool:
+    """True when every resolved IP is a catch-all / nonce probe address."""
+    wild = {str(ip) for ip in (wildcard_ips or []) if ip}
+    have = [str(ip) for ip in (ips or []) if ip]
+    if not have or not wild:
+        return False
+    return all(ip in wild for ip in have)
+
+
+def keep_resolved_host(
+    host: str,
+    ips: list[str] | None,
+    wildcard_ips: set[str] | None,
+    apex: str,
+    source: str | None = None,
+    independent: set[str] | None = None,
+) -> bool:
+    """Keep the live apex and independently found names; drop brute catch-all noise."""
+    h = (host or "").strip().lower().rstrip(".")
+    a = (apex or "").strip().lower().rstrip(".")
+    if not h:
+        return False
+    if a and h == a:
+        return True
+    if source in ("known", "passive", "ffuf"):
+        return True
+    if independent and h in independent:
+        return True
+    return not is_wildcard_only(ips, wildcard_ips)
+
+
+_INDEPENDENT_SOURCES = frozenset({
+    "crtsh", "subfinder", "amass", "findomain", "assetfinder", "assetfinder-related",
+    "passive", "passive-recon", "waybackurls", "gau", "chaos", "ffuf", "httpx", "known",
+})
+
+
+def asset_discovery_source(row: dict[str, Any]) -> str:
+    sources = [str(s).strip().lower() for s in (row.get("sources") or []) if s]
+    if any(s in _INDEPENDENT_SOURCES or s.startswith("psv") for s in sources):
+        return "known"
+    return str(row.get("source") or "brute")
+
+
+def keep_asset_row(row: dict[str, Any], wildcard_ips: set[str] | None, apex: str) -> bool:
+    host = str(row.get("host") or "").strip().lower().rstrip(".")
+    ips = [str(x) for x in (row.get("ips") or ([row.get("ip")] if row.get("ip") else [])) if x]
+    return keep_resolved_host(host, ips, wildcard_ips, apex, source=asset_discovery_source(row))
+
+
 def container_path(params: Any, target: str, rel: str) -> str:
     mount = str(params.require("recon_container_mount")).rstrip("/")
     rel_n = rel.replace("\\", "/").lstrip("/")

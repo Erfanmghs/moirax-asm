@@ -33,6 +33,8 @@ def _vehicle_dir() -> tuple[Params, Path]:
         "schema_version": 1,
         "assets": [
             {"host": "dev.example.com", "ips": ["1.1.1.1"], "alive": True, "length": 1234, "sources": ["subfinder", "crtsh"], "tags": ["dev"]},
+            # Resolves to an in-scope IP but the HTTP probe did not answer:
+            # still a LIVE asset (must never be counted/reported as dead).
             {"host": "api.example.com", "ips": ["2.2.2.2"], "alive": False, "sources": ["subfinder"], "tags": []},
             {"host": "www.example.com", "ips": ["3.3.3.3"], "alive": True, "length": 88, "sources": ["crtsh"], "tags": []},
         ],
@@ -65,10 +67,38 @@ class TestPrecisionContract(unittest.TestCase):
         params, td = _vehicle_dir()
         bundle = collect(params, td, "20260101T000000Z")
         self.assertEqual(bundle["counts"]["hosts"], 3)
-        self.assertEqual(bundle["counts"]["alive_hosts"], 2)
+        # All 3 resolve to an in-scope IP => all 3 are live assets, even though
+        # api.example.com's HTTP probe reported alive=False (HTTP-down != dead).
+        self.assertEqual(bundle["counts"]["alive_hosts"], 3)
         self.assertEqual(bundle["counts"]["module_docs"], 2)
         self.assertEqual(bundle["scope_digest"], scope_digest(params))
         self.assertEqual(bundle["run_timestamp"], "20260101T000000Z")
+
+    def test_ip_bearing_host_is_never_dead_but_no_ip_is(self):
+        """Regression: a resolved (IP-bearing) host is a live asset even when
+        the HTTP probe said alive=False; only a host with NO IP is dead."""
+        tmp = Path(tempfile.mkdtemp()) / "example.com"
+        (tmp / "00_assets").mkdir(parents=True)
+        (tmp / "00_assets" / "assets.json").write_text(json.dumps({
+            "schema_version": 1,
+            "assets": [
+                {"host": "ip-http-down.example.com", "ips": ["5.5.5.5"], "alive": False, "sources": ["dnsx"]},
+                {"host": "ip-no-probe.example.com", "ips": ["6.6.6.6"], "alive": None, "sources": ["dnsx"]},
+                {"host": "dead.example.com", "ips": [], "alive": False, "sources": ["ffuf-3"]},
+            ],
+        }), encoding="utf-8")
+        params = _params()
+        bundle = collect(params, tmp, "20260101T000000Z")
+        self.assertEqual(bundle["counts"]["hosts"], 3)
+        self.assertEqual(bundle["counts"]["alive_hosts"], 2, "both IP-bearing hosts are alive; only the no-IP host is dead")
+        generate_all(params, tmp, "20260101T000000Z")
+        export = json.loads((tmp / "90_report" / "export.json").read_text(encoding="utf-8"))
+        alive_by_host = {h["host"]: h["alive"] for h in export["hosts"]}
+        self.assertTrue(alive_by_host["ip-http-down.example.com"], "IP-bearing, HTTP-down host must export alive")
+        self.assertTrue(alive_by_host["ip-no-probe.example.com"], "IP-bearing, unprobed host must export alive")
+        self.assertFalse(alive_by_host["dead.example.com"], "a host with no IP is genuinely dead")
+        csv_text = (tmp / "90_report" / "export.csv").read_text(encoding="utf-8")
+        self.assertIn("hosts,ip-http-down.example.com,5.5.5.5,True", csv_text)
 
     def test_all_formats_agree_on_counts(self):
         """Companion B7 acceptance: counts equal across md/html/csv/json/pdf."""
@@ -80,7 +110,7 @@ class TestPrecisionContract(unittest.TestCase):
         csv_text = (report_dir / "export.csv").read_text(encoding="utf-8")
         export = json.loads((report_dir / "export.json").read_text(encoding="utf-8"))
         pdf_bytes = (report_dir / "report.pdf").read_bytes()
-        self.assertIn("hosts: 3 (alive: 2)", md)
+        self.assertIn("hosts: 3 (alive: 3)", md)
         self.assertIn("run timestamp: 20260101T000000Z", md)
         self.assertIn(bundle_scope(params), md)
         self.assertIn("hosts: 3", html)
@@ -107,10 +137,13 @@ class TestPrecisionContract(unittest.TestCase):
         params, td = _vehicle_dir()
         generate_all(params, td, "20260101T000000Z")
         html = (td / "90_report" / "report.html").read_text(encoding="utf-8")
-        self.assertIn("#0a0e14", html, "section 9.4 dark palette embedded")
+        self.assertIn("#070b12", html, "dashboard dark palette embedded")
+        self.assertIn("#0a0e14", html, "legacy palette token kept for theme contract")
         self.assertIn("badge", html)
         self.assertIn("<th>length</th>", html)
-        self.assertIn(">1234<", html)
+        self.assertIn("1234", html)
+        self.assertIn('id="f-q"', html)
+        self.assertIn("Attack Surface Management", html)
         csv_text = (td / "90_report" / "export.csv").read_text(encoding="utf-8")
         self.assertIn("length", csv_text.splitlines()[0])
 
@@ -118,7 +151,37 @@ class TestPrecisionContract(unittest.TestCase):
         params, td = _vehicle_dir()
         generate_all(params, td, "20260101T000000Z")
         html = (td / "90_report" / "report.html").read_text(encoding="utf-8")
-        self.assertIn("NEW</span>", html, "diff badge for added host (section 6.6 wiring)")
+        self.assertIn('"is_new": true', html, "diff badge for added host is in the report payload")
+        self.assertIn("<th>Port</th>", html)
+        self.assertIn("<th>Product</th>", html)
+        self.assertIn("<th>Version</th>", html)
+        self.assertNotIn("<th>ips</th>", html)
+
+
+class TestReportDropsCatchall(unittest.TestCase):
+    def test_wildcard_only_host_omitted_from_bundle(self):
+        tmp = Path(tempfile.mkdtemp()) / "example.com"
+        (tmp / "00_assets").mkdir(parents=True)
+        (tmp / "20_dns" / "dnsx").mkdir(parents=True)
+        (tmp / "00_assets" / "assets.json").write_text(json.dumps({
+            "schema_version": 1,
+            "assets": [
+                {"host": "example.com", "ips": ["9.9.9.9"], "alive": True, "sources": ["dnsx"]},
+                {"host": "app2.example.com", "ips": ["9.9.9.9"], "alive": True, "sources": ["dnsx"]},
+            ],
+        }), encoding="utf-8")
+        (tmp / "20_dns" / "dnsx" / "data.json").write_text(json.dumps({
+            "schema_version": 1,
+            "module": "dns-resolve",
+            "wildcard_ips": ["9.9.9.9"],
+            "resolved": [],
+        }), encoding="utf-8")
+        params = _params()
+        bundle = collect(params, tmp, "20260101T000000Z")
+        hosts = {h["host"] for h in bundle["hosts"]}
+        self.assertIn("example.com", hosts)
+        self.assertNotIn("app2.example.com", hosts)
+        self.assertEqual(bundle["counts"]["hosts"], 1)
 
 
 class TestTamperCheck(unittest.TestCase):

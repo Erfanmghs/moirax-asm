@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Attack Surface Management | moirax-ASM</title>
 <link rel="icon" href="/static/favicon.svg?v=asm1" type="image/svg+xml" sizes="any">
-<link rel="stylesheet" href="/static/theme.css?v=asm4">
+<link rel="stylesheet" href="/static/theme.css?v=asm11">
 </head>
 <body>
 <canvas id="fx-field" aria-hidden="true"></canvas>
@@ -127,7 +127,8 @@
         <li><span class="ui">Authorize this target</span> -- adds each new domain to <span class="ui">scope.yaml</span> if missing.</li>
         <li>On that site's row, press <span class="ui">START</span> to begin a check when the site is idle. Add the site first. <span class="ui">START</span> does not kill a live scan.</li>
         <li>SETUP is optional. If you skip it, this site uses global SETTINGS / TOOLS / WORDLISTS. Uncheck inherit to pick tools (each row says what it does) and tick wordlist filenames on this same page. SHOW NAMES previews entries in a file. Automatic checks for this site are also in SETUP.</li>
-        <li>START / RESUME / RESTART / STOP / DELETE on a row apply only to that site. START begins a new ladder when idle. RESUME continues done modules. RESTART stops a live scan for this site, then starts from the first module. DELETE hides it from SCAN immediately; warehouse records stay for 7 days, then that site's files are removed.</li>
+        <li>START / RESUME / RESTART / STOP / DELETE on a row apply only to that site. START begins a new ladder when idle. RESUME continues done modules. RESTART stops a live scan for this site, then starts from the first module. The dashboard clears circuit-breaker pauses automatically when a run starts or the next module is due — you do not click a limiter button. DELETE hides it from SCAN immediately; warehouse records stay for 7 days, then that site's files are removed.</li>
+        <li>Each SCAN row shows live dnsx parent / hit count / QPS, and warnings from the last run (false QPS collapse, canary latency, tool timeout, paused breaker). A breaker pause is cleared automatically when the next module (or the next START / RESUME) runs.</li>
       </ol>
       <h4>SCHEDULER</h4>
       <p>Global defaults live in <span class="ui">SETTINGS</span> (automatic checks on/off and interval, minimum 10 minutes). Each site can enable, change the interval, or turn checks off in <span class="ui">SETUP</span> / TARGETS. Empty per-site fields inherit SETTINGS. Example: 720 minutes is about twice a day.</p>
@@ -187,15 +188,14 @@
       <h3 id="h-res">7. RESULTS -- read findings</h3>
       <p>Choose a site that you added on SCAN. The list is that board, not a default leftover.</p>
       <ol>
-        <li>Pick the site and press <span class="ui">LOAD RESULTS</span>.</li>
-        <li>Filters: free text, source, tag, alive/dead, in/out of scope, run timestamp.</li>
+        <li>Pick the site. While a scan is running, this page auto-refreshes <span class="ui">LIVE RESULTS</span> from dnsx output (you do not wait for MERGE). Press <span class="ui">LOAD RESULTS</span> anytime.</li>
+        <li>Filters match the table columns: host, open ports (has / none), alive, length, tech, source, tag, first seen, last seen, plus free text, IP search, and scope.</li>
         <li><span class="ui">APPLY</span> runs the filter. <span class="ui">COPY URL</span> copies a restore link. <span class="ui">CLEAR</span> resets filters.</li>
       </ol>
       <h4>Asset table</h4>
       <ul>
-        <li><span class="ui">HOST</span> -- discovered name.</li>
-        <li><span class="ui">IPS</span> -- server address.</li>
-        <li><span class="ui">OPEN PORTS</span> -- ports found open on that host (from port-check / port-sweep). Same ports are listed again under OPEN PORTS BY HOST.</li>
+        <li><span class="ui">HOST</span> -- discovered name. Click a live host to open it in a new tab.</li>
+        <li><span class="ui">OPEN PORTS</span> -- how many ports are open on this name. Click the count to see each IP, then click an IP for port / product / version.</li>
         <li><span class="ui">ALIVE</span> -- answered or not.</li>
         <li><span class="ui">SOURCES</span> -- which source found it (overlap is normal).</li>
         <li><span class="ui">TAGS</span> -- labels such as dev.</li>
@@ -334,6 +334,7 @@
             <label>ACTIVE BUDGET (sec)<input id="t-b-active" type="number" min="1" class="mono" placeholder="inherit"></label>
             <label><span class="lbl">NESTED DNS DEPTH (1-5) <span class="help" tabindex="0" data-help="How deep active DNS nesting goes for THIS site. Empty = global SETTINGS.">?</span></span><input id="t-b-recon" type="number" min="1" max="5" class="mono" placeholder="inherit"></label>
             <label><span class="lbl">NESTED VHOST DEPTH (1-5) <span class="help" tabindex="0" data-help="How deep Host-header vhost nesting goes for THIS site. Independent of DNS depth. Empty = global SETTINGS.">?</span></span><input id="t-b-ffuf-depth" type="number" min="1" max="5" class="mono" placeholder="inherit"></label>
+            <label><span class="lbl">PARALLEL DNS PARENTS (1-8) <span class="help" tabindex="0" data-help="How many nested dnsx parent jobs run at once. Total QPS is split across them (4 at 5000 QPS = 1250 each). Does not raise origin HTTP load. Empty = global SETTINGS.">?</span></span><input id="t-b-dnsx-parents" type="number" min="1" max="8" class="mono" placeholder="inherit"></label>
             <label>PASSIVE RECURSION DEPTH<input id="t-b-depth" type="number" min="0" max="5" class="mono" placeholder="inherit"></label>
             <label>FFUF-3 MAX DEAD PROBES<input id="t-b-dead" type="number" min="1" class="mono" placeholder="inherit"></label>
             <label>FFUF-4 MAX PORT JOBS<input id="t-b-ffuf4" type="number" min="1" class="mono" placeholder="inherit"></label>
@@ -373,18 +374,30 @@
   <!-- b) RESULTS -->
   <section id="panel-results" class="panel hidden">
     <h2>RESULTS <span class="help" tabindex="0" data-help="Choose a site you added on SCAN. Findings for that site only.">?</span> <span class="hint">pick one of the sites on SCAN -- not a leftover default</span></h2>
-    <p class="lede">Each host shows which ports are open on that name. Filter, copy a restore link, then compare any two checks of this site only.</p>
+    <p class="lede">Each row is one discovered name. Click a live host to open it in a new tab. The table shows how many ports are open; click that count for IPs, then an IP for port, product, and version. Filter any column below.</p>
     <div class="row">
       <label>SITE <select id="results-target" class="mono site-select" aria-label="Results site"><option value="">Choose a site from SCAN...</option></select></label>
       <button id="results-load">LOAD RESULTS</button>
+      <span id="results-live-badge" class="badge">live</span>
       <span id="wh-badge" class="badge">warehouse</span>
     </div>
     <p id="wh-meta" class="mono dim">each site stores history in its own warehouse -- pick a site and load</p>
     <div class="filters" id="filters">
       <input id="f-q" placeholder="free-text search">
+      <input id="f-host" placeholder="host">
+      <input id="f-ip" placeholder="ip">
+      <select id="f-ports" aria-label="Open ports filter">
+        <option value="">ports: any</option>
+        <option value="open">has open ports</option>
+        <option value="none">no open ports</option>
+      </select>
+      <select id="f-alive"><option value="">alive: any</option><option value="true">alive</option><option value="false">dead</option></select>
+      <input id="f-length" placeholder="length">
+      <input id="f-tech" placeholder="tech">
       <input id="f-source" placeholder="source (subfinder, crtsh...)">
       <input id="f-tag" placeholder="tag (dev, stage...)">
-      <select id="f-alive"><option value="">alive: any</option><option value="true">alive</option><option value="false">dead</option></select>
+      <input id="f-first_seen" placeholder="first seen">
+      <input id="f-last_seen" placeholder="last seen">
       <select id="f-scope"><option value="">scope: all</option><option value="in">scope includes</option><option value="excluded">scope excludes</option></select>
       <input id="f-run" placeholder="run timestamp">
       <button id="f-apply">APPLY</button>
@@ -393,11 +406,7 @@
     </div>
     <div id="diff-badges" class="badges"></div>
     <div class="table-wrap"><table id="assets-table"><thead>
-      <tr><th data-sort="host">HOST</th><th data-sort="ips">IPS</th><th data-sort="open_ports_text">OPEN PORTS</th><th data-sort="alive">ALIVE</th><th data-sort="length">LENGTH</th><th data-sort="tech">TECH</th><th data-sort="sources">SOURCES</th><th data-sort="tags">TAGS</th><th data-sort="first_seen">FIRST SEEN</th><th data-sort="last_seen">LAST SEEN</th><th>JSON</th></tr>
-    </thead><tbody></tbody></table></div>
-    <h2 class="mt">OPEN PORTS BY HOST <span class="hint">port scan joined to each subdomain -- empty means no open ports recorded yet</span></h2>
-    <div class="table-wrap"><table id="ports-by-host"><thead>
-      <tr><th>HOST</th><th>IP</th><th>OPEN PORTS</th></tr>
+      <tr><th data-sort="host">HOST</th><th data-sort="open_ports_text">OPEN PORTS</th><th data-sort="alive">ALIVE</th><th data-sort="length">LENGTH</th><th data-sort="tech">TECH</th><th data-sort="sources">SOURCES</th><th data-sort="tags">TAGS</th><th data-sort="first_seen">FIRST SEEN</th><th data-sort="last_seen">LAST SEEN</th><th>JSON</th></tr>
     </thead><tbody></tbody></table></div>
     <h2 class="mt">SOURCE COVERAGE ANALYTICS <span class="hint">which source found what -- and how much they overlap</span></h2>
     <div class="table-wrap"><table id="coverage-table"><thead>
@@ -417,7 +426,7 @@
   <!-- b2) REPORTS -->
   <section id="panel-reports" class="panel hidden">
     <h2>REPORTS <span class="help" tabindex="0" data-help="CHECK BUNDLE shows what already exists; GENERATE NOW builds a fresh report from the latest data. Every file carries a checksum so you can prove it was not modified.">?</span> <span class="hint">one-click, tamper-checked reports: web page, PDF, CSV, JSON</span></h2>
-    <p class="lede">Build a shareable pack. OPEN each file; SHA256 proves it was not modified after generate.</p>
+    <p class="lede">GENERATE NOW builds a shareable pack from the latest findings. OPEN <span class="ui">report.html</span> for the dashboard-styled page (same filters as RESULTS, ports grouped by IP). SHA256 proves files were not modified after generate.</p>
     <div class="row">
       <label>SITE <select id="rep-target" class="mono site-select" aria-label="Reports site"><option value="">Choose a site from SCAN...</option></select></label>
       <button id="rep-check">CHECK BUNDLE</button>
@@ -518,6 +527,7 @@
     <div class="grid">
       <label><span class="lbl">NESTED DNS DEPTH (1-5)</span><input id="s-recon-depth" type="number" min="1" max="5" class="mono"></label>
       <label><span class="lbl">NESTED VHOST DEPTH (1-5)</span><input id="s-ffuf-depth" type="number" min="1" max="5" class="mono"></label>
+      <label><span class="lbl">PARALLEL DNS PARENTS (1-8) <span class="help" tabindex="0" data-help="Nested dnsx jobs share the global QPS cap. 4 parents at 5000 QPS is 1250 QPS each. Origin HTTP probes stay on their own rate.">?</span></span><input id="s-dnsx-parents" type="number" min="1" max="8" class="mono"></label>
       <label><span class="lbl">PASSIVE RECURSION DEPTH (0-5)</span><input id="s-passive-depth" type="number" min="0" max="5" class="mono"></label>
     </div>
     <p class="hint">Defaults for every site. SCAN SETUP / TARGETS can set different values for one site only.</p>
@@ -576,9 +586,25 @@
 </main>
 <p class="page-foot">Attack Surface Management -- only scan assets you own or have written permission to test.</p>
 
+<div id="port-inspector" class="port-inspector" hidden>
+  <div class="port-inspector-card" role="dialog" aria-modal="true" aria-labelledby="pi-host">
+    <header class="port-inspector-head">
+      <div>
+        <p class="port-inspector-kicker">open ports</p>
+        <h3 id="pi-host" class="mono">—</h3>
+        <p id="pi-ips" class="dim mono"></p>
+      </div>
+      <div class="port-inspector-actions">
+        <button type="button" id="pi-back" hidden>BACK</button>
+        <button type="button" id="pi-close">CLOSE</button>
+      </div>
+    </header>
+    <div id="pi-body"></div>
+  </div>
+</div>
 <div id="toast" class="toast hidden"></div>
 <div id="help-pop" class="help-pop hidden" role="tooltip"></div>
 <script src="/static/motion.js?v=asm4"></script>
-<script src="/static/app.js?v=asm4"></script>
+<script src="/static/app.js?v=asm11"></script>
 </body>
 </html>

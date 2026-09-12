@@ -351,6 +351,28 @@ def ingest_run_end(
     return ingest_maps(params, target_dir, target, stamp, status, counts, maps, diff_doc)
 
 
+def ingest_live(params: Params, target_dir: Path, target: str) -> dict[str, Any]:
+    """Index valid in-scope facts from the live tree into warehouse.sqlite.
+
+    Reuses run.live_stamp so RESULTS can refresh during a scan; run-end ingest
+    updates the same stamp.
+    """
+    from pipeline.history import extract_live_classes, utc_stamp
+    from pipeline import state as state_engine
+
+    state = state_engine.load_state(params, target_dir, target)
+    run = state.setdefault("run", {})
+    stamp = str(run.get("live_stamp") or "").strip()
+    if not stamp or not _STAMP_RE.match(stamp):
+        stamp = utc_stamp()
+        run["live_stamp"] = stamp
+        state_engine.save_state(params, target_dir, state)
+    maps = extract_live_classes(params, target_dir)
+    counts = {cls: len(bucket) for cls, bucket in maps.items()}
+    status = str(run.get("status") or "running")
+    return ingest_maps(params, target_dir, target, stamp, status, counts, maps, None)
+
+
 def ingest_maps(
     params: Params,
     target_dir: Path,

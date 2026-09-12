@@ -13,6 +13,8 @@ import os
 import random
 import re
 import socket
+import threading
+import time
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
@@ -198,6 +200,12 @@ def load_settings(params: Params) -> dict[str, Any]:
         doc.setdefault("recon_depth", 1)
         doc.setdefault("ffuf_depth", 1)
     try:
+        from pipeline.recon_depth import clamp_dnsx_parallel_parents
+
+        doc["dnsx_parallel_parents"] = clamp_dnsx_parallel_parents(params)
+    except Exception:
+        doc.setdefault("dnsx_parallel_parents", 1)
+    try:
         doc["passive_recursion_depth"] = int(params.require("passive_recursion_depth"))
     except Exception:
         doc.setdefault("passive_recursion_depth", 1)
@@ -220,7 +228,7 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
     unknown = set(patch) - {
         "proxy_url", "proxy_pool", "digest_threshold", "alert_rules", "telegram",
         "resource_budget", "agent", "retention", "recon_depth", "ffuf_depth",
-        "passive_recursion_depth",
+        "passive_recursion_depth", "dnsx_parallel_parents",
     }
     if unknown:
         errors.append(f"settings keys not allowed: {sorted(unknown)} (closed allow-list)")
@@ -323,6 +331,10 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
         depth = patch.get("passive_recursion_depth")
         if not isinstance(depth, int) or isinstance(depth, bool) or depth < 0 or depth > 5:
             errors.append("passive_recursion_depth must be an integer 0-5")
+    if "dnsx_parallel_parents" in patch:
+        n = patch.get("dnsx_parallel_parents")
+        if not isinstance(n, int) or isinstance(n, bool) or n < 1 or n > 8:
+            errors.append("dnsx_parallel_parents must be an integer 1-8 (nested DNS brute)")
     return errors
 
 
@@ -358,7 +370,7 @@ def save_settings(params: Params, patch: dict[str, Any]) -> dict[str, Any]:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
     _chmod_private(path)
-    depth_keys = ("recon_depth", "ffuf_depth", "passive_recursion_depth")
+    depth_keys = ("recon_depth", "ffuf_depth", "passive_recursion_depth", "dnsx_parallel_parents")
     if any(k in patch for k in depth_keys):
         _sync_depth_tools(params, {k: int(patch[k]) for k in depth_keys if k in patch})
     return _mask_settings(merged)
@@ -586,10 +598,10 @@ def _read_json_silent(path: Path) -> dict[str, Any]:
     return doc if isinstance(doc, dict) else {}
 
 
-def scan_target_row(params: Params, target: str) -> dict[str, Any]:
+def scan_target_row(params: Params, target: str, registry: dict[str, Any] | None = None) -> dict[str, Any]:
     """One SCAN-board row: status, modules, last run -- THIS target only."""
     from pipeline.factory import target_root
-    from pipeline.target_profiles import get_profile, profile_has_overrides
+    from pipeline.target_profiles import load_registry, profile_has_overrides
 
     target_dir = target_root(params, target)
     state = _read_json_silent(target_dir / str(params.require("state_filename")))
@@ -599,9 +611,19 @@ def scan_target_row(params: Params, target: str) -> dict[str, Any]:
     last = runs[-1] if runs else {}
     logs_dir = target_dir / "logs"
     has_logs = any((logs_dir / name).is_file() for name in ("run.log", "dashboard-spawn.log"))
-    profile = get_profile(params, target) or {}
+    if registry is None:
+        registry = load_registry(params)
+    profile = registry.get(target) or {}
     modules = state.get("modules") if isinstance(state.get("modules"), dict) else {}
     running_n = sum(1 for row in modules.values() if isinstance(row, dict) and row.get("status") == "running")
+    try:
+        from pipeline.live_status import live_status
+
+        health = live_status(params, target_dir)
+    except Exception:  # noqa: BLE001 -- SCAN board must still render
+        health = {}
+    live = health.get("live") if isinstance(health, dict) else {}
+    issues = health.get("issues") if isinstance(health, dict) else []
 
     return {
         "target": target,
@@ -620,17 +642,28 @@ def scan_target_row(params: Params, target: str) -> dict[str, Any]:
         "last_counts": last.get("counts") if isinstance(last.get("counts"), dict) else {},
         "run_count": len(runs),
         "has_logs": has_logs,
+        "live": live if isinstance(live, dict) else {},
+        "issues": issues if isinstance(issues, list) else [],
     }
+
+
+_PURGE_AT = 0.0
 
 
 def scan_board_view(params: Params) -> dict[str, Any]:
     """All known targets for the SCAN accordion -- never mixes per-target rows."""
     from pipeline.deleted import purge_expired_all
+    from pipeline.target_profiles import load_registry
 
-    try:
-        purge_expired_all(params)
-    except Exception:  # noqa: BLE001 -- purge must never blank the SCAN board
-        pass
+    global _PURGE_AT
+    now = time.time()
+    if now - _PURGE_AT >= 60.0:
+        try:
+            purge_expired_all(params)
+        except Exception:  # noqa: BLE001 -- purge must never blank the SCAN board
+            pass
+        _PURGE_AT = now
+    registry = load_registry(params)
     names = known_target_names(params)
     rows = []
     seen: set[str] = set()
@@ -638,7 +671,7 @@ def scan_board_view(params: Params) -> dict[str, Any]:
         if name in seen:
             continue
         seen.add(name)
-        rows.append(scan_target_row(params, name))
+        rows.append(scan_target_row(params, name, registry=registry))
     return {"targets": rows, "count": len(rows)}
 
 
@@ -1094,34 +1127,89 @@ def _patch_task_selection(text: str, task: str, keys: list[str], doc: dict[str, 
 
 # ---------------------------------------------------------------- filters (b)
 
-_FILTER_KEYS = ("q", "source", "tag", "alive", "run", "scope")
+_FILTER_KEYS = (
+    "q", "source", "tag", "alive", "run", "scope",
+    "host", "ip", "ports", "length", "tech", "first_seen", "last_seen",
+)
+FILTER_KEYS = _FILTER_KEYS
+
+
+def _blob(value: Any) -> str:
+    if isinstance(value, list):
+        return " ".join(str(x) for x in value if x).lower()
+    if value is None:
+        return ""
+    return str(value).lower()
+
+
+def _filter_haystack(row: dict[str, Any]) -> str:
+    bits = [
+        str(row.get("host") or ""),
+        " ".join(str(x) for x in (row.get("ips") or ([row.get("ip")] if row.get("ip") else []))),
+        " ".join(str(x) for x in (row.get("sources") or [])),
+        " ".join(str(x) for x in (row.get("tags") or [])),
+        " ".join(str(x) for x in (row.get("tech") or [])),
+        str(row.get("module") or ""),
+        str(row.get("open_ports_total") or ""),
+        str(row.get("length") or ""),
+        str(row.get("first_seen") or ""),
+        str(row.get("last_seen") or ""),
+    ]
+    return " ".join(bits).lower()
+
+
+def _text_match(row: dict[str, Any], needle: str, *keys: str) -> bool:
+    blob = " ".join(_blob(row.get(k)) for k in keys)
+    return needle in blob
+
 
 def apply_filters(rows: list[dict[str, Any]], filters: dict[str, Any], scope_includes: list[str] | None = None,
                   scope_excludes: list[str] | None = None) -> list[dict[str, Any]]:
-    """section 9.2-b GLOBAL RESULT FILTERS -- combinable: free-text, per-source
-    attribution, tags, alive/dead, run selection, scope in/excludes."""
+    """section 9.2-b GLOBAL RESULT FILTERS -- combinable per column."""
     out = rows
     q = str(filters.get("q") or "").strip().lower()
     if q:
-        out = [r for r in out if q in json.dumps(r, default=str).lower()]
+        out = [r for r in out if q in _filter_haystack(r)]
+    host = str(filters.get("host") or "").strip().lower()
+    if host:
+        out = [r for r in out if host in _blob(r.get("host"))]
+    ip = str(filters.get("ip") or "").strip().lower()
+    if ip:
+        out = [r for r in out if _text_match(r, ip, "ips", "ip")]
     source = str(filters.get("source") or "").strip()
     if source:
-        out = [r for r in out if source in (r.get("sources") or [])]
+        sl = source.lower()
+        out = [r for r in out if any(sl in str(s).lower() for s in (r.get("sources") or []))]
     tag = str(filters.get("tag") or "").strip()
     if tag:
-        out = [r for r in out if tag in (r.get("tags") or [])]
+        tl = tag.lower()
+        out = [r for r in out if any(tl in str(t).lower() for t in (r.get("tags") or []))]
+    tech = str(filters.get("tech") or "").strip().lower()
+    if tech:
+        out = [r for r in out if tech in _blob(r.get("tech"))]
+    length = str(filters.get("length") or "").strip().lower()
+    if length:
+        out = [r for r in out if length in str(r.get("length") if r.get("length") is not None else "").lower()]
+    first_seen = str(filters.get("first_seen") or "").strip().lower()
+    if first_seen:
+        out = [r for r in out if first_seen in str(r.get("first_seen") or "").lower()]
+    last_seen = str(filters.get("last_seen") or "").strip().lower()
+    if last_seen:
+        out = [r for r in out if last_seen in str(r.get("last_seen") or "").lower()]
+    ports = str(filters.get("ports") or "").strip().lower()
+    if ports in ("open", "yes", "true"):
+        out = [r for r in out if int(r.get("open_ports_total") or 0) > 0]
+    elif ports in ("none", "no", "false", "0"):
+        out = [r for r in out if int(r.get("open_ports_total") or 0) <= 0]
     alive = str(filters.get("alive") or "").strip().lower()
     if alive in ("true", "false"):
         want = alive == "true"
-        out = [r for r in out if bool(r.get("alive")) == want]
+        out = [r for r in out if (bool(r.get("alive")) or bool(r.get("ips") or [])) == want]
     run_sel = str(filters.get("run") or "").strip()
     if run_sel:
         out = [r for r in out if str(r.get("run") or "") == run_sel]
     scope = str(filters.get("scope") or "").strip().lower()
     if scope in ("in", "excluded"):
-        host = None
-        def _match(patterns: list[str], h: str) -> bool:
-            return any(fnmatch.fnmatch(h, p.lstrip("*.") and f"*{p.lstrip('*')}" if p.startswith("*.") else p) for p in patterns)
         kept = []
         for r in out:
             h = str(r.get("host") or "")
@@ -1316,8 +1404,106 @@ def warehouse_rebuild_view(params: Params, target: str) -> dict[str, Any]:
         raise DashboardError(str(exc)) from exc
 
 
+_ASSETS_CACHE: dict[str, tuple[float, int, list[dict[str, Any]]]] = {}
+_ASSETS_LOCK = threading.Lock()
+_LIVE_ROWS_CACHE: dict[str, tuple[float, int, list[dict[str, Any]]]] = {}
+_MERGED_ROWS_CACHE: dict[str, tuple[tuple, list[dict[str, Any]]]] = {}
+
+
+def _assets_from_json(params: Params, target_dir: Path) -> list[dict[str, Any]]:
+    path = target_dir / str(params.require("assets_relpath"))
+    if not path.is_file():
+        return []
+    try:
+        st = path.stat()
+    except OSError:
+        return []
+    key = str(path)
+    with _ASSETS_LOCK:
+        hit = _ASSETS_CACHE.get(key)
+        if hit and hit[0] == st.st_mtime and hit[1] == st.st_size:
+            return hit[2]
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return []
+    rows = [r for r in (doc.get("assets") or []) if isinstance(r, dict)]
+    with _ASSETS_LOCK:
+        _ASSETS_CACHE[key] = (st.st_mtime, st.st_size, rows)
+    return rows
+
+
+def _live_fingerprint(target_dir: Path, assets_rel: str) -> tuple[float, int]:
+    stamp = 0.0
+    size = 0
+    paths = [target_dir / assets_rel]
+    dnsx = target_dir / "20_dns" / "dnsx"
+    if dnsx.is_dir():
+        paths.extend(dnsx.glob("brute_*.json"))
+        data = dnsx / "data.json"
+        if data.is_file():
+            paths.append(data)
+        paths.extend(dnsx.glob("wildcard-probe*.json"))
+    for path in paths:
+        try:
+            st = path.stat()
+        except OSError:
+            continue
+        stamp = max(stamp, st.st_mtime)
+        size += int(st.st_size)
+    return stamp, size
+
+
+def _live_host_rows(params: Params, target_dir: Path) -> list[dict[str, Any]]:
+    """RESULTS during a scan: hosts from dnsx NDJSON without writing warehouse.sqlite."""
+    from pipeline.history import extract_live_classes
+
+    assets_rel = str(params.require("assets_relpath"))
+    stamp, size = _live_fingerprint(target_dir, assets_rel)
+    key = str(target_dir)
+    with _ASSETS_LOCK:
+        hit = _LIVE_ROWS_CACHE.get(key)
+        if hit and hit[0] == stamp and hit[1] == size:
+            return hit[2]
+    maps = extract_live_classes(params, target_dir)
+    rows: list[dict[str, Any]] = []
+    for host, payload in (maps.get("hosts") or {}).items():
+        if not isinstance(payload, dict):
+            continue
+        row = dict(payload)
+        row.setdefault("host", host)
+        row.setdefault("ips", [])
+        row.setdefault("alive", bool(row.get("ips")))
+        row.setdefault("sources", ["dnsx"])
+        rows.append(row)
+    with _ASSETS_LOCK:
+        _LIVE_ROWS_CACHE[key] = (stamp, size, rows)
+    return rows
+
+
+def _merge_result_rows(canonical: list[dict[str, Any]], live: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not live:
+        return canonical
+    if not canonical:
+        return live
+    by_host: dict[str, dict[str, Any]] = {}
+    for row in live:
+        host = str(row.get("host") or "")
+        if host:
+            by_host[host] = dict(row)
+    for row in canonical:
+        host = str(row.get("host") or "")
+        if not host:
+            continue
+        if host in by_host:
+            by_host[host] = {**by_host[host], **row}
+        else:
+            by_host[host] = dict(row)
+    return list(by_host.values())
+
+
 def results_rows_for(params: Params, target: str, run_stamp: str = "") -> list[dict[str, Any]]:
-    """Latest assets.json, or a historical warehouse snapshot when run= is set."""
+    """Latest assets plus in-progress dnsx hosts, or a warehouse snapshot when run= is set."""
     from pipeline.warehouse import facts_as_assets, ensure_ingested
 
     target_dir = _target_dir(params, target)
@@ -1326,21 +1512,44 @@ def results_rows_for(params: Params, target: str, run_stamp: str = "") -> list[d
             ensure_ingested(params, target_dir, target)
             rows = facts_as_assets(params, target_dir, target, run_stamp)
             if rows:
-                return rows
+                from pipeline.history import drop_wildcard_host_rows
+
+                return drop_wildcard_host_rows(params, target_dir, rows)
         except Exception:  # noqa: BLE001 -- fall back to latest canonical index
             pass
-    path = target_dir / str(params.require("assets_relpath"))
-    if not path.is_file():
-        return []
+    assets_rel = str(params.require("assets_relpath"))
     try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, ValueError):
-        return []
-    rows = doc.get("assets") or []
-    return [r for r in rows if isinstance(r, dict)]
+        ast = (target_dir / assets_rel).stat()
+        afp: tuple[float, int] = (ast.st_mtime, ast.st_size)
+    except OSError:
+        afp = (0.0, 0)
+    fingerprint = (afp, _live_fingerprint(target_dir, assets_rel))
+    key = str(target_dir)
+    with _ASSETS_LOCK:
+        hit = _MERGED_ROWS_CACHE.get(key)
+        if hit and hit[0] == fingerprint:
+            return hit[1]
+    canonical = _assets_from_json(params, target_dir)
+    try:
+        live = _live_host_rows(params, target_dir)
+    except Exception:  # noqa: BLE001 -- RESULTS still shows assets.json
+        live = []
+    merged = _merge_result_rows(canonical, live)
+    try:
+        from pipeline.history import drop_wildcard_host_rows
+
+        merged = drop_wildcard_host_rows(params, target_dir, merged)
+    except Exception:  # noqa: BLE001 -- RESULTS still shows the merged index
+        pass
+    with _ASSETS_LOCK:
+        _MERGED_ROWS_CACHE[key] = (fingerprint, merged)
+    return merged
 
 
-def _port_entry(port: Any, ip: str, service: str = "") -> dict[str, Any] | None:
+_MAX_TCP_PORT = 65535
+
+
+def _port_entry(port: Any, ip: str, service: str = "", svc_meta: dict[str, str] | None = None) -> dict[str, Any] | None:
     if isinstance(port, dict):
         raw = port.get("port")
         proto = str(port.get("proto") or port.get("protocol") or "tcp").lower()
@@ -1354,10 +1563,37 @@ def _port_entry(port: Any, ip: str, service: str = "") -> dict[str, Any] | None:
         num = int(raw)
     except (TypeError, ValueError):
         return None
+    if num < 1 or num > _MAX_TCP_PORT:
+        return None
     label = f"{num}/{proto}"
     if svc:
         label = f"{label} {svc}"
-    return {"port": num, "proto": proto, "state": state, "service": svc, "ip": ip, "label": label}
+    meta = svc_meta or {}
+    name = str(meta.get("name") or "")
+    product = str(meta.get("product") or "")
+    version = str(meta.get("version") or "")
+    extrainfo = str(meta.get("extrainfo") or "")
+    if isinstance(port, dict):
+        name = name or str(port.get("name") or "")
+        product = product or str(port.get("product") or "")
+        version = version or str(port.get("version") or "")
+        extrainfo = extrainfo or str(port.get("extrainfo") or "")
+    if not name and svc and not product:
+        name = svc
+    # name/product/version kept as distinct fields so the UI can render a clean
+    # human-readable detail (from nmap -sV); `service`/`label` stay for compat.
+    return {
+        "port": num,
+        "proto": proto,
+        "state": state,
+        "service": svc,
+        "name": name,
+        "product": product,
+        "version": version,
+        "extrainfo": extrainfo,
+        "ip": ip,
+        "label": label,
+    }
 
 
 def _read_port_json(path: Path) -> dict[str, Any]:
@@ -1370,24 +1606,50 @@ def _read_port_json(path: Path) -> dict[str, Any]:
     return doc if isinstance(doc, dict) else {}
 
 
-def _collect_open_ports(params: Params, target: str) -> tuple[dict[str, dict[tuple[int, str], dict[str, Any]]], dict[str, dict[tuple[int, str], dict[str, Any]]]]:
-    """host -> {(port, proto): entry}, ip -> same. Sweep wins over light check."""
-    by_host: dict[str, dict[tuple[int, str], dict[str, Any]]] = {}
-    by_ip: dict[str, dict[tuple[int, str], dict[str, Any]]] = {}
+_PORTS_CACHE: dict[str, tuple[tuple, Any]] = {}
+
+
+def _collect_open_ports(params: Params, target: str) -> tuple[dict[str, dict[tuple[str, int, str], dict[str, Any]]], dict[str, dict[tuple[str, int, str], dict[str, Any]]]]:
+    """host -> {(port, proto): entry}, ip -> same. Sweep wins over light check.
+
+    Cached by the (mtime,size) of the port JSON files: RESULTS polling re-joins
+    ports on every tick, and the naabu-full data.json can be multi-MB.
+    """
+    by_host: dict[str, dict[tuple[str, int, str], dict[str, Any]]] = {}
+    by_ip: dict[str, dict[tuple[str, int, str], dict[str, Any]]] = {}
     target_dir = _target_dir(params, target)
     services: dict[tuple[str, int, str], str] = {}
+    svc_meta: dict[tuple[str, int, str], dict[str, str]] = {}
 
-    def _put(bucket: dict[str, dict[tuple[int, str], dict[str, Any]]], key: str, entry: dict[str, Any]) -> None:
+    port_rels: list[str] = []
+    for param_key in ("portcheck_data_json", "portsweep_data_json"):
+        try:
+            port_rels.append(str(params.require(param_key)))
+        except (KeyError, ValueError, TypeError):
+            continue
+    fp = []
+    for rel in port_rels:
+        try:
+            st = (target_dir / rel).stat()
+            fp.append((st.st_mtime, st.st_size))
+        except OSError:
+            fp.append((0.0, 0))
+    fingerprint = tuple(fp)
+    cache_key = str(target_dir)
+    with _ASSETS_LOCK:
+        hit = _PORTS_CACHE.get(cache_key)
+        if hit and hit[0] == fingerprint:
+            return hit[1]
+
+    def _put(bucket: dict[str, dict[tuple[str, int, str], dict[str, Any]]], key: str, entry: dict[str, Any]) -> None:
         if not key:
             return
         slot = bucket.setdefault(key, {})
-        slot[(int(entry["port"]), str(entry["proto"]))] = entry
+        # Key includes IP so two addresses on the same name keep distinct port rows
+        # (80/tcp on 1.2.3.4 is not 80/tcp on 5.6.7.8).
+        slot[(str(entry.get("ip") or ""), int(entry["port"]), str(entry["proto"]))] = entry
 
-    for param_key in ("portcheck_data_json", "portsweep_data_json"):
-        try:
-            rel = str(params.require(param_key))
-        except (KeyError, ValueError, TypeError):
-            continue
+    for rel in port_rels:
         doc = _read_port_json(target_dir / rel)
         for svc in doc.get("services") or []:
             if not isinstance(svc, dict) or svc.get("port") is None:
@@ -1399,8 +1661,15 @@ def _collect_open_ports(params: Params, target: str) -> tuple[dict[str, dict[tup
             ip = str(svc.get("ip") or "")
             proto = str(svc.get("proto") or "tcp").lower()
             product = " ".join(x for x in (str(svc.get("product") or ""), str(svc.get("version") or "")) if x).strip()
-            if ip and product:
-                services[(ip, pnum, proto)] = product
+            if ip:
+                if product:
+                    services[(ip, pnum, proto)] = product
+                svc_meta[(ip, pnum, proto)] = {
+                    "name": str(svc.get("name") or svc.get("service") or ""),
+                    "product": str(svc.get("product") or ""),
+                    "version": str(svc.get("version") or ""),
+                    "extrainfo": str(svc.get("extrainfo") or ""),
+                }
         rows = doc.get("scans") or doc.get("results") or []
         for scan in rows:
             if not isinstance(scan, dict):
@@ -1409,7 +1678,8 @@ def _collect_open_ports(params: Params, target: str) -> tuple[dict[str, dict[tup
             hosts = [str(h) for h in (scan.get("hosts") or []) if h]
             if scan.get("host") and not hosts:
                 hosts = [str(scan["host"])]
-            for port in scan.get("ports") or []:
+            raw_ports = scan.get("ports") or []
+            for port in raw_ports:
                 svc_name = ""
                 if isinstance(port, dict):
                     try:
@@ -1418,17 +1688,73 @@ def _collect_open_ports(params: Params, target: str) -> tuple[dict[str, dict[tup
                         continue
                     proto = str(port.get("proto") or port.get("protocol") or "tcp").lower()
                     svc_name = services.get((ip, pnum, proto), "")
-                entry = _port_entry(port, ip, svc_name)
+                entry = _port_entry(port, ip, svc_name, svc_meta.get((ip, pnum, proto)))
                 if not entry:
                     continue
                 _put(by_ip, ip, entry)
                 for host in hosts:
                     _put(by_host, host.lower(), entry)
-    return by_host, by_ip
+    result = (by_host, by_ip)
+    with _ASSETS_LOCK:
+        _PORTS_CACHE[cache_key] = (fingerprint, result)
+    return result
 
 
-def attach_open_ports(params: Params, target: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Join naabu light/full open ports onto each RESULTS host (no warehouse schema change)."""
+def _row_ips(row: dict[str, Any]) -> list[str]:
+    ips = [str(x) for x in (row.get("ips") or ([row.get("ip")] if row.get("ip") else [])) if x]
+    return list(dict.fromkeys(ips))
+
+
+def _merged_ports_for_host(
+    by_host: dict[str, dict[tuple[str, int, str], dict[str, Any]]],
+    by_ip: dict[str, dict[tuple[str, int, str], dict[str, Any]]],
+    host: str,
+    ips: list[str],
+) -> list[dict[str, Any]]:
+    merged: dict[tuple[str, int, str], dict[str, Any]] = {}
+    merged.update(by_host.get(host.lower()) or {})
+    for ip in ips:
+        merged.update(by_ip.get(ip) or {})
+    return sorted(
+        merged.values(),
+        key=lambda p: (str(p.get("ip") or ""), int(p["port"]), str(p["proto"])),
+    )
+
+
+def _ports_by_ip_counts(ports: list[dict[str, Any]], ips: list[str]) -> list[dict[str, Any]]:
+    counts: dict[str, int] = {}
+    for port in ports:
+        ip = str(port.get("ip") or "")
+        counts[ip] = counts.get(ip, 0) + 1
+    ordered: list[str] = []
+    for ip in ips:
+        if ip and ip not in ordered:
+            ordered.append(ip)
+    for ip in counts:
+        if ip not in ordered:
+            ordered.append(ip)
+    return [{"ip": ip, "count": int(counts.get(ip, 0))} for ip in ordered]
+
+
+def _slim_port(port: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "port": int(port["port"]),
+        "proto": str(port.get("proto") or "tcp"),
+        "ip": str(port.get("ip") or ""),
+        "product": str(port.get("product") or ""),
+        "version": str(port.get("version") or ""),
+    }
+
+
+def attach_open_ports(
+    params: Params,
+    target: str,
+    rows: list[dict[str, Any]],
+    *,
+    include_ports: bool = False,
+) -> list[dict[str, Any]]:
+    """Join open ports onto each RESULTS host. List payload is counts per IP; full
+    1–65535 port lists are loaded when the operator clicks an IP."""
     try:
         by_host, by_ip = _collect_open_ports(params, target)
     except Exception:  # noqa: BLE001 -- ports are additive, never fail RESULTS
@@ -1436,29 +1762,60 @@ def attach_open_ports(params: Params, target: str, rows: list[dict[str, Any]]) -
     out: list[dict[str, Any]] = []
     for row in rows:
         host = str(row.get("host") or "").lower()
-        ips = [str(x) for x in (row.get("ips") or ([row.get("ip")] if row.get("ip") else [])) if x]
-        merged: dict[tuple[int, str], dict[str, Any]] = {}
-        merged.update(by_host.get(host) or {})
-        for ip in ips:
-            merged.update(by_ip.get(ip) or {})
-        ports = sorted(merged.values(), key=lambda p: (int(p["port"]), str(p["proto"])))
-        out.append({
+        ips = _row_ips(row)
+        ports = _merged_ports_for_host(by_host, by_ip, host, ips)
+        total = len(ports)
+        entry = {
             **row,
-            "open_ports": ports,
-            "open_ports_text": ", ".join(str(p["label"]) for p in ports),
-        })
+            "open_ports_total": total,
+            "open_ports_by_ip": _ports_by_ip_counts(ports, ips),
+            "open_ports_text": str(total) if total else "",
+        }
+        if include_ports:
+            entry["open_ports"] = ports
+        out.append(entry)
     return out
 
 
+def ports_for_host(params: Params, target: str, host: str, ip: str | None = None) -> dict[str, Any]:
+    """Full open-port list for one host, optionally one IP. Ports outside 1–65535 are omitted."""
+    host_l = str(host or "").strip().lower()
+    want_ip = str(ip or "").strip()
+    try:
+        by_host, by_ip = _collect_open_ports(params, target)
+    except Exception:  # noqa: BLE001
+        by_host, by_ip = {}, {}
+    if want_ip:
+        entries: dict[tuple[str, int, str], dict[str, Any]] = dict(by_ip.get(want_ip) or {})
+        for key, item in (by_host.get(host_l) or {}).items():
+            if str(item.get("ip") or "") == want_ip:
+                entries[key] = item
+        ports = sorted(entries.values(), key=lambda p: (int(p["port"]), str(p["proto"])))
+        slim = [_slim_port(p) for p in ports]
+        return {"host": host_l, "ip": want_ip, "count": len(slim), "ports": slim}
+    extra_ips = []
+    if host_l:
+        extra_ips = list(dict.fromkeys(
+            str(p.get("ip") or "") for p in (by_host.get(host_l) or {}).values() if p.get("ip")
+        ))
+    ports = _merged_ports_for_host(by_host, by_ip, host_l, extra_ips)
+    return {
+        "host": host_l,
+        "ip": "",
+        "count": len(ports),
+        "ips": _ports_by_ip_counts(ports, extra_ips),
+        "ports": [],
+    }
+
+
 def enrich_results_rows(params: Params, target: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    from pipeline.warehouse import enrich_assets, ensure_ingested
+    from pipeline.warehouse import enrich_assets
 
     target_dir = _target_dir(params, target)
     enriched = rows
     try:
-        ensure_ingested(params, target_dir, target)
         enriched = enrich_assets(params, target_dir, target, rows)
     except Exception:  # noqa: BLE001 -- timeline is additive, never fail the panel
         enriched = rows
-    return attach_open_ports(params, target, enriched)
+    return attach_open_ports(params, target, enriched, include_ports=False)
 

@@ -60,6 +60,8 @@ from pipeline.textio import atomic_write_text, read_lines
 # REJECTED -- the safety rails are untouched.
 _FULL_RANGE_PORTS = 65535
 _MIN_PPS = 1
+# Throttle mid-sweep full-JSON flushes; the final write still captures every IP.
+_FLUSH_INTERVAL_SEC = 3.0
 
 
 def run_port_sweep(
@@ -286,6 +288,11 @@ def run_port_sweep(
     reprobe_divisor = max(1, int(params.require("portsweep_filtered_reprobe_divisor")))
     anomalous_threshold = int(params.require("portsweep_anomalous_open_threshold"))
     paused_by_canary = False
+    # Mid-sweep flush is throttled: rewriting the full scan JSON after EVERY IP
+    # is O(N^2) bytes on large sweeps and stalls the live dashboard reads. We
+    # flush at most once per _FLUSH_INTERVAL_SEC; the authoritative final
+    # write_json after the loop still captures every IP (never silent).
+    _last_flush = 0.0
     for ip in sorted(ip_hosts):
         if getattr(adapter, "stop_requested", lambda: False)():
             remaining.extend(sorted(set(ip_hosts) - {s["ip"] for s in scans}))
@@ -345,24 +352,28 @@ def run_port_sweep(
             services.extend(
                 _nmap_services(params, adapter, target_dir, target, extra, ip, record["ports"], timeout_sec)
             )
-        # Flush after every IP so RESULTS/PORTS update mid-sweep (not only at end).
-        mid = _payload(
-            params,
-            scans=list(scans),
-            services=list(services),
-            pace=pace,
-            unique_ips_scanned=len(scans),
-            duplicates_skipped=duplicates_skipped,
-            skipped=None,
-            completed_at=_stamp_now(),
-            remaining_ips=sorted(set(ip_hosts) - {s["ip"] for s in scans}),
-            unreachable=list(unreachable),
-            skipped_no_ip=[u["host"] for u in unresolved],
-            guarantee={"hosts": len(no_ip_hosts), "resolved": resolved_now, "unresolved": unresolved},
-            sentinels_used=len(sentinels),
-            skips=list(skips),
-        )
-        _write_outputs(params, target_dir, mid, skips)
+        # Flush so RESULTS/PORTS update mid-sweep (not only at end), but throttled
+        # to avoid O(N^2) full-JSON rewrites on large IP sets.
+        now = adapter.clock.time()
+        if now - _last_flush >= _FLUSH_INTERVAL_SEC:
+            _last_flush = now
+            mid = _payload(
+                params,
+                scans=list(scans),
+                services=list(services),
+                pace=pace,
+                unique_ips_scanned=len(scans),
+                duplicates_skipped=duplicates_skipped,
+                skipped=None,
+                completed_at=_stamp_now(),
+                remaining_ips=sorted(set(ip_hosts) - {s["ip"] for s in scans}),
+                unreachable=list(unreachable),
+                skipped_no_ip=[u["host"] for u in unresolved],
+                guarantee={"hosts": len(no_ip_hosts), "resolved": resolved_now, "unresolved": unresolved},
+                sentinels_used=len(sentinels),
+                skips=list(skips),
+            )
+            _write_outputs(params, target_dir, mid, skips)
     if remaining:
         # window breach / canary pause: the remaining-IP list is disclosed --
         # the sweep is PARTIAL, never silently abandoned.
@@ -625,13 +636,21 @@ def _nmap_services(
     )
     parsed = _parse_nmap_xml(result.stdout or "")
     return [
-        {"ip": ip, "port": p, "proto": proto, "product": product, "version": version}
-        for p, proto, product, version in parsed
+        {
+            "ip": ip,
+            "port": p,
+            "proto": proto,
+            "name": name,
+            "product": product,
+            "version": version,
+            "extrainfo": extrainfo,
+        }
+        for p, proto, name, product, version, extrainfo in parsed
     ]
 
 
-def _parse_nmap_xml(text: str) -> list[tuple[int, str, str, str]]:
-    services: list[tuple[int, str, str, str]] = []
+def _parse_nmap_xml(text: str) -> list[tuple[int, str, str, str, str, str]]:
+    services: list[tuple[int, str, str, str, str, str]] = []
     try:
         root = ElementTree.fromstring(text)
     except ElementTree.ParseError:
@@ -643,9 +662,13 @@ def _parse_nmap_xml(text: str) -> list[tuple[int, str, str, str]]:
         if portid is None or state_el is None or state_el.get("state") != "open":
             continue
         service_el = port_el.find("service")
+        # nmap -sV service element carries the human-useful identity:
+        # name (http/ssh/...), product (nginx/OpenSSH/...), version, extrainfo.
+        name = (service_el.get("name") if service_el is not None else "") or ""
         product = (service_el.get("product") if service_el is not None else "") or ""
         version = (service_el.get("version") if service_el is not None else "") or ""
-        services.append((int(portid), proto, product, version))
+        extrainfo = (service_el.get("extrainfo") if service_el is not None else "") or ""
+        services.append((int(portid), proto, name, product, version, extrainfo))
     return services
 
 

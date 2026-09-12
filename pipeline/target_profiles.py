@@ -60,6 +60,7 @@ BUDGET_KEYS_ALLOW = {
     "passive_recursion_depth",
     "recon_depth",
     "ffuf_depth",
+    "dnsx_parallel_parents",
     "ffuf3_max_dead_probes",
     "ffuf4_max_jobs",
 }

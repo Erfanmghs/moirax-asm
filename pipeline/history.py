@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from pipeline.hostsutil import keep_asset_row, keep_resolved_host
 from pipeline.jsonio import read_json, write_json
 from pipeline.params import Params
 
@@ -129,7 +130,7 @@ _empty_classes = empty_classes
 _empty_maps = empty_maps
 
 
-def extract_classes(params: Params, snap: Path) -> dict[str, dict[str, Any]]:
+def extract_classes(params: Params, snap: Path, skip_history: bool = False) -> dict[str, dict[str, Any]]:
     buckets = {name: {} for name in _CLASSES}
     if not snap.is_dir():
         return buckets
@@ -142,6 +143,8 @@ def extract_classes(params: Params, snap: Path) -> dict[str, dict[str, Any]]:
             host = str(row["host"])
             buckets["hosts"][host] = row
     for data_path in snap.rglob("data.json"):
+        if skip_history and _under_history(data_path, snap, params):
+            continue
         try:
             doc = read_json(data_path)
         except (OSError, json.JSONDecodeError, ValueError):
@@ -177,6 +180,146 @@ def extract_classes(params: Params, snap: Path) -> dict[str, dict[str, Any]]:
             if isinstance(row, dict) and row.get("ip"):
                 buckets["passive_ips"][str(row["ip"])] = row
     return buckets
+
+
+def extract_live_classes(params: Params, target_dir: Path) -> dict[str, dict[str, Any]]:
+    """Index the live workspace so RESULTS can refresh before MERGE writes assets.json."""
+    buckets = extract_classes(params, target_dir, skip_history=True)
+    apex = target_dir.name.strip().lower().rstrip(".")
+    wild = live_wildcard_ips(params, target_dir)
+    dnsr = target_dir / str(params.require("dnsr_data_json"))
+    if dnsr.is_file():
+        try:
+            doc = read_json(dnsr)
+        except (OSError, json.JSONDecodeError, ValueError):
+            doc = {}
+        if isinstance(doc, dict):
+            for rec in doc.get("resolved") or []:
+                if not isinstance(rec, dict):
+                    continue
+                host = str(rec.get("host") or "").strip().lower()
+                status = str(rec.get("resolution_status") or "resolved")
+                if not host or status not in ("", "resolved"):
+                    continue
+                if host in buckets["hosts"]:
+                    continue
+                ips = rec.get("ips") or rec.get("a") or []
+                if not isinstance(ips, list):
+                    ips = []
+                ip_list = [str(ip) for ip in ips if ip]
+                if not keep_resolved_host(host, ip_list, wild, apex, source=str(rec.get("source") or "")):
+                    continue
+                buckets["hosts"][host] = {
+                    "host": host,
+                    "ips": ip_list,
+                    # resolved with an IP => live asset (HTTP detail is separate)
+                    "alive": bool(ip_list) or (rec.get("alive") is True),
+                    "attribution": "active",
+                    "sources": ["dns-resolve"],
+                }
+    dnsx_dir = target_dir / "20_dns" / "dnsx"
+    if dnsx_dir.is_dir():
+        for path in sorted(dnsx_dir.glob("brute_*.json")):
+            _hosts_from_dnsx_json(buckets["hosts"], path, wild, apex)
+    return buckets
+
+
+def live_wildcard_ips(params: Params, target_dir: Path) -> set[str]:
+    ips: set[str] = set()
+    dnsr = target_dir / str(params.require("dnsr_data_json"))
+    if dnsr.is_file():
+        try:
+            doc = read_json(dnsr)
+        except (OSError, json.JSONDecodeError, ValueError):
+            doc = {}
+        if isinstance(doc, dict):
+            for item in doc.get("wildcard_ips") or []:
+                if item:
+                    ips.add(str(item))
+    probe_paths = []
+    probe = target_dir / str(params.require("dnsr_wildcard_out_rel"))
+    probe_paths.append(probe)
+    dnsx_dir = target_dir / "20_dns" / "dnsx"
+    if dnsx_dir.is_dir():
+        probe_paths.extend(sorted(dnsx_dir.glob("wildcard-probe*.json")))
+    seen: set[str] = set()
+    for probe in probe_paths:
+        key = str(probe)
+        if key in seen or not probe.is_file():
+            continue
+        seen.add(key)
+        try:
+            text = probe.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(rec, dict):
+                continue
+            for key_name in ("a", "aaaa", "A"):
+                val = rec.get(key_name)
+                if isinstance(val, list):
+                    ips.update(str(x) for x in val if x)
+                elif isinstance(val, str) and val:
+                    ips.add(val)
+    return ips
+
+
+def drop_wildcard_host_rows(params: Params, target_dir: Path, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    wild = live_wildcard_ips(params, target_dir)
+    if not wild:
+        return rows
+    apex = target_dir.name.strip().lower().rstrip(".")
+    return [row for row in rows if isinstance(row, dict) and keep_asset_row(row, wild, apex)]
+
+
+def _hosts_from_dnsx_json(
+    hosts: dict[str, Any],
+    path: Path,
+    wildcard_ips: set[str] | None = None,
+    apex: str = "",
+) -> None:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(rec, dict):
+            continue
+        host = str(rec.get("host") or rec.get("input") or "").strip().lower().rstrip(".")
+        if not host:
+            continue
+        ips = rec.get("a") or rec.get("aaaa") or rec.get("A") or []
+        if isinstance(ips, str):
+            ips = [ips]
+        ips = [str(ip) for ip in ips if ip]
+        if not keep_resolved_host(host, ips, wildcard_ips, apex, source="brute"):
+            continue
+        row = hosts.get(host) or {"host": host, "ips": [], "sources": ["dnsx"], "alive": bool(ips)}
+        merged = list(row.get("ips") or [])
+        for ip in ips:
+            if ip not in merged:
+                merged.append(ip)
+        row["ips"] = merged
+        sources = list(row.get("sources") or [])
+        if "dnsx" not in sources:
+            sources.append("dnsx")
+        row["sources"] = sources
+        row["alive"] = bool(merged) or bool(row.get("alive"))
+        hosts[host] = row
 
 
 _extract_classes = extract_classes

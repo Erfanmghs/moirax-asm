@@ -268,7 +268,15 @@ class Adapter:
         stderr = completed.stderr
         code = int(completed.returncode)
         success = code == 0
-        self.breaker.record(module, success=success, latency_sec=duration, timeout=code == 124)
+        probe = bool(extra.get("breaker_probe")) or str(spec.name).endswith("-canary") or str(
+            spec.name
+        ).endswith("-probe")
+        if probe:
+            self.breaker.record(module, success=success, latency_sec=duration, timeout=code == 124)
+        elif code in (124, 130):
+            self.breaker.record(module, success=True, latency_sec=None, timeout=False)
+        else:
+            self.breaker.record(module, success=success, latency_sec=None, timeout=False)
         self._log_run(module, spec.name, code, stderr, argv, success)
         data_path = None
         if extra.get("skip_parse"):
@@ -479,25 +487,69 @@ class _DockerRunner:
             )
         except OSError as exc:
             return Completed(1, "", str(exc))
+        # Drain stdout/stderr on a side thread. Waiting on poll() with unread
+        # PIPEs deadlocks dnsx once the kernel pipe fills (~64KiB) because
+        # those tools write NDJSON to stdout even when `-o` is set.
+        box: dict[str, Any] = {}
+
+        def _wait() -> None:
+            try:
+                out, err = proc.communicate()
+                box["stdout"] = out or ""
+                box["stderr"] = err or ""
+            except Exception as exc:  # noqa: BLE001 -- still return an exit
+                box["stdout"] = box.get("stdout") or ""
+                box["stderr"] = str(exc)
+            box["rc"] = proc.returncode
+
+        waiter = threading.Thread(target=_wait, name="recon-docker-wait", daemon=True)
+        waiter.start()
         start = time.time()
-        while True:
+        while waiter.is_alive():
             if self.abort_check():
+                _stop_docker_container(self.params, docker_cmd)
                 _kill_popen(proc)
-                return Completed(130, "", "operator stop")
-            rc = proc.poll()
-            if rc is not None:
-                stdout, stderr = proc.communicate()
-                return Completed(rc, stdout or "", stderr or "")
+                waiter.join(1.0)
+                return Completed(130, str(box.get("stdout") or ""), str(box.get("stderr") or "operator stop"))
             if timeout_sec is not None and (time.time() - start) >= float(timeout_sec):
+                _stop_docker_container(self.params, docker_cmd)
                 _kill_popen(proc)
-                stdout, stderr = "", ""
-                try:
-                    out_b, err_b = proc.communicate(timeout=0.5)
-                    stdout, stderr = out_b or "", err_b or ""
-                except Exception:  # noqa: BLE001
-                    pass
-                return Completed(124, stdout, stderr or "container timeout")
-            time.sleep(0.12)
+                waiter.join(1.0)
+                return Completed(
+                    124,
+                    str(box.get("stdout") or ""),
+                    str(box.get("stderr") or "container timeout"),
+                )
+            waiter.join(0.12)
+        return Completed(int(box.get("rc") or 0), str(box.get("stdout") or ""), str(box.get("stderr") or ""))
+
+
+def _container_name(docker_cmd: list[str]) -> str:
+    try:
+        idx = docker_cmd.index("--name")
+    except ValueError:
+        return ""
+    if idx + 1 >= len(docker_cmd):
+        return ""
+    return str(docker_cmd[idx + 1]).strip()
+
+
+def _stop_docker_container(params: Params, docker_cmd: list[str]) -> None:
+    """Kill the named tool container. SIGKILL on `docker run` does not always
+    reap the daemon-side container (`--rm` only runs after the container exits).
+    """
+    name = _container_name(docker_cmd)
+    if not name:
+        return
+    try:
+        prefix = docker_prefix(params)
+    except Exception:  # noqa: BLE001 -- timeout path must still return
+        return
+    try:
+        subprocess.run([*prefix, "kill", name], capture_output=True, text=True, check=False, timeout=8)
+        subprocess.run([*prefix, "rm", "-f", name], capture_output=True, text=True, check=False, timeout=8)
+    except (OSError, subprocess.TimeoutExpired):
+        return
 
 
 def _kill_popen(proc: subprocess.Popen) -> None:

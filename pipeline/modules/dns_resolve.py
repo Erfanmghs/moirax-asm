@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 import secrets
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import nullcontext
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from pipeline.adapter import Adapter
-from pipeline.hostsutil import container_path, normalize_fqdn, wildcard_seeds
+from pipeline.hostsutil import (
+    container_path,
+    is_wildcard_only,
+    keep_resolved_host,
+    normalize_fqdn,
+    wildcard_seeds,
+)
 from pipeline.jsonio import read_json, write_json
 from pipeline.load_balance import LoadBalancer, write_sentinel_file
 from pipeline.ndjson import load_json_file, parse_json_payload
@@ -16,8 +26,28 @@ from pipeline.resolver_forge import forge_resolvers
 from pipeline.scope import ScopeGate
 from pipeline.textio import atomic_write_text, read_lines
 from pipeline.wordlist_forge import copy_into_target, materialize_effective
-from pipeline.recon_depth import child_depth, clamp_recon_depth, recursion_parents, vhost_driven_parents
+from pipeline.recon_depth import (
+    child_depth,
+    clamp_dnsx_parallel_parents,
+    clamp_recon_depth,
+    dnsx_job_qps,
+    dnsx_parent_worker_count,
+    recursion_parents,
+    vhost_driven_parents,
+)
 from pipeline import httpx_probe
+
+
+def _done_marker(path: Path) -> Path:
+    return path.with_name(path.name + ".done")
+
+
+def _write_done(path: Path) -> None:
+    _done_marker(path).write_text("ok\n", encoding="utf-8")
+
+
+def _chunk_complete(out_path: Path) -> bool:
+    return _done_marker(out_path).is_file() and out_path.is_file()
 
 
 def _unlink_stale(path: Path) -> None:
@@ -83,43 +113,31 @@ def run_dns_resolve(
     depth = clamp_recon_depth(params)
     max_level = int(params.require("max_hosts_per_level"))
     nested_parents: list[str] = []
-    wildcard_ip = None
+    wildcard_ips: set[str] = set()
+    if balancer.tick(resolvers_c, "logs/raw/dnsx-canary", extra_lb):
+        wildcard_ips |= _wildcard_ip(
+            params,
+            adapter,
+            target_dir,
+            target,
+            extra,
+            planned,
+            timeout_sec,
+            balancer,
+            resolvers_c,
+            apex,
+        )
+    else:
+        partial.append("load_balance_canary_pause")
     for level in range(1, depth + 1):
-        parents = recursion_parents(resolved, apex, level, wildcard_ip, max_level)
+        if "load_balance_canary_pause" in partial:
+            break
+        parents = recursion_parents(resolved, apex, level, wildcard_ips, max_level)
         if level > 1:
             if not parents:
                 break
-            nested_parents.extend(parents)
-            if len(parents) >= max_level:
-                partial.append("max_hosts_per_level")
-        for parent in parents:
-            added, pause = _brute_under_parent(
-                params,
-                gate,
-                adapter,
-                target_dir,
-                target,
-                extra,
-                planned,
-                timeout_sec,
-                balancer,
-                extra_lb,
-                resolvers_c,
-                brute_lines,
-                chunk,
-                parent,
-                level,
-                resolved,
-            )
-            brute_valid += added
-            if pause:
-                partial.append("load_balance_canary_pause")
-                break
-        if "load_balance_canary_pause" in partial:
-            break
-        if level == 1:
             if balancer.tick(resolvers_c, "logs/raw/dnsx-canary", extra_lb):
-                wildcard_ip = _wildcard_ip(
+                per_parent = _probe_parent_wildcards(
                     params,
                     adapter,
                     target_dir,
@@ -129,19 +147,72 @@ def run_dns_resolve(
                     timeout_sec,
                     balancer,
                     resolvers_c,
-                    apex,
+                    parents,
+                    f"l{level}",
                 )
             else:
                 partial.append("load_balance_canary_pause")
                 break
+            kept: list[str] = []
+            for parent in parents:
+                extra_wild = per_parent.get(parent) or set()
+                if extra_wild:
+                    wildcard_ips |= extra_wild
+                    continue
+                row = resolved.get(parent) or {}
+                if is_wildcard_only(row.get("ips") or [], wildcard_ips):
+                    continue
+                kept.append(parent)
+            parents = kept
+            if not parents:
+                break
+            nested_parents.extend(parents)
+            if len(parents) >= max_level:
+                partial.append("max_hosts_per_level")
+        added, pause = _brute_parent_batch(
+            params,
+            gate,
+            adapter,
+            target_dir,
+            target,
+            extra,
+            planned,
+            timeout_sec,
+            balancer,
+            extra_lb,
+            resolvers_c,
+            brute_lines,
+            chunk,
+            parents,
+            level,
+            resolved,
+            wildcard_ips,
+            apex,
+        )
+        brute_valid += added
+        if pause:
+            partial.append("load_balance_canary_pause")
+            break
+        if level == 1:
+            try:
+                hit_floor = float(params.require("dnsx_wildcard_hit_rate"))
+            except (KeyError, TypeError, ValueError):
+                hit_floor = 0.8
+            if brute_lines and added >= int(hit_floor * len(brute_lines)):
+                partial.append("wildcard_hit_rate")
+                _log_parallel(
+                    params,
+                    target_dir,
+                    f"skip-nested catch-all hits={added}/{len(brute_lines)} floor={hit_floor}",
+                )
+                break
 
-    # Wildcard probe already ran after level-1 brute (nested parents skip
-    # wildcard-IP names). Same wildcard_ip classifies the DNSR-3 phase below.
+    # Wildcard probe ran before brute; nested parents skip catch-all IPs.
     flagged = _misconfig_flagged(params, target_dir)
     # Permute DNS-validated names (brute hits + any earlier ffuf/passive
     # artifacts), not HTTP-fuzz noise. Empty ffuf is expected when dnsx runs first.
     perm_seed = sorted(set(known) | set(resolved.keys()) | set(seeds))
-    wildcard_seed_suspects = _wildcard_ip_members(perm_seed, resolved, wildcard_ip)
+    wildcard_seed_suspects = _wildcard_ip_members(perm_seed, resolved, wildcard_ips)
     perm_hosts, seed_counts = _filter_seeds(perm_seed, flagged, wildcard_seed_suspects)
     dropped_aggregate = 0
     if perm_hosts:
@@ -198,6 +269,9 @@ def run_dns_resolve(
                     host = normalize_fqdn(str(rec.get("host") or rec.get("input") or ""))
                     if not host or not gate.enforce(target_dir, host):
                         continue
+                    ips = _ips_from_dnsx(rec)
+                    if not keep_resolved_host(host, ips, wildcard_ips, apex, source="perm"):
+                        continue
                     _merge_resolved(resolved, rec, host, "perm")
 
     all_hosts = sorted(set(known) | set(resolved.keys()) | {apex})
@@ -249,20 +323,40 @@ def run_dns_resolve(
             else:
                 row["resolution_status"] = "resolved"
                 row["resolution_reason"] = None
-            if wildcard_ip and wildcard_ip in row["ips"]:
+            if wildcard_ips & set(row["ips"]):
                 suspects.append(host)
         wildcard_suspects = sorted(set(suspects))
+
+    independent = set(known) | set(seeds) | {apex}
+    for host in list(resolved):
+        if keep_resolved_host(
+            host,
+            (resolved.get(host) or {}).get("ips") or [],
+            wildcard_ips,
+            apex,
+            source=(resolved.get(host) or {}).get("source"),
+            independent=independent,
+        ):
+            continue
+        wildcard_suspects.append(host)
+        resolved.pop(host, None)
+    wildcard_suspects = sorted(set(wildcard_suspects))
 
     _httpx_enrich_resolved(
         params, adapter, target_dir, target, extra, planned, timeout_sec, resolved
     )
     valid = sum(1 for row in resolved.values() if row.get("resolution_status") == "resolved")
+    # The actual catch-all/wildcard IPs (a random nonce resolved to these).
+    # MERGE consumes this to quarantine names that resolve EXCLUSIVELY to
+    # catch-all IPs; wildcard_suspects (hostnames) drives nested-brute pruning.
+    wildcard_ip_list = sorted(wildcard_ips)
     payload = {
         "schema_version": int(params.require("schema_version")),
         "module": "dns-resolve",
         "resolved": sorted(resolved.values(), key=lambda r: r["host"]),
         "candidates": {"brute": len(brute_lines), "perms": perm_candidates, "valid": valid},
         "wildcard_suspects": wildcard_suspects,
+        "wildcard_ips": wildcard_ip_list,
         "nested_parents": nested_parents,
     }
     write_json(target_dir / str(params.require("dnsr_data_json")), payload)
@@ -324,6 +418,7 @@ def expand_nested_after_vhosts(
     already = set(str(x) for x in (doc.get("nested_parents") or []))
     already.add(apex)
     wild = {str(x) for x in (doc.get("wildcard_suspects") or [])}
+    wildcard_ips = {str(x) for x in (doc.get("wildcard_ips") or []) if x}
     extra_names = _ffuf_hosts(params, target_dir)
     cap = int(params.require("max_hosts_per_level"))
     parents = vhost_driven_parents(apex, depth, resolved, extra_names, already, wild, cap)
@@ -346,6 +441,31 @@ def expand_nested_after_vhosts(
     chunk = int(params.require("dnsx_chunk_size"))
     nested_parents = list(doc.get("nested_parents") or [])
     added_total = 0
+    if balancer.tick(resolvers_c, "logs/raw/dnsx-canary", extra_lb):
+        per_parent = _probe_parent_wildcards(
+            params,
+            adapter,
+            target_dir,
+            target,
+            extra,
+            planned,
+            timeout_sec,
+            balancer,
+            resolvers_c,
+            parents,
+            "vhost",
+        )
+        kept_parents: list[str] = []
+        for parent in parents:
+            extra_wild = per_parent.get(parent) or set()
+            if extra_wild:
+                wildcard_ips |= extra_wild
+                wild.add(parent)
+                continue
+            kept_parents.append(parent)
+        parents = kept_parents
+    if not parents:
+        return None
     for parent in parents:
         extra_labels = child_depth(parent, apex)
         level = extra_labels + 1 if extra_labels >= 1 else 2
@@ -366,6 +486,8 @@ def expand_nested_after_vhosts(
             parent,
             level,
             resolved,
+            wildcard_ips=wildcard_ips,
+            apex=apex,
         )
         added_total += added
         nested_parents.append(parent)
@@ -383,7 +505,8 @@ def expand_nested_after_vhosts(
             "perms": int(candidates.get("perms") or 0),
             "valid": valid,
         },
-        "wildcard_suspects": list(doc.get("wildcard_suspects") or []),
+        "wildcard_suspects": sorted(wild),
+        "wildcard_ips": sorted(wildcard_ips),
         "nested_parents": nested_parents,
     }
     write_json(path, payload)
@@ -394,6 +517,82 @@ def expand_nested_after_vhosts(
             f"expand-nested-dns\tparents={len(parents)}\tadded_hosts={added_total}\n"
         )
     return payload
+
+
+def _log_parallel(params: Params, target_dir: Path, detail: str) -> None:
+    path = target_dir / str(params.require("run_log"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"{stamp}\tdns-resolve\tparallel-parents\t0\tok\t{detail}\n")
+
+
+def _brute_parent_batch(
+    params: Params,
+    gate: ScopeGate,
+    adapter: Adapter,
+    target_dir: Path,
+    target: str,
+    extra: dict[str, Any],
+    planned: int,
+    timeout_sec: float | None,
+    balancer: LoadBalancer,
+    extra_lb: dict[str, Any],
+    resolvers_c: str,
+    brute_lines: list[str],
+    chunk: int,
+    parents: list[str],
+    level: int,
+    resolved: dict[str, dict[str, Any]],
+    wildcard_ips: set[str] | None = None,
+    apex: str = "",
+) -> tuple[int, bool]:
+    if not parents:
+        return 0, False
+    live_qps = balancer.current_qps()
+    workers = dnsx_parent_worker_count(params, len(parents), live_qps)
+    job_qps = dnsx_job_qps(live_qps, workers)
+    planned_n = max(int(planned or 1), workers)
+    _log_parallel(
+        params,
+        target_dir,
+        f"level={level} workers={workers} parents={len(parents)} qps={live_qps} job_qps={job_qps}",
+    )
+    if workers <= 1 or len(parents) <= 1:
+        total = 0
+        for parent in parents:
+            added, pause = _brute_under_parent(
+                params, gate, adapter, target_dir, target, extra, planned_n, timeout_sec,
+                balancer, extra_lb, resolvers_c, brute_lines, chunk, parent, level, resolved,
+                job_qps=job_qps, wildcard_ips=wildcard_ips, apex=apex,
+            )
+            total += added
+            if pause:
+                return total, True
+        return total, False
+    merge_lock = threading.Lock()
+    stop_more = threading.Event()
+    added_total = 0
+    paused = False
+
+    def _one(parent: str) -> tuple[int, bool]:
+        if stop_more.is_set() or adapter.stop_requested():
+            return 0, True
+        return _brute_under_parent(
+            params, gate, adapter, target_dir, target, extra, planned_n, timeout_sec,
+            balancer, extra_lb, resolvers_c, brute_lines, chunk, parent, level, resolved,
+            resolved_lock=merge_lock, job_qps=job_qps, wildcard_ips=wildcard_ips, apex=apex,
+        )
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futs = [pool.submit(_one, parent) for parent in parents]
+        for fut in as_completed(futs):
+            added, pause = fut.result()
+            added_total += added
+            if pause:
+                paused = True
+                stop_more.set()
+    return added_total, paused
 
 
 def _brute_under_parent(
@@ -413,11 +612,19 @@ def _brute_under_parent(
     parent: str,
     level: int,
     resolved: dict[str, dict[str, Any]],
+    resolved_lock: threading.Lock | None = None,
+    job_qps: int | None = None,
+    wildcard_ips: set[str] | None = None,
+    apex: str = "",
 ) -> tuple[int, bool]:
     """dnsx -d PARENT -w wordlist. Returns (new_valid_count, paused)."""
     added = 0
     tag = _safe_dns_parent(parent)
+    merge_lock = resolved_lock if resolved_lock is not None else nullcontext()
+    qps = int(job_qps) if job_qps else balancer.current_qps()
     for i in range(0, len(brute_lines), chunk):
+        if adapter.stop_requested():
+            return added, True
         if not balancer.tick(resolvers_c, "logs/raw/dnsx-canary", extra_lb):
             return added, True
         part = brute_lines[i : i + chunk]
@@ -437,7 +644,7 @@ def _brute_under_parent(
                 "target_domain": parent,
                 "dnsx_wordlist": container_path(params, target, rel),
                 "dnsx_resolvers": resolvers_c,
-                "dnsx_max_qps": balancer.current_qps(),
+                "dnsx_max_qps": qps,
                 "dnsx_output": container_path(params, target, out_rel),
                 "output_raw_dir": f"logs/raw/dnsx/brute_l{level}_{tag}_{i}",
                 "skip_parse": True,
@@ -451,8 +658,12 @@ def _brute_under_parent(
             host = normalize_fqdn(str(rec.get("host") or ""))
             if not host or not gate.enforce(target_dir, host):
                 continue
-            added += 1
-            _merge_resolved(resolved, rec, host, "brute")
+            ips = _ips_from_dnsx(rec)
+            if not keep_resolved_host(host, ips, wildcard_ips, apex or target, source="brute"):
+                continue
+            with merge_lock:
+                added += 1
+                _merge_resolved(resolved, rec, host, "brute")
     return added, False
 
 
@@ -477,6 +688,8 @@ def _dnsx_run(
 ) -> list[dict[str, Any]]:
     merged = dict(extra)
     merged.update(local)
+    if _chunk_complete(out_path):
+        return _rows_from(out_path, "")
     _unlink_stale(out_path)  # TEST 3 T3-1: dnsx -o appends
     result = adapter.invoke(
         tool,
@@ -489,6 +702,8 @@ def _dnsx_run(
     rows = _rows_from(out_path, result.stdout)
     if result.exit_code != 0 and not rows:
         rows = _massdns_brute(params, adapter, target_dir, target, extra, planned, timeout_sec, brute_rel, apex, local)
+    elif result.exit_code == 0:
+        _write_done(out_path)
     return rows
 
 
@@ -517,7 +732,10 @@ def _dnsx_list(
         "output_raw_dir": f"logs/raw/{tool}/{source}",
         "skip_parse": True,
     }
-    _unlink_stale(target_dir / out_rel)  # TEST 3 T3-1: dnsx -o appends
+    out_path = target_dir / out_rel
+    if _chunk_complete(out_path):
+        return _rows_from(out_path, "")
+    _unlink_stale(out_path)  # TEST 3 T3-1: dnsx -o appends
     result = adapter.invoke(
         tool,
         module="dns-resolve",
@@ -526,9 +744,11 @@ def _dnsx_list(
         timeout_sec=timeout_sec,
         allow_fallback=False,
     )
-    rows = _rows_from(target_dir / out_rel, result.stdout)
+    rows = _rows_from(out_path, result.stdout)
     if result.exit_code != 0 and not rows:
         rows = _massdns_list(params, adapter, target_dir, target, extra, planned, timeout_sec, hosts_rel, resolvers_c, out_rel)
+    elif result.exit_code == 0:
+        _write_done(out_path)
     return rows
 
 
@@ -616,11 +836,54 @@ def _wildcard_ip(
     balancer: LoadBalancer,
     resolvers_c: str,
     apex: str,
-) -> str | None:
-    nonce = "wl" + secrets.token_hex(8)
-    host = f"{nonce}.{apex}"
-    rel = str(params.require("dnsr_wildcard_list_rel"))
-    atomic_write_text(target_dir / rel, host + "\n")
+) -> set[str]:
+    found = _probe_parent_wildcards(
+        params,
+        adapter,
+        target_dir,
+        target,
+        extra,
+        planned,
+        timeout_sec,
+        balancer,
+        resolvers_c,
+        [apex],
+        "apex",
+        list_rel=str(params.require("dnsr_wildcard_list_rel")),
+        out_rel=str(params.require("dnsr_wildcard_out_rel")),
+    )
+    return set(found.get(apex) or [])
+
+
+def _probe_parent_wildcards(
+    params: Params,
+    adapter: Adapter,
+    target_dir: Path,
+    target: str,
+    extra: dict[str, Any],
+    planned: int,
+    timeout_sec: float | None,
+    balancer: LoadBalancer,
+    resolvers_c: str,
+    parents: list[str],
+    tag: str,
+    list_rel: str | None = None,
+    out_rel: str | None = None,
+) -> dict[str, set[str]]:
+    """Resolve a random nonce under each parent. Answers are catch-all IPs."""
+    out: dict[str, set[str]] = {p: set() for p in parents}
+    if not parents:
+        return out
+    mapping: dict[str, str] = {}
+    lines: list[str] = []
+    for parent in parents:
+        nonce = "wl" + secrets.token_hex(8)
+        host = f"{nonce}.{parent}"
+        mapping[host] = parent
+        lines.append(host)
+    rel = list_rel or f"20_dns/dnsx/wildcard-probe-{tag}.txt"
+    outp = out_rel or f"20_dns/dnsx/wildcard-probe-{tag}.json"
+    atomic_write_text(target_dir / rel, "\n".join(lines) + "\n")
     rows = _dnsx_list(
         params,
         adapter,
@@ -631,16 +894,18 @@ def _wildcard_ip(
         timeout_sec,
         balancer,
         rel,
-        str(params.require("dnsr_wildcard_out_rel")),
+        outp,
         resolvers_c,
         "wildcard",
         full_records=False,
     )
     for rec in rows:
-        ips = _ips_from_dnsx(rec)
-        if ips:
-            return ips[0]
-    return None
+        host = normalize_fqdn(str(rec.get("host") or rec.get("input") or ""))
+        parent = mapping.get(host or "")
+        if not parent:
+            continue
+        out[parent].update(_ips_from_dnsx(rec))
+    return out
 
 
 def _cap_perms(
@@ -703,16 +968,17 @@ def _misconfig_flagged(params: Params, target_dir: Path) -> set[str]:
 def _wildcard_ip_members(
     hosts: list[str],
     resolved: dict[str, dict[str, Any]],
-    wildcard_ip: str | None,
+    wildcard_ip: str | set[str] | None,
 ) -> list[str]:
     """Wildcard-suspect seeds visible at DNSR-2 time: known hosts whose
     resolved-so-far row carries the wildcard IP."""
-    if not wildcard_ip:
+    wild = {wildcard_ip} if isinstance(wildcard_ip, str) else set(wildcard_ip or [])
+    if not wild:
         return []
     return [
         host
         for host in hosts
-        if wildcard_ip in ((resolved.get(host) or {}).get("ips") or [])
+        if wild.intersection((resolved.get(host) or {}).get("ips") or [])
     ]
 
 
@@ -752,11 +1018,18 @@ def _httpx_enrich_resolved(
 ) -> None:
     """When httpx is ENABLED, tag resolved names with length + technology."""
     for row in resolved.values():
-        row.setdefault("alive", None)
         row.setdefault("http_status", None)
         row.setdefault("length", None)
         row.setdefault("tech", [])
         row.setdefault("title", None)
+        # A name that resolves to an in-scope IP is a LIVE asset (DNS-alive):
+        # it must never be reported or treated as dead just because the
+        # optional HTTP probe is disabled, missed it, or the host serves no
+        # plain HTTP. HTTP reachability detail is carried in http_status/tech.
+        if row.get("resolution_status") == "resolved" and row.get("ips"):
+            row["alive"] = True
+        else:
+            row.setdefault("alive", None)
     if not bool(params.require("dnsr_httpx_probe")):
         return
     if not adapter.enabled("httpx"):
@@ -786,7 +1059,12 @@ def _httpx_enrich_resolved(
         row = resolved.get(host)
         if row is None:
             continue
-        httpx_probe.apply_enrich(row, by_host.get(host), miss_alive=True)
+        # Enrich HTTP fields only -- a missed/failed probe must not flip a
+        # resolved host to dead (miss_alive=False), and a resolved host stays
+        # alive regardless of the HTTP outcome.
+        httpx_probe.apply_enrich(row, by_host.get(host), miss_alive=False)
+        if row.get("ips"):
+            row["alive"] = True
 
 
 def _prior_asset_hosts(params: Params, target_dir: Path) -> list[str]:

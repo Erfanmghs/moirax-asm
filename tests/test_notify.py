@@ -347,7 +347,7 @@ class TestScheduler(unittest.TestCase):
         self.assertTrue(due(doc, t0 + 10 * 60))
 
     def test_overlay_for_target_uses_profile(self):
-        from pipeline.scheduler import overlay_for_target
+        from pipeline.scheduler import load_schedule, overlay_for_target
         from pipeline.target_profiles import set_profile
 
         tmp = Path(tempfile.mkdtemp())
@@ -362,7 +362,8 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(merged["interval_minutes"], 30)
         other = overlay_for_target(params, "other.example")
         self.assertFalse(other.get("enabled"))
-        self.assertEqual(other.get("interval_minutes"), 720)
+        # No profile for this target -> inherits the global scheduler default.
+        self.assertEqual(other.get("interval_minutes"), load_schedule(params).get("interval_minutes"))
 
     def test_mark_run_writes_iso_stamp(self):
         stamped = mark_run({"enabled": True, "interval_minutes": 10, "last_run": None}, 1767225600.0)

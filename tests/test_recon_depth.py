@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -110,7 +111,10 @@ class TestProfileAndSettings(unittest.TestCase):
     def test_transient_plan_does_not_sync_ffuf_from_recon(self):
         tmp = Path(tempfile.mkdtemp())
         tools_src = (_ROOT / "tools.yaml").read_text(encoding="utf-8")
-        tools_src = tools_src.replace("  ffuf_depth: 3", "  ffuf_depth: 5").replace("  recon_depth: 3", "  recon_depth: 5")
+        # Robust to the committed default (may be tuned for speed): force a
+        # distinct high base so we can prove ffuf_depth is NOT synced from recon.
+        tools_src = re.sub(r"^  ffuf_depth: \d+", "  ffuf_depth: 5", tools_src, flags=re.M)
+        tools_src = re.sub(r"^  recon_depth: \d+", "  recon_depth: 5", tools_src, flags=re.M)
         (tmp / "tools.yaml").write_text(tools_src, encoding="utf-8")
         (tmp / "wordlists.yaml").write_text((_ROOT / "wordlists.yaml").read_text(encoding="utf-8"), encoding="utf-8")
         params = Params(tmp)

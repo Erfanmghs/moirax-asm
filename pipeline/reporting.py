@@ -48,9 +48,15 @@ def _live_module_rel(rel: str) -> bool:
     return not rel.startswith("history/") and not rel.startswith("logs/")
 
 
+def _host_alive(row: dict[str, Any]) -> bool:
+    """A host is a live asset if it resolves to an IP or an HTTP probe answered.
+    Never report an IP-bearing host as dead just because HTTP did not respond."""
+    return bool(row.get("alive")) or bool(row.get("ips") or [])
+
+
 def _facts(params: Params, target_dir: Path, hosts: list[dict[str, Any]], module_docs: dict[str, dict[str, Any]]) -> dict[str, Any]:
     with_ip = [r for r in hosts if any(r.get("ips") or [])]
-    alive = [r for r in hosts if r.get("alive")]
+    alive = [r for r in hosts if _host_alive(r)]
     dns = module_docs.get("20_dns/dnsx/data.json") or {}
     resolved = [r for r in (dns.get("resolved") or []) if isinstance(r, dict)]
     dns_with_ip = sum(1 for r in resolved if r.get("ips"))
@@ -99,6 +105,108 @@ def _as_int(val: Any) -> int:
     return 0
 
 
+def _collect_services(module_docs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for doc in module_docs.values():
+        for row in doc.get("services") or []:
+            if isinstance(row, dict) and row.get("port") is not None:
+                out.append(row)
+    return out
+
+
+def _collect_vhosts(module_docs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for doc in module_docs.values():
+        for row in doc.get("vhosts") or []:
+            if isinstance(row, dict) and row.get("vhost"):
+                out.append(row)
+    return out
+
+
+def _attach_ports_to_hosts(hosts: list[dict[str, Any]], module_docs: dict[str, dict[str, Any]]) -> None:
+    """Join per-IP port-sweep rows onto hosts. Each IP is scanned on its own."""
+    svc_meta: dict[tuple[str, int, str], dict[str, str]] = {}
+    by_host: dict[str, dict[tuple[str, int, str], dict[str, Any]]] = {}
+    by_ip: dict[str, dict[tuple[str, int, str], dict[str, Any]]] = {}
+    for doc in module_docs.values():
+        for svc in doc.get("services") or []:
+            if not isinstance(svc, dict) or svc.get("port") is None:
+                continue
+            try:
+                pnum = int(svc["port"])
+            except (TypeError, ValueError):
+                continue
+            if pnum < 1 or pnum > 65535:
+                continue
+            ip = str(svc.get("ip") or "")
+            proto = str(svc.get("proto") or "tcp").lower()
+            svc_meta[(ip, pnum, proto)] = {
+                "name": str(svc.get("name") or svc.get("service") or ""),
+                "product": str(svc.get("product") or ""),
+                "version": str(svc.get("version") or ""),
+                "extrainfo": str(svc.get("extrainfo") or ""),
+            }
+        for scan in doc.get("scans") or doc.get("results") or []:
+            if not isinstance(scan, dict):
+                continue
+            ip = str(scan.get("ip") or "")
+            hosts_on_ip = [str(h).lower() for h in (scan.get("hosts") or []) if h]
+            if scan.get("host") and not hosts_on_ip:
+                hosts_on_ip = [str(scan["host"]).lower()]
+            raw_ports = scan.get("ports") or []
+            for port in raw_ports:
+                if isinstance(port, dict):
+                    try:
+                        pnum = int(port.get("port"))
+                    except (TypeError, ValueError):
+                        continue
+                    proto = str(port.get("proto") or "tcp").lower()
+                elif isinstance(port, int):
+                    pnum, proto = port, "tcp"
+                else:
+                    continue
+                if pnum < 1 or pnum > 65535:
+                    continue
+                meta = svc_meta.get((ip, pnum, proto), {})
+                entry = {
+                    "port": pnum,
+                    "proto": proto,
+                    "ip": ip,
+                    "name": meta.get("name", ""),
+                    "product": meta.get("product", ""),
+                    "version": meta.get("version", ""),
+                    "extrainfo": meta.get("extrainfo", ""),
+                    "label": f"{pnum}/{proto}",
+                }
+                key = (ip, pnum, proto)
+                if ip:
+                    by_ip.setdefault(ip, {})[key] = entry
+                for host in hosts_on_ip:
+                    by_host.setdefault(host, {})[key] = entry
+    for row in hosts:
+        host = str(row.get("host") or "").lower()
+        ips = [str(x) for x in (row.get("ips") or []) if x]
+        merged: dict[tuple[str, int, str], dict[str, Any]] = {}
+        merged.update(by_host.get(host) or {})
+        for ip in ips:
+            merged.update(by_ip.get(ip) or {})
+        ports = sorted(merged.values(), key=lambda p: (str(p.get("ip") or ""), int(p["port"])))
+        counts: dict[str, int] = {}
+        for port in ports:
+            pip = str(port.get("ip") or "")
+            counts[pip] = counts.get(pip, 0) + 1
+        ordered: list[str] = []
+        for ip in ips:
+            if ip and ip not in ordered:
+                ordered.append(ip)
+        for ip in counts:
+            if ip not in ordered:
+                ordered.append(ip)
+        row["open_ports"] = ports
+        row["open_ports_total"] = len(ports)
+        row["open_ports_by_ip"] = [{"ip": ip, "count": int(counts.get(ip, 0))} for ip in ordered]
+
+
 def collect(params: Params, target_dir: Path, stamp: str) -> dict[str, Any]:
     """Canonical bundle: assets.json rows + every module data.json (section 6.3)."""
     assets_doc = _read_json(target_dir / str(params.require("assets_relpath")))
@@ -112,10 +220,25 @@ def collect(params: Params, target_dir: Path, stamp: str) -> dict[str, Any]:
             continue
         module_docs[rel] = _read_json(path)
     hosts = [r for r in assets_doc.get("assets") or [] if isinstance(r, dict) and r.get("host")]
+    # Normalize the live-asset flag so EVERY export format (json/csv/md/html/pdf)
+    # agrees: a host that resolves to an IP is alive even if the HTTP probe did
+    # not answer. HTTP reachability stays in http_status. Never export an
+    # IP-bearing host as dead.
+    for r in hosts:
+        r["alive"] = _host_alive(r)
+    try:
+        from pipeline.history import drop_wildcard_host_rows
+
+        hosts = drop_wildcard_host_rows(params, target_dir, hosts)
+    except Exception:  # noqa: BLE001 -- report still emits canonical assets
+        pass
+    _attach_ports_to_hosts(hosts, module_docs)
     facts = _facts(params, target_dir, hosts, module_docs)
+    facts["vhosts"] = _collect_vhosts(module_docs)
+    facts["services"] = _collect_services(module_docs)
     counts = {
         "hosts": len(hosts),
-        "alive_hosts": len([r for r in hosts if r.get("alive")]),
+        "alive_hosts": len([r for r in hosts if _host_alive(r)]),
         "module_docs": len(module_docs),
         "hosts_with_ip": facts["hosts_with_ip"],
         "open_port_rows": facts["open_port_rows"],
@@ -212,60 +335,10 @@ def write_report_md(params: Params, target_dir: Path, bundle: dict[str, Any]) ->
     return out
 
 
-_THEME_CSS = (
-    "body{background:#0a0e14;color:#c9d6e3;font:13px/1.45 'JetBrains Mono',monospace;margin:24px}"
-    "h1,h2{border-left:3px solid #22d3ee;padding-left:10px;letter-spacing:1px}"
-    "table{border-collapse:collapse;width:100%;font-size:12px}"
-    "th{position:sticky;top:0;background:#0f1620;color:#6b7f94;text-align:left;padding:8px;border-bottom:1px solid #1d2a3a}"
-    "td{padding:6px 10px;border-bottom:1px solid #1d2a3a}"
-    ".badge{display:inline-block;padding:1px 8px;border:1px solid #1d2a3a;border-radius:2px}"
-    ".alive{color:#34d399;border-color:#34d399}.dead{color:#64748b;border-color:#64748b}.new{color:#fbbf24;border-color:#fbbf24}"
-)
-
-
 def write_report_html(params: Params, target_dir: Path, bundle: dict[str, Any], diff: dict[str, Any] | None = None) -> Path:
-    out = target_dir / str(params.require("report_dirname")) / "report.html"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    new_hosts = {str(r.get("host")) for r in ((diff or {}).get("added") or {}).get("hosts") or []}
-    facts = bundle.get("facts") or {}
-    hosts_for_table = list(bundle["hosts"])
-    if len(hosts_for_table) > 80:
-        prefer = [r for r in hosts_for_table if r.get("alive") or (r.get("ips") or [])]
-        rest = [r for r in hosts_for_table if r not in prefer]
-        hosts_for_table = prefer + rest[: max(0, 80 - len(prefer))]
-    rows = []
-    for r in hosts_for_table:
-        badge = ' <span class="badge new">NEW</span>' if str(r.get("host")) in new_hosts else ""
-        alive = f'<span class="badge {"alive" if r.get("alive") else "dead"}">{"ALIVE" if r.get("alive") else "DEAD"}</span>'
-        rows.append(
-            f"<tr><td>{r.get('host')}{badge}</td><td>{', '.join(r.get('ips') or [])}</td>"
-            f"<td>{alive}</td><td>{'' if r.get('length') is None else r.get('length')}</td>"
-            f"<td>{', '.join(r.get('sources') or [])}</td><td>{', '.join(r.get('tags') or [])}</td></tr>"
-        )
-    measure = (
-        f"<p>DNS names {facts.get('dns_names', 0)} (A/AAAA {facts.get('dns_with_ip', 0)}, "
-        f"unresolved {facts.get('dns_unresolved', 0)}). "
-        f"Port-check IPs {facts.get('portcheck_ips', 0)}, skipped no-IP {facts.get('skipped_no_ip', 0)}. "
-        f"Port-sweep IPs {facts.get('portsweep_ips', 0)}, open-port rows {facts.get('open_port_rows', 0)}.</p>"
-    )
-    cap_note = "" if len(bundle["hosts"]) <= 80 else f"<p>Asset table shows {len(hosts_for_table)} of {len(bundle['hosts'])} hosts (alive and IP-bearing first). Full list is in export.csv.</p>"
-    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>recon report -- {bundle['target']}</title>
-<style>{_THEME_CSS}</style></head><body>
-<h1>recon report -- {bundle['target']}</h1>
-<p>run timestamp: {bundle['run_timestamp']} &nbsp;|&nbsp; scope digest: <code>{bundle['scope_digest']}</code></p>
-<h2>counts</h2>
-<p>hosts: {bundle['counts']['hosts']} | alive: {bundle['counts']['alive_hosts']} | module data.json: {bundle['counts']['module_docs']}</p>
-<h2>what was measured</h2>
-{measure}
-{cap_note}
-<h2>assets</h2>
-<table><thead><tr><th>host</th><th>ips</th><th>alive</th><th>length</th><th>sources</th><th>tags</th></tr></thead>
-<tbody>{''.join(rows)}</tbody></table>
-<h2>modules</h2>
-<ul>{''.join(f'<li><code>{rel}</code> -- {doc.get("module", "")}</li>' for rel, doc in bundle['module_docs'].items())}</ul>
-</body></html>"""
-    out.write_text(html, encoding="utf-8")
-    return out
+    from pipeline.report_html import write_report_html as _write
+
+    return _write(params, target_dir, bundle, diff)
 
 
 def write_export_csv(params: Params, target_dir: Path, bundle: dict[str, Any]) -> Path:
@@ -286,7 +359,7 @@ def _class_rows(bundle: dict[str, Any], cls: str) -> list[dict[str, Any]]:
             {
                 "host": r.get("host"),
                 "ips": ",".join(r.get("ips") or []),
-                "alive": bool(r.get("alive")),
+                "alive": _host_alive(r),
                 "length": "" if r.get("length") is None else r.get("length"),
                 "sources": ",".join(r.get("sources") or []),
                 "tags": ",".join(r.get("tags") or []),

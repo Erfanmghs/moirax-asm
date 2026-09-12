@@ -124,6 +124,9 @@ let AUTHED = false;
 let LAST_CLICK = 0;
 let TOUCH_AT = 0;
 let CURRENT = { target: localStorage.getItem("recon_last_target") || "", assets: [], sort: { key: null, dir: 1 } };
+let RESULTS_LIVE_TIMER = null;
+let RESULTS_INFLIGHT = false;
+let RESULTS_LAST_AT = 0;
 const TASK_LABELS = {
   "FFUF-0": "Optional HTTP brute (ffuf)",
   "DNSR-1": "DNS subdomain brute (dnsx)",
@@ -673,6 +676,7 @@ function buildTargetProfile(fields) {
     ["depth", "passive_recursion_depth"],
     ["recon", "recon_depth"],
     ["ffufDepth", "ffuf_depth"],
+    ["dnsxParents", "dnsx_parallel_parents"],
     ["dead", "ffuf3_max_dead_probes"],
     ["ffuf4", "ffuf4_max_jobs"],
   ];
@@ -712,6 +716,7 @@ function targetProfileFromUI() {
     depth: elVal("#t-b-depth"),
     recon: elVal("#t-b-recon"),
     ffufDepth: elVal("#t-b-ffuf-depth"),
+    dnsxParents: elVal("#t-b-dnsx-parents"),
     dead: elVal("#t-b-dead"),
     ffuf4: elVal("#t-b-ffuf4"),
     activeMods: elVal("#t-m-active"),
@@ -757,6 +762,7 @@ function profileFromSetup(root) {
     depth: val("b-depth"),
     recon: val("b-recon"),
     ffufDepth: val("b-ffuf-depth"),
+    dnsxParents: val("b-dnsx-parents"),
     dead: val("b-dead"),
     ffuf4: val("b-ffuf4"),
     activeMods,
@@ -929,6 +935,7 @@ function applyProfileToSetup(root, profile) {
   setv("b-active", b.active_branch_budget_sec ?? "");
   setv("b-recon", b.recon_depth ?? "");
   setv("b-ffuf-depth", b.ffuf_depth ?? "");
+  setv("b-dnsx-parents", b.dnsx_parallel_parents ?? "");
   setv("b-depth", b.passive_recursion_depth ?? "");
   setv("b-dead", b.ffuf3_max_dead_probes ?? "");
   setv("b-ffuf4", b.ffuf4_max_jobs ?? "");
@@ -976,6 +983,7 @@ function scanSetupHtml(target) {
       <label>ACTIVE BUDGET (sec)<input data-pf="b-active" type="number" min="1" class="mono" placeholder="inherit"></label>
       <label>NESTED DNS DEPTH (1-5)<input data-pf="b-recon" type="number" min="1" max="5" class="mono" placeholder="inherit global"></label>
       <label>NESTED VHOST DEPTH (1-5)<input data-pf="b-ffuf-depth" type="number" min="1" max="5" class="mono" placeholder="inherit global"></label>
+      <label>PARALLEL DNS PARENTS (1-8)<input data-pf="b-dnsx-parents" type="number" min="1" max="8" class="mono" placeholder="inherit global"></label>
       <label>PASSIVE RECURSION DEPTH<input data-pf="b-depth" type="number" min="0" max="5" class="mono" placeholder="inherit"></label>
       <label>FFUF-3 MAX DEAD PROBES<input data-pf="b-dead" type="number" min="1" class="mono" placeholder="inherit"></label>
       <label>FFUF-4 MAX PORT JOBS<input data-pf="b-ffuf4" type="number" min="1" class="mono" placeholder="inherit"></label>
@@ -1097,6 +1105,7 @@ function targetProfileToUI(profile) {
   setVal("#t-b-active", b.active_branch_budget_sec ?? "");
   setVal("#t-b-recon", b.recon_depth ?? "");
   setVal("#t-b-ffuf-depth", b.ffuf_depth ?? "");
+  setVal("#t-b-dnsx-parents", b.dnsx_parallel_parents ?? "");
   setVal("#t-b-depth", b.passive_recursion_depth ?? "");
   setVal("#t-b-dead", b.ffuf3_max_dead_probes ?? "");
   setVal("#t-b-ffuf4", b.ffuf4_max_jobs ?? "");
@@ -1173,7 +1182,7 @@ async function loadTargetsTable() {
 }
 
 /* ---------------- b) RESULTS ---------------- */
-const FILTER_IDS = ["q", "source", "tag", "alive", "run", "scope"];
+const FILTER_IDS = ["q", "host", "ip", "ports", "alive", "length", "tech", "source", "tag", "first_seen", "last_seen", "run", "scope"];
 
 function readFilterUI() {
   const f = {};
@@ -1211,10 +1220,35 @@ function clearResultsView(message) {
   if ($("#diff-view")) $("#diff-view").textContent = "";
   if ($("#wh-meta")) $("#wh-meta").textContent = message || "pick a site added on SCAN";
   if ($("#wh-badge")) { $("#wh-badge").textContent = "warehouse"; $("#wh-badge").className = "badge"; }
+  const liveBadge = $("#results-live-badge");
+  if (liveBadge) { liveBadge.textContent = "live"; liveBadge.className = "badge"; }
+}
+
+function startResultsLiveTimer() {
+  clearInterval(RESULTS_LIVE_TIMER);
+  RESULTS_LIVE_TIMER = setInterval(() => {
+    const panel = $("#panel-results");
+    if (!panel || panel.classList.contains("hidden")) return;
+    loadResults({ quiet: true });
+  }, 8000);
 }
 
 async function loadResults(opts) {
   const quiet = !!(opts && opts.quiet);
+  // Load balance: RESULTS runs a multi-second warehouse ingest server-side.
+  // Never let polling stack (two timers can call this) or fire faster than ~6s.
+  if (quiet && Date.now() - RESULTS_LAST_AT < 6000) return;
+  if (RESULTS_INFLIGHT) return;
+  RESULTS_INFLIGHT = true;
+  try {
+    await _loadResultsBody(quiet);
+  } finally {
+    RESULTS_INFLIGHT = false;
+    RESULTS_LAST_AT = Date.now();
+  }
+}
+
+async function _loadResultsBody(quiet) {
   await refreshSiteSelects();
   const target = panelTarget("results-target");
   if (!target) {
@@ -1229,12 +1263,23 @@ async function loadResults(opts) {
     const doc = await api("GET", "/api/results/" + encodeURIComponent(target) + (qs ? "?" + qs : ""));
     CURRENT.assets = doc.assets || [];
     renderAssets();
+    const liveBadge = $("#results-live-badge");
+    if (liveBadge) {
+      const n = (CURRENT.assets || []).length;
+      liveBadge.textContent = n ? ("live " + n + " hosts") : "live (empty)";
+      liveBadge.className = "badge " + (n ? "ok" : "");
+    }
   } catch (e) {
     CURRENT.assets = [];
     renderAssets();
     if (!quiet) toast(e.message, true);
     return;
   }
+  // Live polling only refreshes the host table (light). Coverage, diff (a
+  // multi-MB payload) and warehouse meta are heavy and near-static during a
+  // scan -- fetch them only on an explicit load (panel open / filter change),
+  // never on the silent poll tick, to keep load off the server.
+  if (quiet) return;
   try {
     const cov = await api("GET", "/api/results/" + encodeURIComponent(target) + "/coverage");
     renderCoverage(cov);
@@ -1303,28 +1348,154 @@ async function compareWarehouseRuns() {
 async function rebuildWarehouse() {
   const target = panelTarget("results-target");
   if (!target) { toast("Pick a site on the RESULTS page", true); return; }
+  if (!window.confirm("Rebuild the warehouse for " + target + " from run history? This can take a while on large sites and replaces the current index.")) return;
   await api("POST", "/api/warehouse/" + encodeURIComponent(target) + "/rebuild");
   toast("warehouse rebuilt for " + target);
   await loadResults();
 }
 
-function portBadges(ports) {
-  const list = Array.isArray(ports) ? ports : [];
-  if (!list.length) return '<span class="dim">--</span>';
-  return list.map((p) => {
-    const label = (p && p.label) ? p.label : String(p);
-    return `<span class="badge port">${esc(label)}</span>`;
-  }).join(" ");
+// Snapshot of the host whose port inspector is open (survives table re-render).
+let PORT_INSPECTOR = null;
+
+function portCountLabel(n) {
+  const count = Number(n) || 0;
+  if (count === 1) return "1 port";
+  return count + " ports";
 }
 
-function renderPortsByHost() {
-  const tbody = $("#ports-by-host tbody");
-  if (!tbody) return;
-  const rows = (CURRENT.assets || []).filter((r) => (r.open_ports || []).length);
-  tbody.innerHTML = rows.map((r) => {
-    const ips = (r.ips || [r.ip]).filter(Boolean).join(", ");
-    return `<tr><td class="mono">${esc(r.host)}</td><td class="dim">${esc(ips)}</td><td class="ports-cell">${portBadges(r.open_ports)}</td></tr>`;
-  }).join("") || '<tr><td colspan="3" class="dim">no open ports recorded for this site yet (run port-check / port-sweep)</td></tr>';
+function hostHref(host) {
+  const name = String(host || "").trim();
+  if (!name) return "";
+  if (/^https?:\/\//i.test(name)) return name;
+  return "https://" + name;
+}
+
+function hostCell(host, isAlive, isNew) {
+  const badge = isNew ? ' <span class="badge new">NEW</span>' : "";
+  if (!host) return badge;
+  if (!isAlive) return `${esc(host)}${badge}`;
+  return `<a class="host-link" href="${esc(hostHref(host))}" target="_blank" rel="noopener noreferrer">${esc(host)}</a>${badge}`;
+}
+
+function portDetailTable(ports) {
+  return `<table class="port-detail"><thead><tr><th>Port</th><th>Product</th><th>Version</th></tr></thead><tbody>`
+    + ports.map((p) => {
+      const port = (p.port != null ? String(p.port) : "") + (p.proto ? "/" + p.proto : "");
+      const product = String(p.product || "").trim();
+      const version = String(p.version || "").trim();
+      return `<tr>`
+        + `<td class="mono port-num">${esc(port)}</td>`
+        + `<td>${product ? esc(product) : '<span class="dim">—</span>'}</td>`
+        + `<td>${version ? esc(version) : '<span class="dim">—</span>'}</td>`
+        + `</tr>`;
+    }).join("")
+    + "</tbody></table>";
+}
+
+function portSummaryCell(host, row) {
+  const total = Number((row && row.open_ports_total) != null ? row.open_ports_total : 0) || 0;
+  const ips = (row && (row.open_ports_by_ip || []).length)
+    ? row.open_ports_by_ip
+    : (row.ips || [row.ip]).filter(Boolean).map((ip) => ({ ip, count: 0 }));
+  if (!total && !(ips && ips.length)) return '<span class="dim">--</span>';
+  const shown = total ? String(total) : "0";
+  return `<button type="button" class="ports-open" data-ports-open="${esc(host)}" title="Show IPs and open ports">`
+    + `<span class="badge port">${esc(shown)}</span></button>`;
+}
+
+function openPortInspector(host) {
+  const row = (CURRENT.assets || []).find((r) => (r.host || "") === host);
+  if (!row) return;
+  const fromJoin = Array.isArray(row.open_ports_by_ip) ? row.open_ports_by_ip : [];
+  const fallback = (row.ips || [row.ip]).filter(Boolean).map((ip) => ({ ip, count: 0 }));
+  PORT_INSPECTOR = {
+    host,
+    ips: fromJoin.length ? fromJoin : fallback,
+    selectedIp: null,
+    ports: [],
+    loading: false,
+  };
+  renderPortInspector();
+}
+
+function closePortInspector() {
+  PORT_INSPECTOR = null;
+  const panel = $("#port-inspector");
+  if (panel) panel.hidden = true;
+}
+
+function portInspectorBack() {
+  if (!PORT_INSPECTOR || !PORT_INSPECTOR.selectedIp) {
+    closePortInspector();
+    return;
+  }
+  PORT_INSPECTOR.selectedIp = null;
+  PORT_INSPECTOR.ports = [];
+  PORT_INSPECTOR.loading = false;
+  renderPortInspector();
+}
+
+async function selectPortIp(ip) {
+  if (!PORT_INSPECTOR) return;
+  PORT_INSPECTOR.selectedIp = ip;
+  PORT_INSPECTOR.ports = [];
+  PORT_INSPECTOR.loading = true;
+  renderPortInspector();
+  const target = panelTarget("results-target") || CURRENT.target || "";
+  try {
+    const qs = new URLSearchParams({ host: PORT_INSPECTOR.host, ip });
+    const doc = await api("GET", "/api/results/" + encodeURIComponent(target) + "/ports?" + qs.toString());
+    if (!PORT_INSPECTOR || PORT_INSPECTOR.selectedIp !== ip) return;
+    PORT_INSPECTOR.ports = doc.ports || [];
+  } catch (e) {
+    if (PORT_INSPECTOR && PORT_INSPECTOR.selectedIp === ip) toast(e.message, true);
+  } finally {
+    if (PORT_INSPECTOR && PORT_INSPECTOR.selectedIp === ip) {
+      PORT_INSPECTOR.loading = false;
+      renderPortInspector();
+    }
+  }
+}
+
+function renderPortInspector() {
+  const panel = $("#port-inspector");
+  if (!panel || !PORT_INSPECTOR) return;
+  const hostEl = $("#pi-host");
+  const ipsEl = $("#pi-ips");
+  const body = $("#pi-body");
+  const back = $("#pi-back");
+  if (hostEl) hostEl.textContent = PORT_INSPECTOR.host;
+  if (back) back.hidden = !PORT_INSPECTOR.selectedIp;
+  if (ipsEl) {
+    ipsEl.textContent = PORT_INSPECTOR.selectedIp
+      ? PORT_INSPECTOR.selectedIp
+      : portCountLabel(PORT_INSPECTOR.ips.reduce((n, row) => n + (Number(row.count) || 0), 0));
+  }
+  if (body) {
+    if (PORT_INSPECTOR.selectedIp) {
+      if (PORT_INSPECTOR.loading) {
+        body.innerHTML = '<span class="dim">loading ports…</span>';
+      } else if (!(PORT_INSPECTOR.ports || []).length) {
+        body.innerHTML = '<span class="dim">no open ports on this IP</span>';
+      } else {
+        body.innerHTML = portDetailTable(PORT_INSPECTOR.ports);
+      }
+    } else if (!(PORT_INSPECTOR.ips || []).length) {
+      body.innerHTML = '<span class="dim">no IPs recorded</span>';
+    } else {
+      body.innerHTML = '<div class="port-ip-list">'
+        + PORT_INSPECTOR.ips.map((row) => {
+          const ip = row.ip || "";
+          const n = Number(row.count) || 0;
+          const disabled = !ip ? " disabled" : "";
+          return `<button type="button" class="port-ip-row" data-port-ip="${esc(ip)}"${disabled}>`
+            + `<span>${esc(ip || "no IP")}</span>`
+            + `<span class="badge port">${esc(portCountLabel(n))}</span></button>`;
+        }).join("")
+        + "</div>";
+    }
+  }
+  panel.hidden = false;
 }
 
 function renderAssets() {
@@ -1338,20 +1509,31 @@ function renderAssets() {
   }
   const tbody = $("#assets-table tbody");
   if (!tbody) return;
-  tbody.innerHTML = rows.map((r) =>     `<tr>` +
-    `<td>${esc(r.host)} ${r.is_new ? '<span class="badge new">NEW</span>' : ""}</td>` +
-    `<td class="dim">${esc((r.ips || [r.ip]).filter(Boolean).join(", "))}</td>` +
-    `<td class="ports-cell">${portBadges(r.open_ports)}</td>` +
-    `<td><span class="badge ${r.alive ? "alive" : "dead"}">${r.alive ? "ALIVE" : "DEAD"}</span></td>` +
+  tbody.innerHTML = rows.map((r) => {
+    // A host that resolves to an IP is a live asset even if HTTP did not answer;
+    // never render an IP-bearing host as DEAD. HTTP status is shown separately.
+    const hasIp = (r.ips || [r.ip]).filter(Boolean).length > 0;
+    const isAlive = !!r.alive || hasIp;
+    const host = r.host || "";
+    return `<tr>` +
+    `<td>${hostCell(host, isAlive, !!r.is_new)}</td>` +
+    `<td class="ports-cell">${portSummaryCell(host, r)}</td>` +
+    `<td><span class="badge ${isAlive ? "alive" : "dead"}">${isAlive ? "ALIVE" : "DEAD"}</span>${r.http_status ? ` <span class="badge">HTTP ${esc(String(r.http_status))}</span>` : ""}</td>` +
     `<td class="dim">${esc(r.length == null ? "" : String(r.length))}</td>` +
     `<td class="dim">${esc((r.tech || []).join(", "))}</td>` +
     `<td class="dim">${esc((r.sources || []).join(", "))}</td>` +
     `<td>${(r.tags || []).map((t) => `<span class="badge">${esc(t)}</span>`).join(" ")}</td>` +
     `<td class="dim">${esc(r.first_seen || "")}</td>` +
     `<td class="dim">${esc(r.last_seen || "")}</td>` +
-    `<td><button data-json='${esc(JSON.stringify(r))}'>{ }</button></td></tr>`).join("") ||
-    `<tr><td colspan="11" class="dim">no assets (run the pipeline first)</td></tr>`;
+    `<td><button data-json='${esc(JSON.stringify(r))}'>{ }</button></td></tr>`;
+  }).join("") ||
+    `<tr><td colspan="10" class="dim">no assets (run the pipeline first)</td></tr>`;
   tbody.onclick = (ev) => {
+    const portsBtn = ev.target.closest("[data-ports-open]");
+    if (portsBtn) {
+      openPortInspector(portsBtn.getAttribute("data-ports-open"));
+      return;
+    }
     const btn = ev.target.closest("[data-json]");
     if (!btn) return;
     const pre = $("#diff-view");
@@ -1359,15 +1541,33 @@ function renderAssets() {
     pre.classList.remove("collapsed");
     pre.scrollIntoView({ behavior: "smooth" });
   };
-  renderPortsByHost();
 }
 
+let LAST_COVERAGE = null;
+let COVERAGE_SORT = { key: "contribution", dir: -1 };
+
 function renderCoverage(cov) {
+  if (cov !== undefined) LAST_COVERAGE = cov;
+  cov = LAST_COVERAGE;
   const tbody = $("#coverage-table tbody");
   if (!tbody) return;
   const contribution = (cov && cov.contribution) || {};
-  tbody.innerHTML = Object.entries(contribution).map(([s, n]) =>
-    `<tr><td>${esc(s)}</td><td>${n}</td><td>${(cov.unique_assets && cov.unique_assets[s]) || 0}</td><td>${(cov.uniqueness_pct && cov.uniqueness_pct[s]) ?? 0}%</td></tr>`).join("");
+  const uniq = (cov && cov.unique_assets) || {};
+  const pct = (cov && cov.uniqueness_pct) || {};
+  const rows = Object.keys(contribution).map((s) => ({
+    source: s,
+    contribution: Number(contribution[s]) || 0,
+    unique: Number(uniq[s]) || 0,
+    uniqueness: Number(pct[s]) || 0,
+  }));
+  const k = COVERAGE_SORT.key, dir = COVERAGE_SORT.dir;
+  rows.sort((a, b) => {
+    const av = a[k], bv = b[k];
+    if (typeof av === "string") return dir * String(av).localeCompare(String(bv));
+    return dir * (av - bv);
+  });
+  tbody.innerHTML = rows.map((r) =>
+    `<tr><td>${esc(r.source)}</td><td>${r.contribution}</td><td>${r.unique}</td><td>${r.uniqueness}%</td></tr>`).join("");
   if ($("#overlap")) $("#overlap").textContent = "overlap (assets found by N sources): " + JSON.stringify((cov && cov.overlap_by_n_sources) || {});
 }
 
@@ -1502,10 +1702,38 @@ function scanModulesHtml(target, modules) {
   const entries = Object.entries(modules || {});
   const chips = entries.map(([m, s]) => {
     const st = (s && s.status) || "?";
+    if (st === "failed" || st === "anomaly" || st === "skipped") {
+      return `<span class="mod-chip">${esc(m)}</span>`;
+    }
     return `<span class="mod-chip ${esc(st)}">${esc(m)} <b>${esc(st)}</b></span>`;
   }).join("");
   return `<span class="scan-mods-label">${esc(target)} steps</span>` +
     (chips || '<span class="dim">no module state yet for this site</span>');
+}
+
+function scanLiveHtml(row) {
+  const live = row.live || {};
+  const bits = [];
+  const hits = live.host_hits || live.lines;
+  if (live.parent) bits.push("parent " + live.parent);
+  if (hits != null && hits !== "") bits.push("dns hits " + hits);
+  const qps = live.qps != null ? live.qps : live.logged_qps;
+  if (qps != null) bits.push("qps " + qps);
+  const liveLine = bits.length
+    ? `<p class="scan-live-line mono">${esc(bits.join(" · "))}</p>`
+    : '<p class="scan-live-line mono dim">waiting for live progress</p>';
+  return `<div class="scan-live" data-scan-live="${esc(row.target || "")}">${liveLine}</div>`;
+}
+
+function paintCardLive(card, row) {
+  if (!card) return;
+  const host = card.querySelector("[data-scan-live]");
+  const html = scanLiveHtml(row);
+  if (host) host.outerHTML = html;
+  else {
+    const head = card.querySelector(".scan-head");
+    if (head) head.insertAdjacentHTML("afterend", html);
+  }
 }
 
 function paintCardModules(card, target, modules) {
@@ -1540,6 +1768,7 @@ function scanCardHtml(row) {
       </div>
       <div class="scan-mods" data-scan-mods="${esc(t)}" aria-label="pipeline steps for ${esc(t)}">${modules}</div>
     </div>
+    ${scanLiveHtml(row)}
     <div class="scan-body">
       ${scanSetupHtml(t)}
       <div class="scan-jumps">
@@ -1641,11 +1870,13 @@ function startTargetStream(target) {
   if (pretty) pretty.innerHTML = "";
   if (raw) raw.textContent = "";
   if (journal) journal.textContent = "";
-  const state = { card, logOff: 0, jOff: 0, prettyKey: "", skipped: false, logTimer: null, journalTimer: null };
+  const state = { card, logOff: 0, jOff: 0, prettyKey: "", skipped: false, logTimer: null, journalTimer: null, logBusy: false, journalBusy: false };
   SCAN.streams[target] = state;
   async function pullLog() {
+    if (state.logBusy) return;
     if (SCAN.halted.has(target) || SCAN.stopping.has(target)) return;
     if ($("#panel-run").classList.contains("hidden") || !SCAN.expanded.has(target)) return;
+    state.logBusy = true;
     try {
       const doc = await api("GET", `/api/run/log/${encodeURIComponent(target)}?offset=${state.logOff}`);
       if (!doc.exists) {
@@ -1657,6 +1888,7 @@ function startTargetStream(target) {
       if (state.logOff === 0 && !state.skipped && doc.total > 200) {
         state.logOff = Math.max(0, doc.total - 200);
         state.skipped = true;
+        state.logBusy = false;
         return pullLog();
       }
       state.skipped = true;
@@ -1670,6 +1902,7 @@ function startTargetStream(target) {
       }
       state.logOff = doc.next_offset;
     } catch (_e) { /* keep polling */ }
+    finally { state.logBusy = false; }
   }
   async function pullJournal() {
     if (SCAN.halted.has(target) || SCAN.stopping.has(target)) return;
@@ -1679,8 +1912,12 @@ function startTargetStream(target) {
       if (!doc.exists || !journal) return;
       if (doc.rows && doc.rows.length) {
         journal.textContent += doc.rows.map((l) => {
-          try { const r = JSON.parse(l); return `[${r.ts}] ${r.event}: ${JSON.stringify(r)}\n`; }
-          catch (_e) { return l + "\n"; }
+          try {
+            const r = JSON.parse(l);
+            const ev = r.event || "note";
+            if (/error|fail|except/i.test(ev) || r.error) return "";
+            return `[${r.ts || ""}] ${ev}\n`;
+          } catch (_e) { return ""; }
         }).join("");
         journal.scrollTop = journal.scrollHeight;
       }
@@ -1773,10 +2010,15 @@ async function loadScanBoard() {
           }
         }
         paintCardModules(card, row.target, row.modules);
+        paintCardLive(card, row);
       }
       for (const t of [...SCAN.expanded]) {
         if (!SCAN.halted.has(t) && !SCAN.stopping.has(t)) startTargetStream(t);
-        loadScanSetup(t, false);
+        const card = cardFor(t);
+        if (card && card.dataset.setupLoaded !== "1") {
+          loadScanSetup(t, false);
+          card.dataset.setupLoaded = "1";
+        }
       }
       return;
     }
@@ -1794,10 +2036,16 @@ async function loadScanBoard() {
         continue;
       }
       if (!SCAN.halted.has(t) && !SCAN.stopping.has(t)) startTargetStream(t);
-      loadScanSetup(t, false);
+      const card = cardFor(t);
+      if (card && card.dataset.setupLoaded !== "1") {
+        loadScanSetup(t, false);
+        card.dataset.setupLoaded = "1";
+      }
     }
-  } catch (e) {
-    board.innerHTML = '<p class="dim">could not load sites: ' + esc(e.message) + "</p>";
+  } catch (_e) {
+    if (!board.querySelector(".scan-card")) {
+      board.innerHTML = '<p class="dim">could not load sites -- try again</p>';
+    }
   }
 }
 
@@ -1819,8 +2067,7 @@ async function refreshScanBadges() {
 function startScanBoardTimer() {
   clearInterval(SCAN.boardTimer);
   SCAN.boardTimer = setInterval(() => {
-    if ($("#panel-run").classList.contains("hidden")) return;
-    refreshScanBadges();
+    if (!$("#panel-run")?.classList.contains("hidden")) refreshScanBadges();
   }, 4000);
 }
 
@@ -1833,10 +2080,9 @@ async function requestScanStop(target) {
   markScanStopping(target);
   toast("stopping " + target + "...");
   try {
-    const r = await api("POST", "/api/run/stop", { target });
-    const note = (r.stdout || r.stderr || ("exit=" + r.exit)).toString().trim();
+    await api("POST", "/api/run/stop", { target });
     markScanStopped(target);
-    toast("stopped " + target + (note ? " -- " + note.split("\n").slice(-1)[0] : ""));
+    toast("stopped " + target);
     if ($("#run-target")) $("#run-target").value = target;
     rememberTarget(target);
     // Refresh badges only -- do NOT restart log streams for a halted target.
@@ -1998,11 +2244,11 @@ function isBannerNoise(text) {
   return t.length > 40 && symbols / t.length > 0.18;
 }
 
-function lastFfufProgress(text) {
-  const matches = [...String(text).matchAll(/Progress:\s*\[(\d+)\/(\d+)\].*?(\d+)\s*req\/sec.*?Duration:\s*\[([^\]]+)\].*?Errors:\s*(\d+)/g)];
+function lastDnsBruteProgress(text) {
+  const matches = [...String(text).matchAll(/dns-brute parent=(\S+) chunk=(\d+) names=(\d+) qps=(\d+)/g)];
   if (!matches.length) return "";
   const m = matches[matches.length - 1];
-  return `Brute progress ${m[1]} of ${m[2]} (${m[3]}/sec, ${m[4]}, ${m[5]} errors)`;
+  return `DNS brute ${m[1]} (chunk ${m[2]}, ${m[3]} names, ${m[4]} qps)`;
 }
 
 function cmdHint(cmd) {
@@ -2043,8 +2289,8 @@ function friendlyMessage(ev) {
       .replace(/\bstatus=(\d+)/g, "HTTP $1")
       .replace(/\bvia=/g, "via ")
       .replace(/\bsource=/g, "source ")
-      .replace(/degraded-continue after section 4\.3 retries/g, "failed after retries, continuing")
-      .replace(/disclosed, never silent/g, "shown on purpose")
+      .replace(/degraded-continue after section 4\.3 retries/g, "continuing")
+      .replace(/disclosed, never silent/g, "")
       .replace(/no key in \.env/g, "no API key");
     return body;
   }
@@ -2054,10 +2300,12 @@ function friendlyMessage(ev) {
       .replace(/engine=/g, "")
       .replace(/disabled -- no key in \.env \(([^)]+)\)/g, "off (no $1 key)")
       .replace(/disclosed, never silent/g, "")
-      .replace(/error-ratio .* -> ISOLATED/g, "isolated after too many errors")
+      .replace(/error-ratio .* -> ISOLATED/g, "")
       .replace(/\s+/g, " ")
       .trim();
   }
+  const dnsProgress = lastDnsBruteProgress(detail);
+  if (dnsProgress) return dnsProgress;
   const progress = lastFfufProgress(detail);
   if (progress) return progress;
   if (/Maximum running time for this job reached/i.test(detail)) {
@@ -2104,13 +2352,28 @@ function parseLogLine(line) {
     }
     const ev = { kind: "event", time, module, tool, code, status, detail: rest, cmd };
     ev.text = friendlyMessage(ev);
-    ev.tone = (status === "fail" || status === "pause") ? "fail"
-      : (status === "throttle" || /skip/i.test(ev.text)) ? "warn"
-      : (status === "ok") ? "ok" : "info";
+    ev.tone = (status === "ok") ? "ok" : "info";
     ev.groupKey = [ev.tone, module, tool, ev.text].join("|");
     return ev;
   }
   return { kind: "plain", status: "info", tone: "info", time: "", module: "", text: raw, groupKey: "plain|" + raw };
+}
+
+function isInternalScanNoise(ev) {
+  const st = String(ev.status || "").toLowerCase();
+  const detail = String(ev.detail || "");
+  const text = String(ev.text || "");
+  const blob = detail + " " + text;
+  if (/pull access denied|Unable to find image/i.test(blob)) return false;
+  if (st === "throttle" || st === "pause" || st === "fail") return true;
+  if (/^skip:/i.test(detail) || /^Skipped:/i.test(text)) return true;
+  if (/circuit breaker|safety limiter|error rate|too many errors/i.test(blob)) return true;
+  if (/canary|load-balance|throttle_factor|latency drift/i.test(blob)) return true;
+  if (/ISOLATED|isolated after|search-forge/i.test(blob)) return true;
+  if (/disclosed|never silent|degraded-continue|no key in \.env/i.test(detail)) return true;
+  if (/Slowing this tool|Paused this tool/i.test(text)) return true;
+  if (isBannerNoise(detail)) return true;
+  return false;
 }
 
 function appendPrettyLogs(lines, box, state) {
@@ -2121,6 +2384,7 @@ function appendPrettyLogs(lines, box, state) {
   for (const line of lines) {
     const ev = parseLogLine(line);
     if (!ev) continue;
+    if (ev.kind === "event" && isInternalScanNoise(ev)) continue;
     if (ev.kind === "event" && ev.groupKey === state.prettyKey && box.lastElementChild) {
       const last = box.lastElementChild;
       const badge = last.querySelector(".log-count");
@@ -2222,7 +2486,14 @@ function startJournalStream() {
       const doc = await api("GET", `/api/run/agent-journal/${encodeURIComponent(target)}?offset=${joffset}`);
       if (!doc.exists) return;
       if (doc.rows && doc.rows.length) {
-        pre.textContent += doc.rows.map((l) => { try { const r = JSON.parse(l); return `[${r.ts}] ${r.event}: ${JSON.stringify(r)}\n`; } catch (_e) { return l + "\n"; } }).join("");
+        pre.textContent += doc.rows.map((l) => {
+          try {
+            const r = JSON.parse(l);
+            const ev = r.event || "note";
+            if (/error|fail|except/i.test(ev) || r.error) return "";
+            return `[${r.ts || ""}] ${ev}\n`;
+          } catch (_e) { return ""; }
+        }).join("");
         pre.scrollTop = pre.scrollHeight;
       }
       joffset = doc.next_offset;
@@ -2259,6 +2530,7 @@ async function loadKeys() {
       loadKeys();
     }
     if (del) {
+      if (!window.confirm("Delete " + del.dataset.del + " from .env? Any module that relies on this key falls back to its keyless mode on the next run.")) return;
       await api("DELETE", "/api/keys/" + del.dataset.del);
       toast(`${del.dataset.del} deleted from .env`);
       loadKeys();
@@ -2333,6 +2605,7 @@ async function loadSettings() {
   setVal("#s-digest", s.digest_threshold || 10);
   setVal("#s-recon-depth", s.recon_depth || 1);
   setVal("#s-ffuf-depth", s.ffuf_depth || 1);
+  setVal("#s-dnsx-parents", s.dnsx_parallel_parents || 4);
   setVal("#s-passive-depth", s.passive_recursion_depth ?? 2);
   try {
     const sched = await api("GET", "/api/scheduler");
@@ -2390,6 +2663,8 @@ async function saveSettings() {
   if (!isNaN(ffufD)) patch.ffuf_depth = ffufD;
   const pasD = parseInt(elVal("#s-passive-depth"), 10);
   if (!isNaN(pasD)) patch.passive_recursion_depth = pasD;
+  const dnsxP = parseInt(elVal("#s-dnsx-parents"), 10);
+  if (!isNaN(dnsxP)) patch.dnsx_parallel_parents = dnsxP;
   try {
     await api("PUT", "/api/settings", patch);
     try {
@@ -2554,6 +2829,11 @@ bind("#f-clear", "click", () => { writeFilterUI({}); shareFilters({}); loadResul
 document.querySelectorAll("#assets-table th[data-sort], #coverage-table th[data-sort], #tools-table th[data-sort]").forEach((th) => {
   th.addEventListener("click", () => {
     const key = th.dataset.sort;
+    if (th.closest("#coverage-table")) {
+      COVERAGE_SORT = { key, dir: COVERAGE_SORT.key === key ? -COVERAGE_SORT.dir : 1 };
+      renderCoverage();
+      return;
+    }
     CURRENT.sort = { key, dir: CURRENT.sort.key === key ? -CURRENT.sort.dir : 1 };
     renderAssets();
   });
@@ -2706,6 +2986,7 @@ if (scanBoard) {
     }
     if (restart) {
       const t = restart.getAttribute("data-scan-restart");
+      if (!window.confirm("Restart " + t + " from the FIRST module? This stops any live scan and discards this run's progress. Previous results/warehouse records are kept.")) return;
       setVal("#run-target", t);
       rememberTarget(t);
       SCAN.expanded.add(t);
@@ -2806,6 +3087,20 @@ bind("#diff-compare", "click", () => compareWarehouseRuns().catch((e) => toast(e
 bind("#wh-rebuild", "click", () => rebuildWarehouse().catch((e) => toast(e.message, true)));
 bind("#results-target", "change", () => loadResults().catch((e) => toast(e.message, true)));
 bind("#rep-target", "change", () => loadReports().catch((e) => toast(e.message, true)));
+bind("#pi-close", "click", closePortInspector);
+bind("#pi-back", "click", portInspectorBack);
+bind("#port-inspector", "click", (ev) => {
+  if (ev.target === ev.currentTarget) closePortInspector();
+  const ipBtn = ev.target.closest("[data-port-ip]");
+  if (ipBtn && ipBtn.getAttribute("data-port-ip")) {
+    selectPortIp(ipBtn.getAttribute("data-port-ip"));
+  }
+});
+document.addEventListener("keydown", (ev) => {
+  if (ev.key !== "Escape" || !PORT_INSPECTOR) return;
+  if (PORT_INSPECTOR.selectedIp) portInspectorBack();
+  else closePortInspector();
+});
 
 async function health() {
   const el = $("#conn");
@@ -2833,7 +3128,7 @@ function loadPanel(name) {
   if (name === "engine") loadTools();
   if (name === "tools") loadWordlists();
   if (name === "targets") { loadTargetsTable(); }
-  if (name === "results") loadResults({ quiet: true });
+  if (name === "results") { loadResults({ quiet: true }); startResultsLiveTimer(); startScanBoardTimer(); }
   if (name === "reports") loadReports({ quiet: true });
   if (name === "run") { loadRun(); startLogStream(); startJournalStream(); startScanBoardTimer(); }
   if (name === "keys") loadKeys();

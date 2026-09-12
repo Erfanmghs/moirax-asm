@@ -1,312 +1,144 @@
 <p align="center">
-  <img src="dashboard/static/logo.svg" width="72" height="72" alt="ASM shield">
+  <img src="dashboard/static/logo.svg" width="64" height="64" alt="moirax-ASM">
 </p>
 
-<h1 align="center">Attack Surface Management</h1>
+<h1 align="center">moirax-ASM</h1>
 
 <p align="center">
-  <b>moirax-ASM</b> -- outside-in inventory of a DNS estate you are authorized to test.<br>
-  Enumerate, resolve, probe, sweep, diff, alert, report. Operators drive a loopback dashboard.<br>
+  Attack surface management for domains you are authorized to test.
 </p>
 
-<p align="center">
-  <a href="#install"><img src="https://img.shields.io/badge/install-Docker_Compose-22d3ee?style=for-the-badge&labelColor=0c1420" alt="Install"></a>
-  <a href="#first-scan"><img src="https://img.shields.io/badge/console-127.0.0.1:8080-34d399?style=for-the-badge&labelColor=0c1420" alt="Dashboard"></a>
-  <a href="#how-a-run-works"><img src="https://img.shields.io/badge/ladder-passive_||_active-fbbf24?style=for-the-badge&labelColor=0c1420" alt="Run ladder"></a>
-  <a href="docs/HELP.md"><img src="https://img.shields.io/badge/guide-HELP.md-7dd3fc?style=for-the-badge&labelColor=0c1420" alt="Help"></a>
-</p>
+Give it a domain. It finds names that belong to that estate, resolves them,
+sweeps ports, compares the result to the last run, and can page you on
+Telegram. Then it writes a report you can open or share.
 
-<p align="center">
-  It does <b>not</b> exploit. It does <b>not</b> send exploit payloads.<br>
-  OWASP pass is evidence-only (zero extra packets). ScopeGate is a hard stop, not a warning.
-</p>
+It is not a vulnerability scanner. It does not send exploit payloads. The
+OWASP pass only reads evidence the run already collected. Every name is
+checked against `scope.yaml` first; suffix tricks that only look in-scope
+are refused.
 
-
-| You | Start |
-|---|---|
-| Install and first scan | [Install](#install) then [First scan](#first-scan) |
-| Architecture / laws | [How a run works](#how-a-run-works) |
-| CLI / fleet | [Command line](#command-line) |
-| Keys, bind, leak response | [docs/security.md](docs/security.md), [docs/api-keys.md](docs/api-keys.md) |
-| Every dashboard control | [docs/HELP.md](docs/HELP.md) |
-| Engineer's map | [docs/HANDOVER.md](docs/HANDOVER.md) |
-
-ASCII English only in this tree (release gate R-3). Scan only what you own
-or have written permission to test.
+Run it only against assets you own or have written permission to test.
 
 ---
 
-## Why this is not "nmap plus a spreadsheet"
+## Features
 
-| Law | What you get |
-|---|---|
-| One ladder | Passive \|\| active -> merge -> full TCP sweep -> post-port vhost -> passive OWASP. Not a pile of unrelated binaries. |
-| Diff | Added / removed / changed hosts and ports vs the last run (HTTP length on reports when httpx is on). |
-| Telegram | New host, removed host, changed host, newly opened port. Above the digest threshold: one grouped DIGEST, not a flood. |
-| Tamper-checked report | HTML / PDF / CSV / JSON / Markdown + SHA-256 manifest. |
-| ScopeGate | Every host is checked against `scope.yaml`. Suffix tricks (`evil-target.com` pretending to be `target.com`) are refused. |
-| Never-silent | A skipped source prints WHY. Missing optional keys skip with an explicit line. |
-| Per-target profiles | Depths, wordlists, Telegram receiver, proxy pool, budgets -- without mutating committed defaults for longer than the run. |
+- **Passive discovery** from certificate logs, public datasets, and optional
+  search APIs. A missing key skips that source and says so in the log.
+- **Active discovery** with dnsx. Catch-all DNS (`*.example.com`) is probed
+  so random labels are not treated as real hosts. Host-header virtual hosts
+  are a separate step, not the DNS brute.
+- **Full TCP sweep** (1-65535) on unique IPs after merge.
+- **Results** as one row per name. The table shows an open-port count. Click
+  it for that name's IPs; click an IP for port, product, and version. Empty
+  product or version means the fingerprint did not identify them.
+- **Diffs and alerts** for added, removed, and changed hosts and ports.
+  Telegram is optional and follows the rules you tick.
+- **Reports** in HTML, PDF, CSV, JSON, and Markdown, with a SHA-256 manifest
+  so you can tell if the bundle was edited after generate.
+
+Each site lives under `recon/<site>/`. Operator login is stored in
+`dashboard/auth/`, not in the warehouse database.
 
 ---
 
 ## Install
 
-Need: Git, Docker Engine (or Docker Desktop), ~4 GB RAM, ~10 GB disk,
-network. No database. No paid keys. Python 3 on the host is required only
-for `./recon.sh`; the dashboard image carries its own runtime.
-
-Shallow clone (this repository's default branch is `private`):
+Needs Git, Docker, roughly 4 GB RAM and 10 GB disk. Host Python 3 is only
+for `./recon.sh`. No external database. Default branch is `private`.
 
 ```bash
-git clone --depth 1 https://github.com/Erfanmghs/moirax-ASM.git
-cd moirax-ASM
+git clone --depth 1 https://github.com/Erfanmghs/moirax-asm.git
+cd moirax-asm
 cp .env.example .env
-```
-
-GitHub will not accept an account password. Use `gh auth login` or a PAT
-with `repo` (and `read:packages` if you pull the published image).
-
-Optional installer lines in `.env` (everything else can wait):
-
-```
-TELEGRAM_BOT_TOKEN=          # @BotFather /newbot; comma-separated backups ok
-RECON_HOST_UID=              # Linux: id -u
-RECON_HOST_GID=              # Linux: id -g
-DOCKER_GID=                  # Linux: getent group docker | cut -d: -f3
-```
-
-Do not put the dashboard password in `.env`. The first browser visit asks
-you to choose it (12+ characters, scrypt hash in `dashboard/auth/`, never
-inside `recon/`).
-
-Optional SecLists mount (compose bind-mounts `~/seclists` read-only). If
-that directory is missing, Docker creates an empty one; curated lists in
-the repo still work:
-
-```bash
-git clone --depth 1 https://github.com/danielmiessler/SecLists.git ~/seclists
-```
-
-**Start the dashboard** (slow on the first build; later starts are seconds).
-Compose `restart: unless-stopped` brings it back after reboot.
-
-Build locally (no GHCR login):
-
-```bash
 docker compose --profile dashboard up -d --build
 ```
 
-Or pull the published image if your GitHub account can read packages:
+Open http://127.0.0.1:8080 and set an operator password (12+ characters).
+The hash is written under `dashboard/auth/`. Do not put the password in
+`.env`.
+
+The UI binds to loopback. If 8080 is busy, set `DASHBOARD_BIND_PORT=9090`
+in `.env` and recreate the container. On Linux, set `RECON_HOST_UID` and
+`RECON_HOST_GID` to `id -u` / `id -g` so nested Docker and file ownership
+line up.
+
+Optional wordlists: clone [SecLists](https://github.com/danielmiessler/SecLists)
+to `~/seclists`. Compose mounts it read-only. If that directory is missing,
+Docker creates an empty one and the lists in this repo still work.
+
+Or pull the published image (`docker login ghcr.io` with `read:packages`):
 
 ```bash
-docker login ghcr.io -u YOUR-GITHUB-USERNAME   # PAT as password
 docker pull ghcr.io/erfanmghs/moirax-asm:dashboard
 docker tag ghcr.io/erfanmghs/moirax-asm:dashboard moirax-asm-dashboard
 docker compose --profile dashboard up -d
 ```
 
-Check: `docker compose --profile dashboard ps` -- status **Up**.
-If 8080 is taken, set `DASHBOARD_BIND_PORT=9090` in `.env` and recreate.
-Bind defaults to `127.0.0.1`; the SPA is not meant to be on the public net.
-
-Open **http://127.0.0.1:8080** -- Set operator password -> Register.
-
-| I want to ... | Command |
-|---|---|
-| Start | `docker compose --profile dashboard up -d` |
-| Stop | `docker compose --profile dashboard down` |
-| Update | `git pull` then `docker compose --profile dashboard up -d --build` |
-| Live log | `docker compose logs -f dashboard` |
+```bash
+docker compose --profile dashboard up -d          # start
+docker compose --profile dashboard down           # stop
+git pull && docker compose --profile dashboard up -d --build   # update
+docker compose logs -f dashboard                  # logs
+```
 
 ---
 
-## First scan
+## First run
 
-1. **SETTINGS** -- Telegram username (`@handle` or a numeric id) -> SAVE ->
-   SEND TEST. Personal bots: open the bot in Telegram, press Start, retry.
-2. **SCAN** -- SITE `example.com` (a name **you** are allowed to test) ->
-   tick Authorize if it is not yet on the allow-list -> **ADD TARGET**.
-3. Optional **SETUP** on that row: DNS depth, vhost depth, wordlists,
-   Telegram override. Empty SETUP inherits SETTINGS / TOOLS / WORDLISTS.
-4. **START**. Watch LIVE LOG. Minutes to ~an hour depending on estate size
-   and wordlists.
-5. **RESULTS** -- pick the site -> LOAD. **REPORTS** -> GENERATE NOW ->
-   OPEN `report.html` or the PDF.
+1. **SETTINGS** -- Telegram handle or numeric id, SAVE, SEND TEST. For a
+   personal bot, open it, press Start, then retry.
+2. **SCAN** -- type a domain you may test. Tick Authorize if it is not on
+   the allow-list yet. ADD TARGET, then START. SETUP on the row is optional;
+   empty fields inherit global settings.
+3. Watch the live log. Small estates finish in minutes; large wordlists can
+   take around an hour.
+4. **RESULTS** -- pick the site. The table updates from live DNS while a
+   scan is running. Click a live host to open it. Click the port count, then
+   an IP, for the service table.
+5. **REPORTS** -- GENERATE NOW, then open `report.html` or the PDF.
 
-Committed `scope.yaml` is a fixture allow-list (`example.com` plus the
-local e2e zone). ADD TARGET appends your apex and `*.apex`. Do not commit
-those edits; the C1 gate rejects non-fixture includes.
+The committed `scope.yaml` is a fixture (`example.com` and the local e2e
+zone). ADD TARGET appends your apex on disk. Leave those edits, `.env`,
+`targets.yaml`, `dashboard/config.json`, and `recon/` uncommitted.
 
-Do not delete a site you still care about; DELETE hides it from SCAN and
-keeps warehouse history for the retention window.
-
----
-
-## Day-to-day
-
-**SCAN** is the board: status, modules, last run, SETUP, START, STOP,
-RESUME, DELETE. ADD LIST accepts one name per line or comma-separated names.
-
-**RESULTS** is independent of SCAN's selected row. Filters, coverage (which
-source uniquely found a host), and DIFF badges are the change signal.
-COMPARE / REBUILD uses warehouse history.
-
-**REPORTS** GENERATE NOW rebuilds the B7 bundle. VERIFIED means the SHA-256
-manifest still matches the files on disk.
-
-**TOOLS / WORDLISTS** change the next run, not the current one. dnsx is the
-active subdomain brute. ffuf vhost rows are Host-header probes, not the DNS
-brute. Full TCP 1-65535 (naabu-full) stays on after MERGE; optional
-top-ports preview is off by default.
-
-Independent depths (SETTINGS and per-site SETUP / TARGETS):
-
-- **DNS depth** (`recon_depth`) -- label levels under the apex dnsx will brute.
-- **vhost depth** (`ffuf_depth`) -- how far Host-header enumeration walks.
-- **Passive recursion** -- how far passive OSINT follows related names.
-
-**Fleet:** register each site, then
-`./recon.sh fleet run --targets all --concurrency 3`. One member failing
-does not stop the others. Dashboard: `GET /api/fleet`,
-`GET /api/fleet/ledger`, `POST /api/fleet/run`.
-
-**Scheduler:** SCAN, interval minutes (minimum 10), enabled, SAVE.
-Example: `720` = twice a day.
-
-Idle sessions die after 15 minutes without an operator click. **LOCK**
-signs you out. APIs also accept a legacy `Authorization: Bearer` token for
-CI (`DASHBOARD_TOKEN` in `.env`).
+DELETE on SCAN hides the site from the board and keeps warehouse history
+for the retention window.
 
 ---
 
-## How a run works
+## Pipeline
 
 ```mermaid
 flowchart TD
-  S[START SCAN or recon.sh] --> G[ScopeGate]
-  G --> P[Per-target SETUP]
-  P --> L[Layout recon/TARGET]
-  L --> PAR[passive parallel active]
-  PAR --> PAS[PASSIVE OSINT / CT / search-forge]
-  PAR --> ACT[dnsx brute + resolve]
-  ACT --> F[ffuf vhost + ffuf-3]
-  ACT --> PC[optional port-check]
-  PAS --> M[MERGE assets.json]
-  F --> M
-  PC --> M
-  M --> SW[TCP 1-65535]
-  SW --> F4[ffuf-4 on HTTP ports]
-  F4 --> OW[OWASP evidence-only]
-  OW --> R[report + warehouse + Telegram]
+  start[START] --> scope[ScopeGate]
+  scope --> layout["recon/SITE"]
+  layout --> par[passive and active in parallel]
+  par --> merge[MERGE]
+  merge --> sweep[TCP 1-65535]
+  sweep --> vhost[vhost on HTTP ports]
+  vhost --> owasp[OWASP evidence-only]
+  owasp --> out[report, warehouse, Telegram]
 ```
 
-```
-START (SCAN or ./recon.sh run TARGET)
-  |  ScopeGate -- refuse out-of-scope / suffix trick
-  |  apply per-target SETUP (transient, restored after)
-  |  layout recon/TARGET + run.pid + state=running
-  |
-  +-- PASSIVE (OSINT / CT / search-forge)  ||  ACTIVE
-  |                                         dns-resolve (dnsx brute + IPs
-  |                                           + optional httpx length/tech)
-  |                                         then in parallel:
-  |                                           ffuf -> nested vhost expand
-  |                                             -> ffuf-3 (DNS-dead names)
-  |                                           port-check (optional top ports)
-  |
-  MERGE -> 00_assets/assets.json
-  port-sweep  TCP 1-65535 on unique resolved IPs
-  ffuf-4      vhost on open HTTP ports
-  owasp-passive  evidence-only Top 10 (zero extra packets)
-  report bundle + warehouse ingest + Telegram on diff
-```
+Passive is OSINT. Active is dnsx brute and resolve, then virtual-host
+fuzzing. Merge writes the host index. The port sweep runs after merge so it
+only sees names that survived scope and wildcard filtering. Each module has
+its own image. STOP kills the run and related containers.
 
-Each module runs in its own Docker image. The orchestrator talks to docker
-through `pipeline/dockerbin.py`. Module status is `done | failed | pending`
-plus `disclosed` for sanctioned anomalies. STOP kills the run PID and
-related containers.
+Depths are independent (SETTINGS or per-site SETUP):
 
-Config dialects (closed allow-lists -- unknown keys are refused):
+- **DNS depth** -- labels under the apex that dnsx will brute
+- **vhost depth** -- how far Host-header enumeration walks
+- **Passive recursion** -- how far OSINT follows related names
 
-- `tools.yaml` -- modules, images, breaker, budgets
-- `wordlists.yaml` -- per-task selection (curated wins; SecLists index +
-  custom + platform-learned lists merge in)
-- `scope.yaml` -- includes / excludes (fixture committed; operator estate
-  is local)
-- `targets.yaml` -- per-site profiles
-- `dashboard/config.json` -- gitignored global dashboard settings
-
-Layout:
-
-```
-recon.sh                 CLI entry (python -m pipeline.cli)
-pipeline/                engine, adapters, modules, notify, reporting, fleet
-dashboard/               FastAPI app.py (thin) + service.py + static SPA
-tests/                   atomic unittest contract
-ci/                      acceptance vehicles + pentest + UI journey
-.github/workflows/       C1 release gate (secrets, SAST, ASCII, PII, scope)
-```
-
-Non-negotiable laws (CI enforces them): never-silent, ScopeGate, frozen
-acceptance vehicles, closed allow-lists, no secrets in tree, ASCII
-English, new behavior = new test. Details: [docs/HANDOVER.md](docs/HANDOVER.md).
-
-Artifacts land under `recon/<target>/` (gitignored):
-
-```
-  00_assets/assets.json     merged host index (RESULTS table)
-  10_subdomains/passive/    OSINT / CT / search-forge
-  15_vhosts/ffuf/           Host-header vhost hits
-  20_dns/dnsx/              brute + resolve
-  30_ports/                 naabu-full (1-65535)
-  70_owasp/                 passive OWASP Top 10 + API Top 10
-  90_report/                html pdf csv json md + report_manifest.json
-  diff.json                 added / removed / changed vs previous run
-  state.json                live module status
-  runs.json                 run ledger
-  logs/run.log              SCAN live log
-```
-
-Auth DB is separate from warehouse SQLite -- never store operator login in
-`recon/<target>/warehouse.sqlite`.
+Optional API keys only add sources. The keyless path always runs.
 
 ---
 
-## Telegram, keys, proxies
+## CLI
 
-**Telegram.** Operator sets username or id only. Bot token stays in `.env`.
-Precedence: per-target profile > SETTINGS > `.env` TELEGRAM_CHAT_ID.
-`telegram_enabled: false` on a profile mutes that site. Comma-separated
-`TELEGRAM_BOT_TOKEN` values are a backup pool: a 401 rotates to the next
-token in the same send. Tokens are never echoed.
-
-**API keys** are optional. Keyless sources always run (crt.sh, HackerTarget,
-Anubis, OTX, urlscan, ...). Optional keys (Chaos, GitHub, SecurityTrails,
-VirusTotal, search engines, ...) add coverage. Paste on **API KEYS**; the
-next run picks them up with no restart. Inventory:
-[docs/api-keys.md](docs/api-keys.md).
-
-**Proxy pool.** SETTINGS PROXY POOL, comma-separated HTTP/SOCKS5 URLs.
-Preflight health-checks every entry (fail-fast, passwords masked). Attempts
-round-robin; unhealthy entries are benched. Per-site pool on TARGETS wins.
-Port-sweep and the dedicated DNS resolver lane stay direct and say so in
-the log.
-
-One-time `.env` knobs:
-
-| Variable | Who | Purpose |
-|---|---|---|
-| `TELEGRAM_BOT_TOKEN` | Installer | Bot API token; comma-separated backups |
-| `TELEGRAM_CHAT_ID` | Optional fallback | Numeric id if SETTINGS is empty |
-| `DASHBOARD_TOKEN` | CI / legacy API | Bearer for scripts; operators use the password gate |
-| `PROXY_POOL` | Optional | Global proxy list if not set in SETTINGS |
-| `RECON_HOST_UID` / `GID` / `DOCKER_GID` | Linux | Nested docker + file ownership |
-| Provider keys | Optional | See `docs/api-keys.md` |
-
----
-
-## Command line
+Host Python 3. The scope check runs before any container starts.
 
 ```bash
 ./recon.sh run example.com
@@ -315,37 +147,89 @@ One-time `.env` knobs:
 ./recon.sh status example.com
 ./recon.sh report example.com
 ./recon.sh fleet run --targets all --concurrency 3
-./recon.sh fleet status
-./recon.sh wordlist-sync
-./recon.sh target-profile get example.com
 ```
 
-Full usage: `./recon.sh` with no args. Host Python 3 is required; the
-scope gate runs before any container starts.
+No arguments prints the rest. Fleet runs sites in parallel; one failure
+does not stop the others.
+
+Scheduler is in SETTINGS / SETUP (minutes, minimum 10). Idle sessions
+expire after 15 minutes. LOCK signs you out. Scripts can still send
+`Authorization: Bearer` with `DASHBOARD_TOKEN`.
+
+---
+
+## Telegram, keys, proxies
+
+Put your Telegram username or id in SETTINGS (or per site). The bot token
+stays in `.env`. Mute one site with `telegram_enabled: false` on its
+profile. Comma-separated `TELEGRAM_BOT_TOKEN` values are backups; a 401
+rotates to the next token. Tokens are never printed.
+
+Paste optional keys on **API KEYS**. The next run picks them up with no
+restart. See [docs/api-keys.md](docs/api-keys.md).
+
+PROXY POOL is comma-separated HTTP or SOCKS5 URLs, health-checked before a
+run. Port-sweep and the dedicated DNS resolver stay direct.
+
+| Variable | Role |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | Bot token; comma-separated backups |
+| `TELEGRAM_CHAT_ID` | Fallback if SETTINGS is empty |
+| `DASHBOARD_TOKEN` | CI / legacy bearer; operators use the password gate |
+| `PROXY_POOL` | Global proxies if SETTINGS is empty |
+| `RECON_HOST_UID` / `GID` | Linux ownership and nested Docker |
+
+---
+
+## Repository layout
+
+```
+recon.sh         CLI (python -m pipeline.cli)
+pipeline/        engine, modules, reporting, fleet
+dashboard/       FastAPI app and static console
+tests/           unit tests
+ci/              release and acceptance gates
+docs/HELP.md     operator walkthrough (also the HELP tab)
+```
+
+Per-site output is gitignored, under `recon/<site>/`:
+
+```
+00_assets/assets.json    merged host index
+20_dns/dnsx/             brute, resolve, wildcard probe
+30_ports/                full TCP sweep
+90_report/               html / pdf / csv / json / md + manifest
+diff.json                versus previous run
+logs/run.log             SCAN live log
+```
 
 ---
 
 ## Troubleshooting
 
-| What you see | What to do |
+| Symptom | Fix |
 |---|---|
-| `git: command not found` | Install Git, open a new terminal |
-| `docker: command not found` | Install / start Docker |
-| `permission denied ... docker.sock` in LIVE LOG | Nested docker inside the dashboard cannot use the socket. Recreate: `docker compose --profile dashboard up -d --build --force-recreate`. On the host, your user must be in the `docker` group (`sudo usermod -aG docker $USER`, then log out/in). |
-| `permission denied ... docker.sock` on the host CLI | Linux: `sudo usermod -aG docker $USER`, log out/in |
-| Clone rejects password | PAT or `gh auth login` |
-| `repository not found` | Ask the owner to invite your GitHub account |
-| `pull access denied` for GHCR | `docker login ghcr.io` with `read:packages`, or build locally |
-| `port is already allocated` | `DASHBOARD_BIND_PORT=9090` in `.env` |
-| First start looks frozen | Pulling layers -- `docker compose logs -f dashboard` |
-| Sign-in loop after 15 min | Idle timeout -- sign in again |
-| START returns "ADD TARGET first" | Register the site on SCAN before START |
-| START 422 illegal target name | Lowercase DNS name, not flags or paths |
+| `docker: command not found` | Install and start Docker |
+| `permission denied ... docker.sock` in the live log | `docker compose --profile dashboard up -d --build --force-recreate`. On Linux, add your user to the `docker` group and log out/in. |
+| Clone rejects a password | `gh auth login` or a PAT with `repo` |
+| `pull access denied` on GHCR | `docker login ghcr.io`, or build locally |
+| Port already allocated | `DASHBOARD_BIND_PORT` in `.env` |
+| First start looks stuck | Image layers -- `docker compose logs -f dashboard` |
+| START says add the target first | ADD TARGET on SCAN, then START |
+| START 422 | Lowercase DNS name, no flags or paths |
+
+---
+
+## Docs
+
+- [Operator guide](docs/HELP.md) -- every dashboard control
+- [API keys](docs/api-keys.md) -- optional providers
+- [Security](docs/security.md) -- bind, auth, leak response
+- [Handover](docs/HANDOVER.md) -- engineering map
 
 ---
 
 ## Legal
 
-Run only against targets you are authorized to test. Unauthorized scanning
-of systems you do not own or do not have permission to test is illegal.
-The allow-list exists to protect you; do not disable it.
+Unauthorized scanning of systems you do not own, or do not have permission
+to test, is illegal. Do not disable the allow-list.

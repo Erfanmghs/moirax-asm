@@ -115,7 +115,10 @@ def _flush_merged(
         asset = {
             "host": host,
             "ips": in_scope_ips,
-            "alive": row["alive"],
+            # A host that resolves to an in-scope IP is a live asset. HTTP
+            # reachability (http_status/tech) is separate; never mark an
+            # IP-bearing, in-scope host dead in the canonical output.
+            "alive": True if in_scope_ips else row["alive"],
             "attribution": row["attribution"],
             "sources": sorted(row["sources"]),
         }
@@ -270,6 +273,11 @@ def _iter_assets(doc: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
 def _wildcard_ips(docs: list[dict[str, Any]]) -> set[str]:
     ips: set[str] = set()
     for doc in docs:
+        # Primary source: dns-resolve emits the catch-all IPs explicitly.
+        for item in doc.get("wildcard_ips") or []:
+            if isinstance(item, str) and _looks_ip(item):
+                ips.add(item)
+        # Backward-compat: some docs may still carry IPs (or ip-dicts) here.
         suspects = doc.get("wildcard_suspects") or []
         if isinstance(suspects, list):
             for item in suspects:
@@ -280,11 +288,15 @@ def _wildcard_ips(docs: list[dict[str, Any]]) -> set[str]:
                         val = item.get(key)
                         if isinstance(val, str) and _looks_ip(val):
                             ips.add(val)
+        # Any resolved row explicitly tagged as the wildcard probe contributes
+        # its IPs to the catch-all set.
         resolved = doc.get("resolved") or []
         if isinstance(resolved, list):
             for row in resolved:
                 if isinstance(row, dict) and row.get("source") == "wildcard":
-                    continue
+                    for ip in row.get("ips") or []:
+                        if isinstance(ip, str) and _looks_ip(ip):
+                            ips.add(ip)
     return ips
 
 
@@ -295,10 +307,15 @@ def _quarantine_reason(
     wildcard_reason: str,
     catchall_reason: str,
 ) -> str | None:
-    hits = [ip for ip in ips if ip in wildcard_ips]
-    if not hits:
+    # CONSERVATIVE: quarantine only names that resolve EXCLUSIVELY to catch-all
+    # IPs. A host that also has any genuine (non-wildcard) IP is a real asset and
+    # is kept -- we never hide an IP-bearing host just because it shares one
+    # catch-all address (this is the inverse of the "wrongly-dead" bug).
+    if not ips or not wildcard_ips:
         return None
-    if any(len(ip_hosts.get(ip) or []) > 1 for ip in hits):
+    if not all(ip in wildcard_ips for ip in ips):
+        return None
+    if any(len(ip_hosts.get(ip) or []) > 1 for ip in ips):
         return catchall_reason
     return wildcard_reason
 

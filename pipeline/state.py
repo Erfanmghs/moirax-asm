@@ -185,13 +185,20 @@ def run_pid_is_live(target_dir: Path) -> bool:
         return False
     try:
         os.kill(pid, 0)
-        return True
     except ProcessLookupError:
         return False
     except PermissionError:
         return True
     except OSError:
         return False
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+        rparen = stat.rfind(")")
+        if rparen != -1 and len(stat) > rparen + 2 and stat[rparen + 2] == "Z":
+            return False
+    except OSError:
+        pass
+    return True
 
 
 def operator_stopped(params: Params, target_dir: Path, target: str) -> bool:
@@ -233,6 +240,16 @@ def persist_pause(params: Params, target_dir: Path, target: str, module: str, re
         "updated_at": _now(),
     }
     save_state(params, target_dir, state)
+
+
+def clear_module_pause(params: Params, target_dir: Path, target: str, module: str) -> dict[str, Any]:
+    state = load_state(params, target_dir, target)
+    breaker = state.setdefault("breaker", {"paused": {}})
+    paused = breaker.setdefault("paused", {})
+    if isinstance(paused, dict):
+        paused.pop(module, None)
+    save_state(params, target_dir, state)
+    return state
 
 
 def clear_breaker_pauses(params: Params, target_dir: Path, target: str) -> dict[str, Any]:

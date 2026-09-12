@@ -110,6 +110,48 @@ class CircuitBreaker:
             window_id = int(self.clock.time() // self.window_sec) if self.window_sec else 0
             self._pause(module, state, reason, 0, 0, window_id)
 
+    def reset_paused(self, module: str | None = None, *, reason: str = "auto-reset") -> list[str]:
+        """Clear persisted + in-memory pauses so the run can continue.
+
+        Throttle stays in effect (the limiter still slows the next calls).
+        Pause is a protect-the-target signal, not an operator chore.
+        """
+        with self._lock:
+            names = [module] if module else [
+                name for name, row in self._modules.items() if row.paused
+            ]
+            if module is None and self.target_dir is not None:
+                persisted = state_engine.paused_modules(self.params, self.target_dir, self.target)
+                for name in persisted:
+                    if str(name) not in names:
+                        names.append(str(name))
+            cleared: list[str] = []
+            for name in names:
+                if not name:
+                    continue
+                row = self._state(name)
+                if not row.paused:
+                    continue
+                row.paused = False
+                row.pause_reason = None
+                row.consecutive_bad = 0
+                row.anomaly_sent = False
+                if self.target_dir is not None:
+                    state_engine.clear_module_pause(self.params, self.target_dir, self.target, name)
+                self._log_transition(
+                    "auto-reset",
+                    name,
+                    0,
+                    0,
+                    int(self.clock.time() // self.window_sec) if self.window_sec else 0,
+                    reason,
+                    row.throttle_factor,
+                )
+                cleared.append(name)
+            if module is None and self.target_dir is not None:
+                state_engine.clear_breaker_pauses(self.params, self.target_dir, self.target)
+            return cleared
+
     def allow(self, module: str) -> bool:
         with self._lock:
             return not self._state(module).paused
@@ -196,7 +238,11 @@ class CircuitBreaker:
             state.last_ok_window = window_id
 
     def _evaluate_latency(self, module: str, state: _ModuleBreaker, window_id: int) -> None:
-        latencies = [ev.latency_sec for ev in state.events if ev.latency_sec is not None]
+        latencies = [
+            ev.latency_sec
+            for ev in state.events
+            if ev.latency_sec is not None and ev.latency_sec <= self.window_sec
+        ]
         if not latencies:
             return
         avg = sum(latencies) / len(latencies)

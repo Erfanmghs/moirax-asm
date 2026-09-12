@@ -39,6 +39,31 @@ def clamp_ffuf_depth(params: Params) -> int:
     return _clamp_depth(params, "ffuf_depth", None)
 
 
+def clamp_dnsx_parallel_parents(params: Params) -> int:
+    def _int(name: str, default: int) -> int:
+        raw = params.settings.get(name, default)
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return default
+
+    lo = max(1, _int("dnsx_parallel_parents_min", 1))
+    hi = max(lo, _int("dnsx_parallel_parents_max", 8))
+    return max(lo, min(hi, _int("dnsx_parallel_parents", lo)))
+
+
+def dnsx_parent_worker_count(params: Params, parent_count: int, current_qps: int) -> int:
+    """Split live QPS across nested dnsx jobs (4×1250 at cap 5000)."""
+    n = max(1, int(parent_count))
+    want = clamp_dnsx_parallel_parents(params)
+    qps = max(1, int(current_qps))
+    return max(1, min(want, n, qps))
+
+
+def dnsx_job_qps(current_qps: int, workers: int) -> int:
+    return max(1, int(current_qps) // max(1, int(workers)))
+
+
 def child_depth(host: str, apex: str) -> int:
     """How many extra labels `host` has under `apex`. Apex itself is 0.
 
@@ -63,13 +88,17 @@ def recursion_parents(
     resolved: dict,
     apex: str,
     level: int,
-    wildcard_ip: str | None,
+    wildcard_ip: str | set[str] | None,
     cap: int,
 ) -> list[str]:
     """Hosts to brute as dnsx -d PARENT at this level (level 1 = apex)."""
     if level <= 1:
         return [apex]
     want = level - 1
+    if isinstance(wildcard_ip, str):
+        wild = {wildcard_ip} if wildcard_ip else set()
+    else:
+        wild = {str(ip) for ip in (wildcard_ip or []) if ip}
     out: list[str] = []
     for host, row in sorted((resolved or {}).items()):
         if child_depth(str(host), apex) != want:
@@ -79,7 +108,7 @@ def recursion_parents(
         ips = [str(ip) for ip in (row.get("ips") or []) if ip]
         if not ips:
             continue
-        if wildcard_ip and wildcard_ip in ips:
+        if wild and wild.intersection(ips):
             continue
         out.append(str(host))
     if cap and len(out) > cap:

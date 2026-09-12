@@ -28,6 +28,51 @@ from pipeline.wordlist_forge import EmptyWordlistError, ingest_if_completed
 from pipeline import state as state_engine
 
 
+# Debounce window for mid-run live warehouse ingests. Each ingest does a full
+# tree rglob + fact rewrite; on a fast module sequence that is pure overhead.
+# The authoritative index is always rebuilt by ingest_run_end() at run end, so
+# skipping an intermediate live ingest only costs a few seconds of dashboard
+# freshness -- never correctness.
+_LIVE_INGEST_MIN_INTERVAL_SEC = 10.0
+_LAST_LIVE_INGEST: dict[str, float] = {}
+
+
+def _ingest_live(params: Params, target_dir: Path, target: str, *, force: bool = False) -> None:
+    key = str(target_dir)
+    now = time.monotonic()
+    last = _LAST_LIVE_INGEST.get(key, 0.0)
+    if not force and (now - last) < _LIVE_INGEST_MIN_INTERVAL_SEC:
+        # Disclosed, not silent: the next module boundary (or run-end ingest)
+        # will refresh the live index.
+        print(f"warehouse: live ingest debounced ({now - last:.1f}s < {_LIVE_INGEST_MIN_INTERVAL_SEC:.0f}s)")
+        return
+    _LAST_LIVE_INGEST[key] = now
+    try:
+        from pipeline.warehouse import ingest_live
+
+        ledger = ingest_live(params, target_dir, target)
+        print(
+            "warehouse: live "
+            f"ok={ledger.get('ok')} facts={ledger.get('facts')} stamp={ledger.get('stamp')}"
+        )
+    except Exception as exc:  # noqa: BLE001 -- derived index must never flip a module
+        print(f"warehouse: live disclosed failure: {exc}")
+
+
+def _release_breaker(breaker: CircuitBreaker, module: str) -> None:
+    """If the limiter paused this module, clear it so the ladder continues.
+
+    Mid-module invokes still see a live pause (protects the target). The next
+    module boundary, or the next run, auto-resets -- the operator never has
+    to click RESET LIMITER.
+    """
+    if breaker.allow(module):
+        return
+    cleared = breaker.reset_paused(module, reason="continue run")
+    if cleared:
+        print(f"breaker: auto-reset {cleared} so {module} can run")
+
+
 class OperatorStop(Exception):
     """Operator requested stop; branches must not start the next module."""
 
@@ -166,6 +211,11 @@ def _run_pipeline_impl(
         target_dir=target_dir,
         target=target,
     )
+    # Operator starting/resuming a run means "continue". Never leave them
+    # stuck behind a persisted limiter pause (RESET LIMITER is automatic).
+    released = breaker.reset_paused(reason="run start")
+    if released:
+        print(f"breaker: auto-reset at run start {released}")
     ceiling = ResourceCeiling(params)
     adapter = Adapter(params, target_dir, breaker, ceiling, clock=clock, runner=runner,
                       aggressive=aggressive, proxy_pool=assigner)
@@ -286,6 +336,8 @@ def _run_pipeline_impl(
         try:
             merge_branches(params, gate, target_dir, target, passive_docs, active_docs)
             state_engine.set_status(params, target_dir, merge_name, "done")
+            # MERGE is the canonical-assets milestone: always refresh the live view.
+            _ingest_live(params, target_dir, target, force=True)
         except Exception as exc:
             failed = True
             partial.append(f"merge:{exc}")
@@ -303,17 +355,17 @@ def _run_pipeline_impl(
         st = state_engine.load_state(params, target_dir, target)
         if state_engine.skip_done(st, sweep_name):
             print(f"skip: module={sweep_name} reason=already done (resume)")
-        elif not adapter.breaker.allow(sweep_name):
-            reason = adapter.breaker.pause_reason(sweep_name) or "circuit breaker paused this module"
-            _append_log(params, target_dir, sweep_name, sweep_name, 0, f"skip: {reason}")
-            print(f"skip: module={sweep_name} reason={reason}")
         else:
+            _release_breaker(adapter.breaker, sweep_name)
+            # fall through to run — do not skip a stage because the limiter tripped.
             state_engine.set_status(params, target_dir, sweep_name, "running")
             try:
                 RUNNERS[sweep_name](
                     params, gate, adapter, target_dir, target, extra, planned, None, partial
                 )
                 state_engine.set_status(params, target_dir, sweep_name, "done")
+                # PORT-SWEEP is the ports milestone: always refresh the live view.
+                _ingest_live(params, target_dir, target, force=True)
             except Exception as exc:
                 state_engine.set_status(params, target_dir, sweep_name, "failed")
                 partial.append(f"portsweep:{exc}")
@@ -330,11 +382,8 @@ def _run_pipeline_impl(
         st = state_engine.load_state(params, target_dir, target)
         if state_engine.skip_done(st, ffuf4_name):
             print(f"skip: module={ffuf4_name} reason=already done (resume)")
-        elif not adapter.breaker.allow(ffuf4_name):
-            reason = adapter.breaker.pause_reason(ffuf4_name) or "circuit breaker paused this module"
-            _append_log(params, target_dir, ffuf4_name, ffuf4_name, 0, f"skip: {reason}")
-            print(f"skip: module={ffuf4_name} reason={reason}")
         else:
+            _release_breaker(adapter.breaker, ffuf4_name)
             state_engine.set_status(params, target_dir, ffuf4_name, "running")
             try:
                 RUNNERS[ffuf4_name](
@@ -350,6 +399,7 @@ def _run_pipeline_impl(
                     partial.append(f"nested-dns-ffuf4:{exc}")
                     _append_log(params, target_dir, "dns-resolve", "dns-resolve", 0, f"nested-after-ffuf4: {exc}")
                 state_engine.set_status(params, target_dir, ffuf4_name, "done")
+                _ingest_live(params, target_dir, target)
             except Exception as exc:
                 state_engine.set_status(params, target_dir, ffuf4_name, "failed")
                 partial.append(f"ffuf4:{exc}")
@@ -367,17 +417,15 @@ def _run_pipeline_impl(
         st = state_engine.load_state(params, target_dir, target)
         if state_engine.skip_done(st, owasp_name):
             print(f"skip: module={owasp_name} reason=already done (resume)")
-        elif not adapter.breaker.allow(owasp_name):
-            reason = adapter.breaker.pause_reason(owasp_name) or "circuit breaker paused this module"
-            _append_log(params, target_dir, owasp_name, owasp_name, 0, f"skip: {reason}")
-            print(f"skip: module={owasp_name} reason={reason}")
         else:
+            _release_breaker(adapter.breaker, owasp_name)
             state_engine.set_status(params, target_dir, owasp_name, "running")
             try:
                 RUNNERS[owasp_name](
                     params, gate, adapter, target_dir, target, extra, planned, None, partial
                 )
                 state_engine.set_status(params, target_dir, owasp_name, "done")
+                _ingest_live(params, target_dir, target)
             except Exception as exc:
                 state_engine.set_status(params, target_dir, owasp_name, "failed")
                 partial.append(f"owasp:{exc}")
@@ -402,6 +450,10 @@ def _run_pipeline_impl(
         return _finalize_stopped(params, gate, target_dir, target, clock, run_started, assigner)
 
     stamp = utc_stamp()
+    st_now = state_engine.load_state(params, target_dir, target)
+    live_stamp = str((st_now.get("run") or {}).get("live_stamp") or "").strip()
+    if live_stamp:
+        stamp = live_stamp
     counts = _counts(params, target_dir, passive_docs, active_docs)
     status, reason, failing_module = _classify_status(params, breaker, alerts, partial, failed, passive_docs, active_docs)
     if state_engine.operator_stopped(params, target_dir, target):
@@ -525,11 +577,7 @@ def run_module(
 ) -> int:
     target_dir = ensure_layout(params, target)
     breaker = CircuitBreaker(params, target_dir=target_dir, target=target)
-    if not breaker.allow(tool_name):
-        reason = breaker.pause_reason(tool_name) or "circuit breaker paused this module"
-        _append_log(params, target_dir, tool_name, tool_name, 0, f"skip: {reason}")
-        print(f"skip: module={tool_name} reason={reason}")
-        return _exit_code(params, str(params.require("run_status_anomaly")))
+    _release_breaker(breaker, tool_name)
     ceiling = ResourceCeiling(params)
     adapter = Adapter(params, target_dir, breaker, ceiling, runner=runner, aggressive=aggressive)
     extra = {"target_domain": target}
@@ -835,15 +883,11 @@ def _filter_paused(
     breaker: CircuitBreaker,
     names: list[str],
 ) -> list[str]:
-    kept: list[str] = []
+    # Limiter pauses are auto-cleared at module boundaries so the branch
+    # continues. The operator is never asked to click RESET LIMITER.
     for name in names:
-        if breaker.allow(name):
-            kept.append(name)
-            continue
-        reason = breaker.pause_reason(name) or "circuit breaker paused this module"
-        _append_log(params, target_dir, name, name, 0, f"skip: {reason}")
-        print(f"skip: module={name} reason={reason}")
-    return kept
+        _release_breaker(breaker, name)
+    return list(names)
 
 
 def _branch_tools(params: Params, key: str) -> list[str]:
@@ -896,11 +940,7 @@ def _run_passive_modules(
                 if doc:
                     docs.append(doc)
             continue
-        if not adapter.breaker.allow(name):
-            reason = adapter.breaker.pause_reason(name) or "circuit breaker paused this module"
-            _append_log(params, target_dir, name, name, 0, f"skip: {reason}")
-            print(f"skip: module={name} reason={reason}")
-            continue
+        _release_breaker(adapter.breaker, name)
         left = deadline - clock.time()
         if left <= 0:
             partial.append("passive_budget")
@@ -925,6 +965,7 @@ def _run_passive_modules(
                 raise OperatorStop("operator stop")
             state_engine.set_status(params, target_dir, name, "done")
             st = state_engine.load_state(params, target_dir, target)
+            _ingest_live(params, target_dir, target)
         except OperatorStop:
             raise
         except Exception as exc:
@@ -984,11 +1025,7 @@ def _run_active_modules(
             if key:
                 return load_tool_doc(target_dir / str(params.require(key)))
             return None
-        if not adapter.breaker.allow(name):
-            reason = adapter.breaker.pause_reason(name) or "circuit breaker paused this module"
-            _append_log(params, target_dir, name, name, 0, f"skip: {reason}")
-            print(f"skip: module={name} reason={reason}")
-            return None
+        _release_breaker(adapter.breaker, name)
         left = deadline - clock.time()
         if left <= 0:
             partial.append("active_budget")
@@ -1022,6 +1059,7 @@ def _run_active_modules(
                 raise OperatorStop("operator stop")
             state_engine.set_status(params, target_dir, name, "done")
             st = state_engine.load_state(params, target_dir, target)
+            _ingest_live(params, target_dir, target)
             return doc if isinstance(doc, dict) else None
         except OperatorStop:
             raise

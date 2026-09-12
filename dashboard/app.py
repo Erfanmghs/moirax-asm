@@ -15,6 +15,7 @@ import json
 import os
 import secrets
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,7 @@ from dashboard.service import (
     list_operator_tools,
     load_settings,
     parse_filters_query,
+    FILTER_KEYS,
     proxy_gate,
     save_settings,
     scheduler_save,
@@ -54,6 +56,7 @@ from dashboard.service import (
     wordlist_preview,
     results_rows_for,
     enrich_results_rows,
+    ports_for_host,
     fleet_members_view,
     latest_fleet_ledger,
     scan_add_targets,
@@ -66,6 +69,7 @@ from pipeline.ip_rotation import gate_pool_or_legacy
 from pipeline.params import Params
 from pipeline.scheduler import load_schedule
 from pipeline.target_profiles import TARGET_NAME_RE
+from pipeline.textio import read_line_window
 from pipeline.yaml_util import load_yaml_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -255,13 +259,25 @@ def _origin_ok(request: Request) -> bool:
     return parsed.netloc == host
 
 
+# When the dashboard is served over TLS (typically via a reverse proxy that
+# terminates HTTPS), set DASHBOARD_COOKIE_SECURE=1 so the session cookie carries
+# the Secure flag and is never transmitted over plaintext. Defaults to off to
+# preserve the plain 127.0.0.1 localhost/dev experience (no regression).
+_COOKIE_SECURE = str(os.environ.get("DASHBOARD_COOKIE_SECURE") or "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+
+
 def _set_session_cookie(response: JSONResponse, raw: str) -> JSONResponse:
     response.set_cookie(
         key=authstore.cookie_name(),
         value=raw,
         httponly=True,
         samesite="strict",
-        secure=False,
+        secure=_COOKIE_SECURE,
         path="/",
     )
     return response
@@ -513,9 +529,38 @@ def read_json_file(path: Path) -> dict[str, Any]:
         return {}
 
 
+_JSON_CACHE: dict[str, tuple[float, int, dict[str, Any]]] = {}
+_JSON_CACHE_LOCK = threading.Lock()
+
+
+def read_json_file_cached(path: Path) -> dict[str, Any]:
+    """mtime+size-gated JSON read for large, rarely-changing hot-path files
+    (e.g. multi-MB diff.json parsed on every RESULTS poll). Returned dict is
+    shared and must be treated as read-only by callers."""
+    try:
+        st = path.stat()
+    except OSError:
+        return {}
+    key = str(path)
+    with _JSON_CACHE_LOCK:
+        hit = _JSON_CACHE.get(key)
+        if hit and hit[0] == st.st_mtime and hit[1] == st.st_size:
+            return hit[2]
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {}
+    if not isinstance(doc, dict):
+        return {}
+    with _JSON_CACHE_LOCK:
+        _JSON_CACHE[key] = (st.st_mtime, st.st_size, doc)
+    return doc
+
+
 @app.get("/api/results/{target}")
 def results(
     target: str,
+    request: Request,
     q: str = Query(default=""),
     source: str = Query(default=""),
     tag: str = Query(default=""),
@@ -529,19 +574,26 @@ def results(
     target = _valid_target(target)
     params = _params_obj()
     rows = results_rows_for(params, target, run)
-    filters = parse_filters_query(f"q={q}&source={source}&tag={tag}&alive={alive}&run={run}&scope={scope}")
+    rows = enrich_results_rows(params, target, rows)
+    filters = {}
+    for key in FILTER_KEYS:
+        val = (request.query_params.get(key) or "").strip()
+        if val:
+            filters[key] = val
+    if not filters:
+        # Named params still work for older clients / tests that do not send Request extras.
+        filters = parse_filters_query(f"q={q}&source={source}&tag={tag}&alive={alive}&run={run}&scope={scope}")
     filtered = apply_filters(rows, filters)
-    diff = read_json_file(ROOT / "recon" / target / str(params.require("diff_filename")))
+    diff = read_json_file_cached(ROOT / "recon" / target / str(params.require("diff_filename")))
     new_hosts = {str(r.get("host")) for r in (diff.get("added") or {}).get("hosts") or []}
-    enriched = [{**r, "is_new": str(r.get("host")) in new_hosts} for r in filtered]
-    enriched = enrich_results_rows(params, target, enriched)
+    page = [{**r, "is_new": str(r.get("host")) in new_hosts} for r in filtered[:limit]]
     return JSONResponse({
         "target": target,
         "total": len(rows),
-        "matched": len(enriched),
-        "returned": min(len(enriched), limit),
+        "matched": len(filtered),
+        "returned": len(page),
         "filters": filters,
-        "assets": enriched[:limit],
+        "assets": page,
     })
 
 
@@ -566,7 +618,7 @@ def results_diff(
             return JSONResponse(warehouse_diff_view(params, target, "", ""))
         except DashboardError:
             return JSONResponse({"exists": False})
-    return JSONResponse({"exists": True, "source": "diff.json", "target": target, **read_json_file(path)})
+    return JSONResponse({"exists": True, "source": "diff.json", "target": target, **read_json_file_cached(path)})
 
 
 @app.get("/api/results/{target}/coverage")
@@ -574,6 +626,24 @@ def results_coverage(target: str, authorization: str | None = Header(default=Non
     _auth(authorization)
     target = _valid_target(target)
     return JSONResponse(coverage_analytics(_assets_rows(target)))
+
+
+@app.get("/api/results/{target}/ports")
+def results_host_ports(
+    target: str,
+    host: str = Query(default=""),
+    ip: str = Query(default=""),
+    authorization: str | None = Header(default=None),
+) -> Any:
+    _auth(authorization)
+    target = _valid_target(target)
+    host = (host or "").strip()
+    if not host or len(host) > 253 or "/" in host or "\\" in host or ".." in host:
+        raise HTTPException(status_code=422, detail="illegal host")
+    ip = (ip or "").strip()
+    if ip and (len(ip) > 64 or "/" in ip or "\\" in ip or ".." in ip):
+        raise HTTPException(status_code=422, detail="illegal ip")
+    return JSONResponse(ports_for_host(_params_obj(), target, host, ip or None))
 
 
 @app.get("/api/runs/{target}")
@@ -787,12 +857,11 @@ def run_log(target: str, offset: int = Query(default=0, ge=0), authorization: st
     if path is None:
         return JSONResponse({"exists": False, "offset": offset, "lines": []})
     try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        chunk, total = read_line_window(path, offset, 400, nonempty=False)
     except OSError:
         return JSONResponse({"exists": False, "offset": offset, "lines": []})
-    chunk = lines[offset:offset + 400]
     return JSONResponse({"exists": True, "offset": offset, "next_offset": offset + len(chunk),
-                         "total": len(lines), "lines": chunk})
+                         "total": total, "lines": chunk})
 
 
 @app.get("/api/run/log/{target}/export")
@@ -820,12 +889,11 @@ def agent_journal(target: str, offset: int = Query(default=0, ge=0), authorizati
     if path is None:
         return JSONResponse({"exists": False, "offset": offset, "rows": []})
     try:
-        lines = [l for l in path.read_text(encoding="utf-8", errors="replace").splitlines() if l.strip()]
+        chunk, total = read_line_window(path, offset, 200, nonempty=True)
     except OSError:
         return JSONResponse({"exists": False, "offset": offset, "rows": []})
-    chunk = lines[offset:offset + 200]
     return JSONResponse({"exists": True, "offset": offset, "next_offset": offset + len(chunk),
-                         "total": len(lines), "rows": chunk})
+                         "total": total, "rows": chunk})
 
 
 @app.get("/api/run/agent-journal/{target}/export")
@@ -950,6 +1018,23 @@ async def run_resume(body: dict[str, Any], authorization: str | None = Header(de
     write_run_pid(ROOT / "recon" / target, proc.pid)
     append_audit(ROOT, "run_resume", {"target": target})
     return JSONResponse({"resumed": True, "pid": proc.pid, "proxy": reason})
+
+
+@app.post("/api/run/reset-breaker")
+async def run_reset_breaker(body: dict[str, Any], authorization: str | None = Header(default=None)) -> Any:
+    _auth(authorization)
+    target = _valid_target(str(body.get("target") or ""))
+    from pipeline.cli import cmd_reset_breaker
+    from pipeline.factory import ensure_layout
+    from pipeline.state import paused_modules
+
+    params = _params_obj()
+    code = cmd_reset_breaker(params, target)
+    if code != 0:
+        raise HTTPException(status_code=404, detail=f"reset-breaker: no state for {target}")
+    paused = paused_modules(params, ensure_layout(params, target), target)
+    append_audit(ROOT, "reset_breaker", {"target": target})
+    return JSONResponse({"ok": True, "target": target, "paused": list(paused.keys())})
 
 
 @app.post("/api/run/restart")

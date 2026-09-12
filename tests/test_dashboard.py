@@ -24,7 +24,9 @@ from dashboard.service import (
     list_keys,
     load_settings,
     mask_secret,
+    results_rows_for,
     parse_filters_query,
+    ports_for_host,
     proxy_gate,
     save_settings,
     scheduler_save,
@@ -306,9 +308,11 @@ class TestGlobalFilters(unittest.TestCase):
     """section 9.2-b GLOBAL RESULT FILTERS: combinable + URL-shareable."""
 
     ROWS = [
-        {"host": "dev.example.com", "ips": ["1.1.1.1"], "alive": True, "sources": ["subfinder", "crtsh"], "tags": ["dev"]},
-        {"host": "api.example.com", "ips": ["2.2.2.2"], "alive": False, "sources": ["subfinder"], "tags": []},
-        {"host": "out.example.com", "ips": ["3.3.3.3"], "alive": True, "sources": ["crtsh"], "tags": ["stage"]},
+        {"host": "dev.example.com", "ips": ["1.1.1.1"], "alive": True, "sources": ["subfinder", "crtsh"], "tags": ["dev"], "open_ports_total": 2, "tech": ["nginx"], "length": 1234, "first_seen": "20260101T000000Z"},
+        # genuinely dead: never resolved (no IP). An IP-bearing host is a live
+        # asset regardless of its stored alive flag, so a dead row must have no IP.
+        {"host": "api.example.com", "ips": [], "alive": False, "sources": ["subfinder"], "tags": []},
+        {"host": "out.example.com", "ips": ["3.3.3.3"], "alive": True, "sources": ["crtsh"], "tags": ["stage"], "open_ports_total": 0},
     ]
 
     def test_free_text(self):
@@ -329,10 +333,24 @@ class TestGlobalFilters(unittest.TestCase):
 
     def test_url_state_roundtrip(self):
         """Companion B6 acceptance: URL filter state restores correctly."""
-        original = {"q": "dev", "source": "subfinder", "alive": "true", "tag": "a b"}
+        original = {"q": "dev", "source": "subfinder", "alive": "true", "tag": "a b", "ports": "open", "host": "dev"}
         query = serialize_filters(original)
         restored = parse_filters_query(query)
         self.assertEqual(restored, original)
+
+    def test_open_ports_column(self):
+        self.assertEqual([r["host"] for r in apply_filters(self.ROWS, {"ports": "open"})], ["dev.example.com"])
+        none = {r["host"] for r in apply_filters(self.ROWS, {"ports": "none"})}
+        self.assertIn("api.example.com", none)
+        self.assertIn("out.example.com", none)
+        self.assertNotIn("dev.example.com", none)
+
+    def test_host_ip_tech_length_columns(self):
+        self.assertEqual([r["host"] for r in apply_filters(self.ROWS, {"host": "dev"})], ["dev.example.com"])
+        self.assertEqual([r["host"] for r in apply_filters(self.ROWS, {"ip": "1.1.1.1"})], ["dev.example.com"])
+        self.assertEqual([r["host"] for r in apply_filters(self.ROWS, {"tech": "nginx"})], ["dev.example.com"])
+        self.assertEqual([r["host"] for r in apply_filters(self.ROWS, {"length": "1234"})], ["dev.example.com"])
+        self.assertEqual([r["host"] for r in apply_filters(self.ROWS, {"first_seen": "20260101"})], ["dev.example.com"])
 
 
 class TestCoverageAnalytics(unittest.TestCase):
@@ -713,7 +731,7 @@ class TestOpenPortsJoin(unittest.TestCase):
                     },
                 ],
                 "services": [
-                    {"ip": "1.2.3.4", "port": 443, "proto": "tcp", "product": "nginx", "version": "1.25"},
+                    {"ip": "1.2.3.4", "port": 443, "proto": "tcp", "name": "https", "product": "nginx", "version": "1.25"},
                 ],
             })
             + "\n",
@@ -724,13 +742,112 @@ class TestOpenPortsJoin(unittest.TestCase):
             {"host": "api.example.com", "ips": ["1.2.3.4"], "alive": True},
             {"host": "dev.example.com", "ip": "9.9.9.9", "alive": True},
             {"host": "lonely.example.com", "ip": "8.8.8.8", "alive": False},
-        ])
+        ], include_ports=True)
         by = {r["host"]: r for r in out}
-        self.assertEqual(by["www.example.com"]["open_ports_text"], "80/tcp, 443/tcp nginx 1.25")
-        self.assertEqual(by["api.example.com"]["open_ports_text"], "80/tcp, 443/tcp nginx 1.25")
-        self.assertEqual(by["dev.example.com"]["open_ports_text"], "22/tcp")
+        self.assertEqual(by["www.example.com"]["open_ports_text"], "2")
+        self.assertEqual(by["api.example.com"]["open_ports_text"], "2")
+        self.assertEqual(by["dev.example.com"]["open_ports_text"], "1")
         self.assertEqual(by["lonely.example.com"]["open_ports_text"], "")
+        self.assertEqual(by["www.example.com"]["open_ports_by_ip"], [{"ip": "1.2.3.4", "count": 2}])
+        self.assertEqual(by["lonely.example.com"]["open_ports_by_ip"], [{"ip": "8.8.8.8", "count": 0}])
         self.assertEqual([p["port"] for p in by["www.example.com"]["open_ports"]], [80, 443])
+        https = next(p for p in by["www.example.com"]["open_ports"] if p["port"] == 443)
+        self.assertEqual(https["product"], "nginx")
+        self.assertEqual(https["version"], "1.25")
+        self.assertEqual(https["name"], "https")
+        self.assertEqual(by["www.example.com"]["open_ports_total"], 2)
+        detail = ports_for_host(params, target, "www.example.com", "1.2.3.4")
+        self.assertEqual(detail["count"], 2)
+        self.assertEqual([p["port"] for p in detail["ports"]], [80, 443])
+        https = next(p for p in detail["ports"] if p["port"] == 443)
+        self.assertEqual(https["product"], "nginx")
+        self.assertEqual(https["version"], "1.25")
+        http = next(p for p in detail["ports"] if p["port"] == 80)
+        self.assertEqual(http["product"], "")
+        self.assertEqual(http["version"], "")
+
+    def test_all_valid_ports_are_kept(self):
+        params = _isolated_params()
+        target = "example.com"
+        td = params.root / "recon" / target
+        (td / "30_ports" / "naabu-full").mkdir(parents=True)
+        ports = [{"port": n, "proto": "tcp"} for n in range(1, 201)]
+        ports.append({"port": 0, "proto": "tcp"})
+        ports.append({"port": 70000, "proto": "tcp"})
+        (td / "30_ports" / "naabu-full" / "data.json").write_text(
+            json.dumps({
+                "scans": [{
+                    "ip": "13.0.0.1",
+                    "hosts": ["cdn.example.com"],
+                    "ports": ports,
+                }],
+                "services": [],
+            })
+            + "\n",
+            encoding="utf-8",
+        )
+        out = attach_open_ports(
+            params, target, [{"host": "cdn.example.com", "ips": ["13.0.0.1"]}],
+            include_ports=True,
+        )
+        row = out[0]
+        self.assertEqual(row["open_ports_total"], 200)
+        self.assertEqual(len(row["open_ports"]), 200)
+        self.assertEqual(row["open_ports_by_ip"], [{"ip": "13.0.0.1", "count": 200}])
+        nums = {p["port"] for p in row["open_ports"]}
+        self.assertNotIn(0, nums)
+        self.assertNotIn(70000, nums)
+        detail = ports_for_host(params, target, "cdn.example.com", "13.0.0.1")
+        self.assertEqual(detail["count"], 200)
+
+
+class TestResultsHotPath(unittest.TestCase):
+    def test_latest_results_read_assets_json_not_warehouse(self):
+        params = _isolated_params()
+        target = "example.com"
+        target_dir = params.root / "recon" / target
+        assets = target_dir / "00_assets"
+        assets.mkdir(parents=True)
+        (assets / "assets.json").write_text(
+            json.dumps({"schema_version": 1, "assets": [{"host": "www.example.com", "alive": True}]})
+            + "\n",
+            encoding="utf-8",
+        )
+        with mock.patch("pipeline.warehouse.ingest_live", side_effect=AssertionError("poll must not ingest")):
+            rows = results_rows_for(params, target, "")
+        self.assertEqual(rows[0]["host"], "www.example.com")
+
+
+class TestResultsDropCatchall(unittest.TestCase):
+    def test_wildcard_only_host_is_omitted_from_results(self):
+        params = _isolated_params()
+        target = "example.com"
+        target_dir = params.root / "recon" / target
+        assets = target_dir / "00_assets"
+        assets.mkdir(parents=True)
+        (assets / "assets.json").write_text(
+            json.dumps({
+                "schema_version": 1,
+                "assets": [
+                    {"host": "example.com", "ips": ["9.9.9.9"], "alive": True, "sources": ["dnsx"]},
+                    {"host": "app2.example.com", "ips": ["9.9.9.9"], "alive": True, "sources": ["dnsx"]},
+                    {"host": "api.example.com", "ips": ["1.2.3.4"], "alive": True, "sources": ["dnsx"]},
+                ],
+            })
+            + "\n",
+            encoding="utf-8",
+        )
+        dnsx = target_dir / "20_dns" / "dnsx"
+        dnsx.mkdir(parents=True)
+        (dnsx / "data.json").write_text(
+            json.dumps({"wildcard_ips": ["9.9.9.9"], "resolved": []}) + "\n",
+            encoding="utf-8",
+        )
+        rows = results_rows_for(params, target, "")
+        hosts = {r["host"] for r in rows}
+        self.assertIn("example.com", hosts)
+        self.assertIn("api.example.com", hosts)
+        self.assertNotIn("app2.example.com", hosts)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,5 @@
 # Publishes the ready-made dashboard image so installs can start without
-# building (compose service pins the local name moirax-asm-dashboard;
-# users tag the pulled image with that name -- README section 4.5 option A).
+# building (compose service pins the local name moirax-asm-dashboard).
 name: docker-publish
 
 on:
@@ -17,6 +16,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: pip-audit pinned dashboard dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pip-audit
+          pip-audit -r requirements.txt
 
       - uses: docker/setup-buildx-action@v3
 

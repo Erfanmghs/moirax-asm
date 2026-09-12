@@ -45,13 +45,13 @@ jobs:
           git clone --depth 1 https://github.com/danielmiessler/SecLists "$HOME/seclists"
           find "$HOME/seclists" -name '*.txt' | wc -l
       - name: "Install deps (dashboard TestClient + agent proof)"
-        run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5"
+        run: python3 -m pip install --quiet -r requirements.txt
 
       - name: Preflight gates (G-N1..G-N8)
         run: PYTHONPATH=. python3 ci/b8_preflight.py
 
       - name: "Install suite deps (REM22/REM23 parity: fastapi + uvicorn + httpx + reportlab)"
-        run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5"
+        run: python3 -m pip install --quiet -r requirements.txt
       - name: Unit proof (full regression suite incl. B8 agent)
         run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v
 

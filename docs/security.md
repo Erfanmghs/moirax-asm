@@ -74,3 +74,17 @@ schema-validated, closed allow-list, spawn-gated). The pentest battery
 (ci/pentest_dast.py, P-1..P-18) encodes this stance; extend it with every
 new surface. Run it: `python ci/pentest_dast.py` (boots real servers on
 loopback from a disposable root).
+
+## 6. Dashboard container and dependencies
+
+The console holds operator sessions, `.env` keys, and recon artifacts. Treat
+the host as a single-operator workstation.
+
+- Compose binds `127.0.0.1` by default. Do not publish 8080 on `0.0.0.0`.
+- `cap_drop: ALL` plus `no-new-privileges`. SETUID/SETGID/CHOWN exist only
+  so the entrypoint can drop from root to `RECON_HOST_UID`/`GID`.
+- Nested `docker.sock` is required to spawn recon tool containers. Anyone
+  who can call the dashboard API as an operator can start those containers.
+- Python runtime pins live in `requirements.txt`. C1 and image publish run
+  `pip-audit -r requirements.txt` and fail on known CVEs. Dependabot opens
+  weekly PRs for pip, the dashboard Dockerfile, and GitHub Actions.

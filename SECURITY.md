@@ -17,5 +17,9 @@ a third-party estate.
   the local e2e zone). Add real estates from the dashboard; do not push them.
 - The C1 release gate (`ci/c1_release_gate.py`) blocks secret-shaped
   material, personal-data shapes, and non-fixture `scope.yaml` includes.
+- Dashboard Python deps are pinned in `requirements.txt` and scanned with
+  `pip-audit` on the release gate. The compose service drops capabilities
+  and binds loopback; `docker.sock` is still required to spawn tool
+  containers on this host.
 
 Rotation and bind/auth details: [docs/security.md](docs/security.md).

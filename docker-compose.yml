@@ -8,8 +8,9 @@ services:
     image: moirax-asm-dashboard
     command: ["uvicorn", "dashboard.app:app", "--host", "0.0.0.0", "--port", "8080"]
     working_dir: /app
-    # Starts as root so entrypoint can attach the docker.sock GID, then drops
-    # to RECON_HOST_UID/GID. Clone-and-run does not need a manual DOCKER_GID.
+    # Root only long enough for entrypoint to attach docker.sock GID, then
+    # setpriv drops to RECON_HOST_UID/GID. docker.sock is required to spawn
+    # recon tool containers; keep the dashboard bound to loopback.
     ports:
       - "${DASHBOARD_BIND_HOST:-127.0.0.1}:${DASHBOARD_BIND_PORT:-8080}:8080"
     env_file:
@@ -25,8 +26,23 @@ services:
       HOME: /app
       RECON_HOST_UID: ${RECON_HOST_UID:-1000}
       RECON_HOST_GID: ${RECON_HOST_GID:-1000}
-      # Nested `docker run -v` from inside this container must bind HOST paths.
       RECON_HOST_ROOT: ${RECON_HOST_ROOT:-${PWD}}
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+    tmpfs:
+      - /tmp:mode=1777,size=67108864,nosuid,nodev
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     profiles:
       - dashboard

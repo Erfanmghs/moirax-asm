@@ -58,10 +58,19 @@ Open http://127.0.0.1:8080 and set an operator password (12+ characters).
 The hash is written under `dashboard/auth/`. Do not put the password in
 `.env`.
 
-The UI binds to loopback. If 8080 is busy, set `DASHBOARD_BIND_PORT=9090`
-in `.env` and recreate the container. On Linux, set `RECON_HOST_UID` and
-`RECON_HOST_GID` to `id -u` / `id -g` so nested Docker and file ownership
-line up.
+**Docker security is part of the default install**, not an extra profile.
+The UI binds to loopback. Compose drops all Linux capabilities except
+the three the entrypoint needs to drop from root (`SETUID` / `SETGID` /
+`CHOWN`), sets `no-new-privileges`, uses `init` and a `tmpfs` `/tmp`,
+and rotates container logs. Dashboard Python packages are pinned in
+`requirements.txt` and scanned with `pip-audit` before the image is
+published. Nested scans still need `docker.sock` on this host, so treat
+the machine as a single-operator workstation. Details:
+[docs/security.md](docs/security.md) section 6.
+
+If 8080 is busy, set `DASHBOARD_BIND_PORT=9090` in `.env` and recreate
+the container. On Linux, set `RECON_HOST_UID` and `RECON_HOST_GID` to
+`id -u` / `id -g` so nested Docker and file ownership line up.
 
 Optional wordlists: clone [SecLists](https://github.com/danielmiessler/SecLists)
 to `~/seclists`. Compose mounts it read-only. If that directory is missing,
@@ -224,7 +233,7 @@ logs/run.log             SCAN live log
 
 - [Operator guide](docs/HELP.md) -- every dashboard control
 - [API keys](docs/api-keys.md) -- optional providers
-- [Security](docs/security.md) -- bind, auth, leak response
+- [Security](docs/security.md) -- bind, auth, Docker hardening, leak response
 - [Handover](docs/HANDOVER.md) -- engineering map
 
 ---

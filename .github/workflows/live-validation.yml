@@ -57,7 +57,7 @@ jobs:
           test -f "$HOME/seclists/Discovery/DNS/subdomains-top1million-5000.txt" && echo "seclists-ok"
 
       - name: "Install suite deps (REM22/REM23 parity: fastapi + uvicorn + httpx + reportlab)"
-        run: python3 -m pip install --quiet "fastapi==0.115.6" "uvicorn==0.34.0" "httpx==0.28.1" "reportlab==4.2.5"
+        run: python3 -m pip install --quiet -r requirements.txt
 
       - name: Unit proof (full suite)
         run: PYTHONPATH=. python3 -m unittest discover -s tests -t . -v

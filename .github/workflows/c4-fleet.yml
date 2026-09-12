@@ -49,7 +49,7 @@ jobs:
           git clone --depth 1 https://github.com/danielmiessler/SecLists "$HOME/seclists"
           find "$HOME/seclists" -name '*.txt' | wc -l
       - name: "Install suite deps (REM22/REM23 parity)"
-        run: pip install --quiet fastapi uvicorn httpx reportlab
+        run: pip install --quiet -r requirements.txt
 
       - name: "Unit suite (shared regression + C4 atomic units)"
         run: |

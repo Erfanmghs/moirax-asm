@@ -148,8 +148,10 @@ def main() -> int:
     env_ok = "DASHBOARD_TOKEN" in str(svc.get("environment") or {})
     ports_ok = "8080" in str(svc.get("ports") or [])
     sock_ok = any("docker.sock" in v for v in (svc.get("volumes") or []))
-    check("G-Z9 compose-service", build_ok and env_ok and ports_ok and sock_ok,
-          f"build={build_ok} token_env={env_ok} bind={ports_ok} docker_sock={sock_ok}")
+    cap_ok = "ALL" in [str(c).upper() for c in (svc.get("cap_drop") or [])]
+    nnp_ok = "no-new-privileges" in " ".join(str(x) for x in (svc.get("security_opt") or []))
+    check("G-Z9 compose-service", build_ok and env_ok and ports_ok and sock_ok and cap_ok and nnp_ok,
+          f"build={build_ok} token_env={env_ok} bind={ports_ok} docker_sock={sock_ok} cap_drop={cap_ok} nnp={nnp_ok}")
 
     print(f"PREFLIGHT {'PASS' if not failures else 'FAIL'} ({len(failures)} failing)")
     return 1 if failures else 0

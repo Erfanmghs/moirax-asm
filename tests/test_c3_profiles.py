@@ -87,6 +87,34 @@ class ValidationLaw(unittest.TestCase):
         with self.assertRaises(ProfileError):
             validate_profile("example.com", {"scheduler": {"interval_minutes": 5}})
 
+    def test_portsweep_allowlist(self):
+        ok = validate_profile(
+            "example.com",
+            {
+                "portsweep": {
+                    "profile": "custom",
+                    "custom_ports": "22, 80,8000-8080",
+                    "nmap_sv": False,
+                }
+            },
+        )
+        self.assertEqual(ok["portsweep"]["profile"], "custom")
+        self.assertEqual(ok["portsweep"]["custom_ports"], "22,80,8000-8080")
+        self.assertFalse(ok["portsweep"]["nmap_sv"])
+        with self.assertRaises(ProfileError):
+            validate_profile("example.com", {"portsweep": {"rate_cap": 10}})
+        with self.assertRaises(ProfileError):
+            validate_profile("example.com", {"portsweep": {"profile": "custom"}})
+        with self.assertRaises(ProfileError):
+            validate_profile("example.com", {"portsweep": {"profile": "nuke"}})
+
+    def test_custom_ports_accept_nmap_dash_p(self):
+        ok = validate_profile(
+            "example.com",
+            {"portsweep": {"profile": "custom", "custom_ports": "-p T:22, 80,8000-8080"}},
+        )
+        self.assertEqual(ok["portsweep"]["custom_ports"], "22,80,8000-8080")
+
     def test_target_name_law(self):
         with self.assertRaises(ProfileError):
             validate_profile("../evil", {"budgets": {}})
@@ -197,6 +225,21 @@ class TransientApplyRestore(unittest.TestCase):
         restore_transient(again)
         restore_transient(applied)
         self.assertEqual((self.root / "wordlists.yaml").read_bytes(), self.wl_before)
+
+    def test_portsweep_transient_edits_tools(self):
+        set_profile(
+            self.params,
+            "sweep.test",
+            {"portsweep": {"profile": "light", "nmap_sv": False}},
+        )
+        snap = self.root / "ps-snap"
+        snap.mkdir()
+        applied = apply_transient(self.params, "sweep.test", snap)
+        tools_doc = load_yaml_file(str(self.root / "tools.yaml"))
+        self.assertEqual(str(tools_doc["settings"]["portsweep_profile"]), "light")
+        self.assertFalse(bool(tools_doc["settings"]["portsweep_nmap_sv"]))
+        restore_transient(applied)
+        self.assertEqual((self.root / "tools.yaml").read_bytes(), self.tools_before)
 
 
 if __name__ == "__main__":

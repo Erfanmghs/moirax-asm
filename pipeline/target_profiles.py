@@ -52,6 +52,7 @@ OVERRIDABLE = {
     "proxy": dict,                   # C5 slot
     "rate_caps": dict,               # C5 slot
     "scheduler": dict,               # per-target automatic checks (interval / enabled)
+    "portsweep": dict,               # port-scan mode / custom ports / nmap -sV
 }
 
 BUDGET_KEYS_ALLOW = {
@@ -81,6 +82,86 @@ SCHEDULER_KEYS_ALLOW = {
     "interval_minutes",
 }
 _SCHEDULER_MIN_INTERVAL = 10
+
+PORTSWEEP_KEYS_ALLOW = {
+    "profile",
+    "custom_ports",
+    "nmap_sv",
+}
+PORTSWEEP_PROFILES = {"full", "light", "custom"}
+_PORTSWEEP_RANGE_RE = re.compile(r"^\d+(-\d+)?$")
+
+
+def normalize_portsweep_ports(raw: str) -> str:
+    """Accept nmap -p style TCP lists: 22,80,443,8000-8080. Empty is allowed.
+
+    Leading ``-p`` / ``-p=`` and optional ``T:`` / ``U:`` / ``S:`` prefixes
+    are stripped so an operator can paste the same string they would give
+    nmap. Coverage is TCP (naabu); UDP prefixes still contribute the port
+    number as TCP.
+    """
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    if text in ("-", "-p-", "p-"):
+        raise ValueError("use PORT SCAN MODE full for all TCP ports (nmap -p-), not a custom list")
+    lowered = text.lower()
+    if lowered.startswith("-p"):
+        text = text[2:].lstrip("= ").strip()
+    elif lowered.startswith("p ") or lowered.startswith("p="):
+        text = text[1:].lstrip("= ").strip()
+    parts: list[str] = []
+    for token in text.split(","):
+        item = token.strip()
+        if not item:
+            continue
+        if ":" in item:
+            proto, rest = item.split(":", 1)
+            if proto.upper() not in ("T", "U", "S") or not rest:
+                raise ValueError("custom ports look like nmap -p: 22,80,443,8000-8080")
+            item = rest.strip()
+        if not _PORTSWEEP_RANGE_RE.match(item):
+            raise ValueError("custom ports look like nmap -p: 22,80,443,8000-8080")
+        if "-" in item:
+            lo_s, hi_s = item.split("-", 1)
+            lo, hi = int(lo_s), int(hi_s)
+            if lo < 1 or hi > 65535 or lo > hi:
+                raise ValueError("portsweep port ranges must stay inside 1-65535")
+            parts.append(f"{lo}-{hi}")
+        else:
+            port = int(item)
+            if port < 1 or port > 65535:
+                raise ValueError("portsweep ports must stay inside 1-65535")
+            parts.append(str(port))
+    return ",".join(parts)
+
+
+def normalize_portsweep(value: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    if "profile" in value:
+        profile = str(value.get("profile") or "").strip().lower()
+        if profile not in PORTSWEEP_PROFILES:
+            raise ValueError("portsweep.profile must be full, light, or custom")
+        out["profile"] = profile
+    if "custom_ports" in value:
+        if not isinstance(value.get("custom_ports"), str):
+            raise ValueError("portsweep.custom_ports must be a string")
+        out["custom_ports"] = normalize_portsweep_ports(str(value.get("custom_ports") or ""))
+    if "nmap_sv" in value:
+        if not isinstance(value.get("nmap_sv"), bool):
+            raise ValueError("portsweep.nmap_sv must be a boolean")
+        out["nmap_sv"] = bool(value.get("nmap_sv"))
+    if out.get("profile") == "custom" and not str(out.get("custom_ports") or "").strip():
+        raise ValueError("custom port scan needs a non-empty port list (example: 22,80,443,8000-8080)")
+    return out
+
+
+def _yaml_scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        return json.dumps(value)
+    return str(value)
 
 TARGET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{2,253}$")
 
@@ -173,6 +254,14 @@ def validate_profile(target: str, profile: dict[str, Any]) -> dict[str, Any]:
                         raise ProfileError(
                             f"scheduler.interval_minutes must be an integer >= {_SCHEDULER_MIN_INTERVAL}"
                         )
+        if section == "portsweep":
+            bad = set(value) - PORTSWEEP_KEYS_ALLOW
+            if bad:
+                raise ProfileError(f"portsweep keys not overridable: {sorted(bad)}")
+            try:
+                value = normalize_portsweep(value)
+            except ValueError as exc:
+                raise ProfileError(str(exc)) from exc
         if section == "wordlist_selection":
             # key law enforced at APPLY time against the live registry; here
             # only the shape law (task -> list of key strings) is checked
@@ -210,7 +299,7 @@ def set_profile(params: Params, target: str, profile: dict[str, Any]) -> dict[st
                     out.append(f"        {k}:")
                     out.extend(f"          - {item}" for item in v)
                 else:
-                    out.append(f"        {k}: {v}")
+                    out.append(f"        {k}: {_yaml_scalar(v)}")
     atomic_write_text(registry_path(params), "\n".join(out) + "\n")
     return {"target": target, "sections": sorted(clean)}
 
@@ -262,8 +351,19 @@ def build_edit_plan(params: Params, target: str) -> dict[str, Any]:
     # mechanics as budgets; json.dumps renders a safely quoted YAML scalar.
     pool = str((settings.get("proxy") or {}).get("proxy_pool") or "").strip()
     if pool:
-        plan["tools_edits"].append({"key": "proxy_pool", "value": json.dumps(pool)})
+        plan["tools_edits"].append({"key": "proxy_pool", "value": pool})
     plan["rate_caps"] = settings.get("rate_caps") or {}
+    portsweep = settings.get("portsweep") or {}
+    if portsweep.get("profile"):
+        plan["tools_edits"].append({"key": "portsweep_profile", "value": str(portsweep["profile"])})
+    if "custom_ports" in portsweep:
+        plan["tools_edits"].append(
+            {"key": "portsweep_custom_ports", "value": str(portsweep.get("custom_ports") or "")}
+        )
+    if "nmap_sv" in portsweep:
+        plan["tools_edits"].append(
+            {"key": "portsweep_nmap_sv", "value": bool(portsweep.get("nmap_sv"))}
+        )
     return plan
 
 
@@ -305,7 +405,7 @@ def apply_transient(params: Params, target: str, before_copy_dir: Path) -> dict[
             if isinstance(value, list):
                 rendered = f"  {key}:\n" + "\n".join(f"    - {item}" for item in value)
             else:
-                rendered = f"  {key}: {value}"
+                rendered = f"  {key}: {_yaml_scalar(value)}"
             text, replaced = _replace_settings_block(text, key, rendered)
             if not replaced:
                 raise ProfileError(f"tools.yaml has no top-level key {key!r} to override")

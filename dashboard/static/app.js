@@ -629,7 +629,7 @@ const SCAN_MODULE_HELP = {
   "dns-resolve": "DNS brute + IP resolve (dnsx). Depth 1 = names under the apex. Depth 2+ also brutes under those names. New unique IPs are port-scanned later.",
   "ffuf": "Virtual hosts. Sends Host-header guesses to IPs you already found. Nested Host headers follow RECON DEPTH.",
   "ffuf-3": "Dead-name virtual hosts. Tries names that did not resolve in DNS, against known IPs.",
-  "port-check": "Quick common-port look that starts as soon as DNS IPs exist (runs beside vhost). Full 1-65535 sweep still runs after MERGE.",
+  "port-check": "Quick common-port look that starts as soon as DNS IPs exist (runs beside vhost). The main port scan after MERGE follows PORT SCAN MODE: full (nmap -p-), top ports, or custom nmap -p list.",
   "passive-recon": "Public/OSINT lookup (certificate logs, search, archives). Does not send scan packets to the site.",
 };
 const SCAN_WL_HELP = {
@@ -650,6 +650,7 @@ function profileSettings(profile) {
     modules: pick("modules"),
     wordlist_selection: pick("wordlist_selection"),
     proxy: pick("proxy"),
+    portsweep: pick("portsweep"),
   };
 }
 
@@ -704,6 +705,14 @@ function buildTargetProfile(fields) {
     if (v) wl[task] = uniqueWlKeysByPath(lists, uniqueNames(v.split(",")), task, uniqueNames(v.split(",")));
   }
   if (Object.keys(wl).length) profile.wordlist_selection = wl;
+  const ps = {};
+  const psp = (fields.psProfile || "").trim().toLowerCase();
+  if (psp) ps.profile = psp;
+  const pspo = (fields.psPorts || "").trim();
+  if (pspo !== "") ps.custom_ports = pspo;
+  const psn = fields.psNmap || "";
+  if (psn !== "") ps.nmap_sv = psn === "true";
+  if (Object.keys(ps).length) profile.portsweep = ps;
   return profile;
 }
 
@@ -725,6 +734,9 @@ function targetProfileFromUI() {
     dnsxParents: elVal("#t-b-dnsx-parents"),
     dead: elVal("#t-b-dead"),
     ffuf4: elVal("#t-b-ffuf4"),
+    psProfile: elVal("#t-ps-profile"),
+    psPorts: elVal("#t-ps-ports"),
+    psNmap: elVal("#t-ps-nmap"),
     activeMods: elVal("#t-m-active"),
     passiveMods: elVal("#t-m-passive"),
     "wl-FFUF-0": elVal("#t-wl-FFUF-0"),
@@ -771,6 +783,9 @@ function profileFromSetup(root) {
     dnsxParents: val("b-dnsx-parents"),
     dead: val("b-dead"),
     ffuf4: val("b-ffuf4"),
+    psProfile: val("ps-profile"),
+    psPorts: val("ps-ports"),
+    psNmap: val("ps-nmap"),
     activeMods,
     passiveMods,
     "wl-FFUF-0": wlFields["wl-FFUF-0"],
@@ -945,6 +960,10 @@ function applyProfileToSetup(root, profile) {
   setv("b-depth", b.passive_recursion_depth ?? "");
   setv("b-dead", b.ffuf3_max_dead_probes ?? "");
   setv("b-ffuf4", b.ffuf4_max_jobs ?? "");
+  const ps = s.portsweep || {};
+  setv("ps-profile", ps.profile || "");
+  setv("ps-ports", ps.custom_ports || "");
+  setv("ps-nmap", ps.nmap_sv === true ? "true" : ps.nmap_sv === false ? "false" : "");
   const wl = s.wordlist_selection || {};
   const hasWl = Object.keys(wl).some((task) => (wl[task] || []).length);
   const wlInherit = pf(root, "wl-inherit");
@@ -992,7 +1011,10 @@ function scanSetupHtml(target) {
       <label>PARALLEL DNS PARENTS (1-8)<input data-pf="b-dnsx-parents" type="number" min="1" max="8" class="mono" placeholder="inherit global"></label>
       <label>PASSIVE RECURSION DEPTH<input data-pf="b-depth" type="number" min="0" max="5" class="mono" placeholder="inherit"></label>
       <label>FFUF-3 MAX DEAD PROBES<input data-pf="b-dead" type="number" min="1" class="mono" placeholder="inherit"></label>
-      <label>FFUF-4 MAX PORT JOBS<input data-pf="b-ffuf4" type="number" min="1" class="mono" placeholder="inherit"></label>
+      <label><span class="lbl">FFUF-4 MAX PORT JOBS <span class="help" tabindex="0" data-help="How many HTTP-like listeners FFUF-4 may probe after the port scan. 0 = every listener (run completes). A positive cap stops early and marks the run partial.">?</span></span><input data-pf="b-ffuf4" type="number" min="0" class="mono" placeholder="inherit"></label>
+      <label><span class="lbl">PORT SCAN MODE <span class="help" tabindex="0" data-help="Same idea as nmap -p. full = all TCP ports (nmap -p-). top ports = common ports (like nmap --top-ports 100). custom = your list. Empty = global SETTINGS.">?</span></span><select data-pf="ps-profile"><option value="">inherit global</option><option value="full">full (nmap -p- / TCP 1-65535)</option><option value="light">top ports (like nmap --top-ports 100)</option><option value="custom">custom (nmap -p list)</option></select></label>
+      <label class="span-2"><span class="lbl">CUSTOM PORTS <span class="help" tabindex="0" data-help="Used when PORT SCAN MODE is custom. Paste an nmap -p list: 22,80,443,8000-8080. Optional -p prefix is accepted.">?</span></span><input data-pf="ps-ports" class="mono" placeholder="like nmap -p 22,80,443,8000-8080"></label>
+      <label><span class="lbl">SERVICE VERSION (nmap -sV) <span class="help" tabindex="0" data-help="When on, open ports are fingerprinted with nmap -Pn -sV (skip ping so firewalled hosts still get product/version). Default on. Empty = global SETTINGS.">?</span></span><select data-pf="ps-nmap"><option value="">inherit global</option><option value="true">on</option><option value="false">off</option></select></label>
     </div>
     <div class="setup-modules">
       <label class="check setup-inherit"><input type="checkbox" data-pf="mod-inherit" checked> inherit default tools (TOOLS tab)</label>
@@ -1115,6 +1137,10 @@ function targetProfileToUI(profile) {
   setVal("#t-b-depth", b.passive_recursion_depth ?? "");
   setVal("#t-b-dead", b.ffuf3_max_dead_probes ?? "");
   setVal("#t-b-ffuf4", b.ffuf4_max_jobs ?? "");
+  const ps = s.portsweep || {};
+  setVal("#t-ps-profile", ps.profile || "");
+  setVal("#t-ps-ports", ps.custom_ports || "");
+  setVal("#t-ps-nmap", ps.nmap_sv === true ? "true" : ps.nmap_sv === false ? "false" : "");
   const m = s.modules || {};
   setVal("#t-m-active", (m.active_branch_modules || []).join(", "));
   setVal("#t-m-passive", (m.passive_branch_modules || []).join(", "));
@@ -2629,6 +2655,10 @@ async function loadSettings() {
   setVal("#s-ffuf-depth", s.ffuf_depth || 1);
   setVal("#s-dnsx-parents", s.dnsx_parallel_parents || 4);
   setVal("#s-passive-depth", s.passive_recursion_depth ?? 2);
+  setVal("#s-ps-profile", s.portsweep_profile || "full");
+  setVal("#s-ps-ports", s.portsweep_custom_ports || "");
+  setVal("#s-ps-nmap", String(s.portsweep_nmap_sv !== false));
+  setVal("#s-ffuf4-jobs", s.ffuf4_max_jobs == null ? 0 : s.ffuf4_max_jobs);
   try {
     const sched = await api("GET", "/api/scheduler");
     setVal("#sched-interval", sched.interval_minutes);
@@ -2687,6 +2717,12 @@ async function saveSettings() {
   if (!isNaN(pasD)) patch.passive_recursion_depth = pasD;
   const dnsxP = parseInt(elVal("#s-dnsx-parents"), 10);
   if (!isNaN(dnsxP)) patch.dnsx_parallel_parents = dnsxP;
+  const psProfile = (elVal("#s-ps-profile") || "full").trim().toLowerCase();
+  patch.portsweep_profile = psProfile;
+  patch.portsweep_custom_ports = elVal("#s-ps-ports").trim();
+  patch.portsweep_nmap_sv = elVal("#s-ps-nmap") !== "false";
+  const ffuf4Jobs = parseInt(elVal("#s-ffuf4-jobs"), 10);
+  if (!isNaN(ffuf4Jobs)) patch.ffuf4_max_jobs = ffuf4Jobs;
   try {
     await api("PUT", "/api/settings", patch);
     try {

@@ -245,7 +245,7 @@ class TestProfileProxyLaws(unittest.TestCase):
         plan = build_edit_plan(params, "bugdasht.ir")
         proxy_edits = [e for e in plan["tools_edits"] if e["key"] == "proxy_pool"]
         self.assertEqual(len(proxy_edits), 1)
-        self.assertEqual(proxy_edits[0]["value"], '"http://u:p@a:1,socks5://b:2"')
+        self.assertEqual(proxy_edits[0]["value"], "http://u:p@a:1,socks5://b:2")
 
 
 class TestSettingsProxyPool(unittest.TestCase):

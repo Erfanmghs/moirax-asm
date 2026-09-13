@@ -46,7 +46,12 @@ def run_ffuf4(
         return _write(params, target_dir, [], [], 0, skipped, partial)
 
     jobs = http_vhost_jobs(params, target_dir, target)
-    cap = int(params.require("ffuf4_max_jobs"))
+    try:
+        cap = int(params.require("ffuf4_max_jobs"))
+    except (TypeError, ValueError):
+        cap = 0
+    if cap < 0:
+        cap = 0
     if not jobs:
         skipped = "no_http_ports"
         _note(params, target_dir, "ffuf-4 skipped: no HTTP-like open ports after PORT-SWEEP")

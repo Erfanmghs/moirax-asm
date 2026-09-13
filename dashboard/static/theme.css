@@ -733,6 +733,7 @@ button.danger:hover { border-color: var(--alert); }
 }
 .form-grid label input, .form-grid label select, .form-grid label .num-wrap { width: 100%; min-width: 0; }
 .form-grid .span-2 { grid-column: 1 / -1; }
+.grid .span-2 { grid-column: 1 / -1; }
 .targets-actions {
   display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
   position: sticky; bottom: 0; padding: 10px 0 2px;

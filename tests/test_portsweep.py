@@ -237,6 +237,17 @@ class PortSweepTest(unittest.TestCase):
         self.assertEqual(payload["skipped"], "profile_unusable:custom")
         self.assertIn("portsweep:profile-unusable:custom", partial)
 
+    def test_nmap_sv_argv_skips_host_discovery(self):
+        params = _params()
+        gate = _gate(params)
+        adapter, _clock = _adapter(params, gate, {})
+        values = dict(params.settings)
+        values.update({"target_domain": "example.com", "naabu_host": "1.2.3.4", "nmap_ports_arg": "80,443"})
+        argv = adapter.assemble("nmap-sv", values, "nmap-sv")
+        self.assertIn("-Pn", argv)
+        self.assertIn("-sV", argv)
+        self.assertLess(argv.index("-Pn"), argv.index("-sV"))
+
     def test_filtered_suspect_after_reprobe(self):
         # FILTERING INTELLIGENCE: alive host, full profile, zero open ports ->
         # ONE slower re-probe; still empty -> filtered_suspect=true.

@@ -278,6 +278,23 @@ class TestFfuf4Run(unittest.TestCase):
         self.assertIn("ffuf4_job_cap", partial)
         self.assertIn("ffuf-4 job cap", (self.root / "logs/run.log").read_text(encoding="utf-8"))
 
+    def test_zero_job_cap_probes_every_listener(self) -> None:
+        _write_sweep(
+            self.root,
+            [
+                {
+                    "ip": "1.2.3.4",
+                    "hosts": ["www.example.com"],
+                    "ports": [{"port": 80}, {"port": 8080}, {"port": 3000}],
+                }
+            ],
+        )
+        adapter = _ProbeSpyAdapter()
+        payload, partial = self._run(adapter, ffuf4_max_jobs=0)
+        self.assertEqual(len(adapter.calls), 3)
+        self.assertNotIn("ffuf4_job_cap", partial)
+        self.assertEqual(payload.get("skipped"), None)
+
     def test_nested_headers_on_same_listener(self) -> None:
         _write_sweep(
             self.root,

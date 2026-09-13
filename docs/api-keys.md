@@ -63,9 +63,12 @@ targets skip per spec) **and** the provider key is present.
 
 ## Port plane -- B4 PORT-SWEEP
 
-**Default is 100% TCP coverage (ports 1-65535) on every resolved IP.**
-The light top-ports check is optional and off by default. naabu SYN full
-range is always-on; nmap -sV stays opt-in.
+**Default is 100% TCP coverage (ports 1-65535) on every resolved IP**,
+same idea as `nmap -p-`. SETTINGS / SETUP can switch to top ports
+(like `nmap --top-ports 100`) or a custom `nmap -p` list
+(`22,80,443,8000-8080`). Open ports are fingerprinted with `nmap -Pn -sV`
+(default on; `-Pn` skips ping so firewalled hosts still get product/version).
+The early TOOLS `port-check` row is an optional fast peek only.
 
 ## Notifications -- B5 (optional)
 

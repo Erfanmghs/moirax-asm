@@ -28,9 +28,10 @@ here, exactly as frozen in the master spec:
   sweep -> filtered_suspect + ONE slower re-probe (rate / divisor); > 1000
   open ports -> anomalous_open_suspect (tarpit/honeypot class, never alert-
   spammed).
-- SECOND STAGE: optional nmap -sV over PORT-SWEEP's open ports ONLY (toggle
-  portsweep_nmap_sv, default OFF) -- the designated VA hook (toggle only; the
-  VA module itself is on the DO-NOT-BUILD list).
+- SECOND STAGE: nmap -Pn -sV over PORT-SWEEP's open ports ONLY (toggle
+  portsweep_nmap_sv, default ON). -Pn skips ICMP host discovery so
+  firewalled IPs are still fingerprinted. Toggle only; the VA module
+  itself is on the DO-NOT-BUILD list.
 
 Per-IP atomicity: a crashed IP scan is marked unreachable, never failed, and
 never corrupts the other scans (section 4.3).

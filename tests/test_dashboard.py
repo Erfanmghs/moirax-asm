@@ -174,6 +174,21 @@ class TestSettingsPanelE(unittest.TestCase):
         self.assertEqual(validate_settings({"retention": {"keep_runs": 5, "log_max_mb": 10, "journal_max_mb": 5, "log_keep_gz": 3, "max_total_mb": 1024}}), [])
         self.assertEqual(validate_settings({"recon_depth": 2}), [])
         self.assertTrue(validate_settings({"recon_depth": 0}))
+        self.assertEqual(
+            validate_settings(
+                {
+                    "portsweep_profile": "custom",
+                    "portsweep_custom_ports": "22,80,443,8000-8080",
+                    "portsweep_nmap_sv": True,
+                    "ffuf4_max_jobs": 0,
+                }
+            ),
+            [],
+        )
+        self.assertTrue(validate_settings({"portsweep_profile": "custom"}))
+        self.assertTrue(validate_settings({"portsweep_profile": "nuke"}))
+        self.assertTrue(validate_settings({"portsweep_nmap_sv": "yes"}))
+        self.assertTrue(validate_settings({"ffuf4_max_jobs": -1}))
 
     def test_scheduler_floor_enforced_via_panel(self):
         with self.assertRaises(DashboardError):

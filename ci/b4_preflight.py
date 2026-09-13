@@ -1,9 +1,8 @@
 """B4 PORT-SWEEP preflight gates -- run BEFORE the vehicle `recon.sh run`.
 
   G-W1  committed portsweep defaults (scope all_resolved, duration
-        24h min 1h, profile full, full cap 1000 pps, ramp 100/100/30s, retries
-        2, timeout 1000ms, reprobe divisor 4, anomalous threshold 1000, nmap
-        toggle OFF with max-rate 300, custom ports "" + cap 1000, concurrency
+        4h min 1h, profile full, full cap 2000 pps, nmap -sV ON with
+        max-rate 300, custom ports "" + cap 1000, concurrency
         50, template rate 100, canary connect 3s, sentinel limit 3)
   G-W2  wiring: RUNNERS has port-sweep; engine carries the post-MERGE hook;
         port-sweep NOT in active_branch_modules (it must never run inside the
@@ -63,7 +62,7 @@ def main() -> int:
         "portsweep_timeout_ms": 1000,
         "portsweep_filtered_reprobe_divisor": 4,
         "portsweep_anomalous_open_threshold": 1000,
-        "portsweep_nmap_sv": False,
+        "portsweep_nmap_sv": True,
         "portsweep_nmap_max_rate": 300,
         "portsweep_module": "port-sweep",
         "portsweep_custom_ports": "",

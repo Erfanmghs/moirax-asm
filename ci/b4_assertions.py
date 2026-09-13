@@ -161,11 +161,11 @@ def main() -> int:
         check("H5", "MANDATORY", zero_line,
               f"hosts=0 zero-disclosure={'resolution-guarantee hosts=0' in log_text}")
 
-    # ---- H6 nmap toggle OFF -> zero nmap invocations -------------------------------
+    # ---- H6 nmap toggle: OFF -> zero invocations; ON -> disclosed nmap-sv ----
     toggle = bool(params.require("portsweep_nmap_sv"))
     nmap_lines = [l for l in log_text.splitlines() if "nmap-sv-invoke" in l]
     check("H6", "MANDATORY", (not toggle and not nmap_lines) or toggle,
-          f"toggle={toggle} nmap_invocations={len(nmap_lines)} (acceptance: OFF -> 0)")
+          f"toggle={toggle} nmap_invocations={len(nmap_lines)}")
 
     # ---- H7 scope -------------------------------------------------------------------
     scope_doc = load_yaml_file(str(ROOT / "scope.yaml"))
@@ -212,9 +212,9 @@ def main() -> int:
                 s = (doc or {}).get("settings") or {}
                 core = {
                     "portsweep_profile": "full",
-                    "portsweep_duration_hours": 24,
-                    "portsweep_full_rate_cap": 1000,
-                    "portsweep_nmap_sv": False,
+                    "portsweep_duration_hours": 4,
+                    "portsweep_full_rate_cap": 2000,
+                    "portsweep_nmap_sv": True,
                     "portsweep_module": "port-sweep",
                 }
                 violations = {k: s.get(k) for k, v in core.items() if s.get(k) != v}

@@ -167,9 +167,9 @@ settings:
   portsweep_timeout_ms: 1000
   portsweep_filtered_reprobe_divisor: 4
   portsweep_anomalous_open_threshold: 1000
-  portsweep_nmap_sv: false
-  # SECOND STAGE nmap -sV (designated VA hook): default OFF -- the toggle is
-  # the only VA surface (DO-NOT-BUILD list); max-rate is a named param.
+  # SECOND STAGE nmap -sV: default ON so RESULTS can show product/version.
+  # Operator can turn it off in SETTINGS / SCAN SETUP.
+  portsweep_nmap_sv: true
   portsweep_nmap_max_rate: 300
   # ---- B4 PORT-SWEEP (spec section 8 order-4 post-MERGE) -- wiring + artifacts.
   portsweep_module: port-sweep
@@ -308,7 +308,9 @@ settings:
   ffuf4_module: ffuf-4
   ffuf4_data_json: 15_vhosts/ffuf-4/data.json
   ffuf4_summary: 15_vhosts/ffuf-4/summary.md
-  ffuf4_max_jobs: 1
+  # 0 = probe every HTTP-like listener (no ffuf4_job_cap). A positive cap
+  # still truncates and marks the run partial (tests and operator override).
+  ffuf4_max_jobs: 0
   vhost_http_ports: "80,81,3000,3001,4000,4173,5000,5001,5601,5985,7001,8000,8008,8080,8081,8088,8880,8888,9000,9090,9200,10000"
   vhost_https_ports: "443,8443,9443,10443"
   tool_retry_count: 2
@@ -942,8 +944,10 @@ tools:
     parser: json
     data_kind: active
     output_raw_dir: logs/raw/naabu-sweep
-  # nmap-sv: SECOND STAGE -- designated VA hook; invoked ONLY when the
-  # portsweep_nmap_sv toggle is on (default OFF -> zero containers ever).
+  # nmap-sv: SECOND STAGE -- designated VA hook; default ON (operator can
+  # disable it in SETTINGS / SCAN SETUP). -Pn skips ICMP/host discovery so
+  # firewalled hosts are still fingerprinted (nmap would otherwise stall
+  # or skip the IP as "down").
   nmap-sv:
     enabled: true
     branch: active
@@ -953,6 +957,7 @@ tools:
     network_host: true
     argv_template:
       - nmap
+      - -Pn
       - -sV
       - -p
       - "{nmap_ports_arg}"

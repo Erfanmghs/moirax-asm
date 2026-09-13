@@ -108,6 +108,32 @@ class TestProfileAndSettings(unittest.TestCase):
         self.assertEqual(loaded["recon_depth"], 2)
         self.assertEqual(loaded["ffuf_depth"], 4)
 
+    def test_global_save_writes_portsweep_and_ffuf4(self):
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "tools.yaml").write_text((_ROOT / "tools.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+        (tmp / "dashboard").mkdir()
+        params = Params(tmp)
+        saved = save_settings(
+            params,
+            {
+                "portsweep_profile": "light",
+                "portsweep_custom_ports": "",
+                "portsweep_nmap_sv": True,
+                "ffuf4_max_jobs": 0,
+            },
+        )
+        self.assertEqual(saved["portsweep_profile"], "light")
+        self.assertTrue(saved["portsweep_nmap_sv"])
+        self.assertEqual(saved["ffuf4_max_jobs"], 0)
+        text = (tmp / "tools.yaml").read_text(encoding="utf-8")
+        self.assertRegex(text, r'(?m)^  portsweep_profile: ["\']?light["\']?\s*$')
+        self.assertRegex(text, r"(?m)^  portsweep_nmap_sv: true\s*$")
+        self.assertRegex(text, r"(?m)^  ffuf4_max_jobs: 0\s*$")
+        loaded = load_settings(Params(tmp))
+        self.assertEqual(loaded["portsweep_profile"], "light")
+        self.assertTrue(loaded["portsweep_nmap_sv"])
+        self.assertEqual(loaded["ffuf4_max_jobs"], 0)
+
     def test_transient_plan_does_not_sync_ffuf_from_recon(self):
         tmp = Path(tempfile.mkdtemp())
         tools_src = (_ROOT / "tools.yaml").read_text(encoding="utf-8")

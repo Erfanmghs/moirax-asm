@@ -209,6 +209,23 @@ def load_settings(params: Params) -> dict[str, Any]:
         doc["passive_recursion_depth"] = int(params.require("passive_recursion_depth"))
     except Exception:
         doc.setdefault("passive_recursion_depth", 1)
+    try:
+        profile = str(params.require("portsweep_profile") or "full").strip().lower()
+        doc["portsweep_profile"] = profile if profile in ("full", "light", "custom") else "full"
+    except Exception:
+        doc.setdefault("portsweep_profile", "full")
+    try:
+        doc["portsweep_custom_ports"] = str(params.require("portsweep_custom_ports") or "")
+    except Exception:
+        doc.setdefault("portsweep_custom_ports", "")
+    try:
+        doc["portsweep_nmap_sv"] = bool(params.require("portsweep_nmap_sv"))
+    except Exception:
+        doc.setdefault("portsweep_nmap_sv", True)
+    try:
+        doc["ffuf4_max_jobs"] = max(0, int(params.require("ffuf4_max_jobs")))
+    except Exception:
+        doc.setdefault("ffuf4_max_jobs", 0)
     return doc
 
 
@@ -229,6 +246,8 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
         "proxy_url", "proxy_pool", "digest_threshold", "alert_rules", "telegram",
         "resource_budget", "agent", "retention", "recon_depth", "ffuf_depth",
         "passive_recursion_depth", "dnsx_parallel_parents",
+        "portsweep_profile", "portsweep_custom_ports", "portsweep_nmap_sv",
+        "ffuf4_max_jobs",
     }
     if unknown:
         errors.append(f"settings keys not allowed: {sorted(unknown)} (closed allow-list)")
@@ -335,6 +354,32 @@ def validate_settings(patch: dict[str, Any]) -> list[str]:
         n = patch.get("dnsx_parallel_parents")
         if not isinstance(n, int) or isinstance(n, bool) or n < 1 or n > 8:
             errors.append("dnsx_parallel_parents must be an integer 1-8 (nested DNS brute)")
+    if "portsweep_profile" in patch:
+        profile = str(patch.get("portsweep_profile") or "").strip().lower()
+        if profile not in ("full", "light", "custom"):
+            errors.append("portsweep_profile must be full, light, or custom")
+    if "portsweep_custom_ports" in patch:
+        raw = patch.get("portsweep_custom_ports")
+        if raw is None:
+            raw = ""
+        if not isinstance(raw, str):
+            errors.append("portsweep_custom_ports must be a string")
+        else:
+            try:
+                from pipeline.target_profiles import normalize_portsweep_ports
+
+                patch["portsweep_custom_ports"] = normalize_portsweep_ports(raw)
+            except ValueError as exc:
+                errors.append(str(exc))
+    if "portsweep_nmap_sv" in patch and not isinstance(patch.get("portsweep_nmap_sv"), bool):
+        errors.append("portsweep_nmap_sv must be a boolean")
+    if "ffuf4_max_jobs" in patch:
+        n = patch.get("ffuf4_max_jobs")
+        if not isinstance(n, int) or isinstance(n, bool) or n < 0:
+            errors.append("ffuf4_max_jobs must be an integer >= 0 (0 = every HTTP listener)")
+    profile = str(patch.get("portsweep_profile") or "").strip().lower()
+    if profile == "custom" and not str(patch.get("portsweep_custom_ports") or "").strip():
+        errors.append("custom port scan needs a non-empty port list (example: 22,80,443,8000-8080)")
     return errors
 
 
@@ -373,21 +418,30 @@ def save_settings(params: Params, patch: dict[str, Any]) -> dict[str, Any]:
     depth_keys = ("recon_depth", "ffuf_depth", "passive_recursion_depth", "dnsx_parallel_parents")
     if any(k in patch for k in depth_keys):
         _sync_depth_tools(params, {k: int(patch[k]) for k in depth_keys if k in patch})
+    tool_keys = ("portsweep_profile", "portsweep_custom_ports", "portsweep_nmap_sv", "ffuf4_max_jobs")
+    if any(k in patch for k in tool_keys):
+        _sync_tools_settings(params, {k: patch[k] for k in tool_keys if k in patch})
     return _mask_settings(merged)
 
 
 def _sync_depth_tools(params: Params, depths: dict[str, int]) -> None:
     """Global SETTINGS writes live tools.yaml knobs the pipeline reads (independently)."""
+    _sync_tools_settings(params, depths)
+
+
+def _sync_tools_settings(params: Params, updates: dict[str, Any]) -> None:
+    """Write SETTINGS knobs into tools.yaml so the next pipeline run sees them."""
+    from pipeline.target_profiles import _yaml_scalar
     from pipeline.textio import atomic_write_text
 
     tools = params.root / "tools.yaml"
     if not tools.is_file():
         return
     text = tools.read_text(encoding="utf-8")
-    for key, depth in depths.items():
-        pattern = re.compile(rf"^  {re.escape(key)}: .*$", re.M)
+    for key, value in updates.items():
+        pattern = re.compile(rf"^  {re.escape(key)}:.*$", re.M)
         if pattern.search(text):
-            text = pattern.sub(f"  {key}: {depth}", text, count=1)
+            text = pattern.sub(f"  {key}: {_yaml_scalar(value)}", text, count=1)
     atomic_write_text(tools, text)
 
 
@@ -523,7 +577,7 @@ OPERATOR_TOOL_CATALOG: tuple[tuple[str, str, str, str], ...] = (
     ("naabu", "naabu", "Optional top-ports preview", "OPTIONAL fast top-ports check only; default OFF. Full TCP coverage is the always-on port sweep"),
     ("naabu-full", "naabu", "All TCP ports (required)", "Always-on full TCP 1-65535 sweep after MERGE; this switch cannot be turned off"),
     ("naabu-sweep", "naabu", "Port sweep (B4)", "Enables or disables the B4 port sweep; not the other naabu rows"),
-    ("nmap-sv", "nmap", "Service fingerprint", "Enables or disables service fingerprinting (-sV) on open ports"),
+    ("nmap-sv", "nmap", "Service fingerprint", "Enables or disables nmap -Pn -sV on open ports (skip ping so firewalled hosts still get product/version)"),
     ("subfinder", "subfinder", "Passive subdomain OSINT", "Enables or disables subfinder as a passive name source"),
     ("amass", "amass", "Passive subdomain OSINT", "Enables or disables amass as a passive name source"),
     ("assetfinder", "assetfinder", "Related-name OSINT", "Enables or disables assetfinder related-name lookup"),

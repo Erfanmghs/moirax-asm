@@ -28,7 +28,11 @@ Run it only against assets you own or have written permission to test.
 - **Active discovery** with dnsx. Catch-all DNS (`*.example.com`) is probed
   so random labels are not treated as real hosts. Host-header virtual hosts
   are a separate step, not the DNS brute.
-- **Full TCP sweep** (1-65535) on unique IPs after merge.
+- **Port scan you choose** -- full TCP 1-65535 (like `nmap -p-`), top
+  ports (like `nmap --top-ports 100`), or a custom `nmap -p` list such as
+  `22,80,443,8000-8080`. Set it in SETTINGS or per-site SETUP. Open ports
+  are fingerprinted with `nmap -Pn -sV` (skip ping so firewalled hosts
+  still get product/version).
 - **Results** as one row per name. The table shows an open-port count. Click
   it for that name's IPs; click an IP for port, product, and version. Empty
   product or version means the fingerprint did not identify them.
@@ -126,7 +130,7 @@ flowchart TD
   scope --> layout["recon/SITE"]
   layout --> par[passive and active in parallel]
   par --> merge[MERGE]
-  merge --> sweep[TCP 1-65535]
+  merge --> sweep[port scan: full / top / custom]
   sweep --> vhost[vhost on HTTP ports]
   vhost --> owasp[OWASP evidence-only]
   owasp --> out[report, warehouse, Telegram]
@@ -134,7 +138,9 @@ flowchart TD
 
 Passive is OSINT. Active is dnsx brute and resolve, then virtual-host
 fuzzing. Merge writes the host index. The port sweep runs after merge so it
-only sees names that survived scope and wildcard filtering. Each module has
+only sees names that survived scope and wildcard filtering. Coverage is
+full, top ports, or a custom nmap -p list (SETTINGS / SETUP). Service
+version uses nmap -Pn -sV. Each module has
 its own image. STOP kills the run and related containers.
 
 Depths are independent (SETTINGS or per-site SETUP):

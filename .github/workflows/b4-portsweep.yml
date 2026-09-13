@@ -165,7 +165,10 @@ jobs:
                   out.append('  portsweep_custom_ports: "80,443,8080"  # TRANSIENT vehicle accommodation (never committed): 3-port custom range keeps the CI sweep bounded; committed default "" stays.')
                   continue
               if line.startswith("  portsweep_duration_hours:"):
-                  out.append("  portsweep_duration_hours: 1  # TRANSIENT vehicle accommodation (never committed): minimum window (spec floor) for the CI budget; committed default 24 stays.")
+                  out.append("  portsweep_duration_hours: 1  # TRANSIENT vehicle accommodation (never committed): minimum window (spec floor) for the CI budget; committed default stays.")
+                  continue
+              if line.startswith("  portsweep_nmap_sv:"):
+                  out.append("  portsweep_nmap_sv: false  # TRANSIENT vehicle accommodation (never committed): keep B4 nmap-sv off so the CI sweep stays bounded; committed default true stays.")
                   continue
               out.append(line)
           p.write_text("\n".join(out) + "\n", encoding="utf-8")

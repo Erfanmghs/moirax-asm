@@ -76,6 +76,7 @@
         <li><a href="#h-token">1. Sign in</a></li>
         <li><a href="#h-first">2. First run</a></li>
         <li><a href="#h-scan">3. SCAN</a></li>
+        <li><a href="#h-ports">3b. Port scan</a></li>
         <li><a href="#h-tools">4. TOOLS</a></li>
         <li><a href="#h-wl">5. WORDLISTS</a></li>
         <li><a href="#h-tgt">6. TARGETS</a></li>
@@ -108,7 +109,7 @@
       <h3 id="h-first">2. First run (zero to report)</h3>
       <ol>
         <li>Sign in (section 1).</li>
-        <li>SETTINGS: enter your Telegram username or numeric id, press <span class="ui">SAVE SETTINGS</span>, then <span class="ui">SEND TEST NOTIFICATION</span>. If you use a personal username, open the bot in Telegram and press Start once first.</li>
+        <li>SETTINGS: enter your Telegram username or numeric id, press <span class="ui">SAVE SETTINGS</span>, then <span class="ui">SEND TEST NOTIFICATION</span>. If you use a personal username, open the bot in Telegram and press Start once first. Same page: <span class="ui">PORT SCAN</span> chooses full / top ports / custom (see 3b).</li>
         <li>TARGETS: type the domain on the left (for example <span class="ui">example.com</span>), <span class="ui">ADD / LOAD</span>, then <span class="ui">SAVE PROFILE</span>.</li>
         <li>TOOLS: leave ENABLED the scanners you want. The change applies on the next check. Same binary can appear on more than one row -- use SWITCH to see which control you are toggling.</li>
         <li>WORDLISTS: tick lists per step and press <span class="ui">SAVE SELECTION</span>. For a short test keep the smoke list. Million-line lists take much longer.</li>
@@ -136,6 +137,16 @@
       <p><span class="ui">LIVE LOG</span> is the diary of the site in the SITE box (and the last row you expanded), streaming live.
       Use <span class="ui">Readable</span> for a human summary (time, step, what happened) or <span class="ui">Raw</span> for the exact file.
       <span class="ui">AGENT JOURNAL</span> fills only if the optional assistant is on in SETTINGS. Normal use does not need it.</p>
+
+      <h3 id="h-ports">3b. Port scan -- pick coverage like nmap -p</h3>
+      <p>After names are merged, each unique IP is port-scanned. You choose the coverage the same way you would pass <span class="ui">-p</span> to nmap. Set the default in <span class="ui">SETTINGS -&gt; PORT SCAN</span>, or override one site in SCAN <span class="ui">SETUP</span> / TARGETS. Press <span class="ui">SAVE SETTINGS</span> or <span class="ui">SAVE SETUP</span>. The next START uses the new mode.</p>
+      <ol>
+        <li><span class="ui">full</span> -- every TCP port 1-65535 (like <span class="ui">nmap -p-</span>). Slowest, most complete. Default.</li>
+        <li><span class="ui">top ports</span> -- the most common TCP ports (naabu top 100, like <span class="ui">nmap --top-ports 100</span>). Fast preview of typical services.</li>
+        <li><span class="ui">custom</span> -- only the ports you type, same syntax as nmap: <span class="ui">22,80,443,8000-8080</span>. You may paste <span class="ui">-p 22,80,443</span> or <span class="ui">T:443</span>. Custom mode needs a non-empty list.</li>
+      </ol>
+      <p><span class="ui">SERVICE VERSION</span> (default on) runs <span class="ui">nmap -Pn -sV</span> on the open ports that the sweep found. <span class="ui">-Pn</span> skips ping/host discovery so a host that ignores ICMP is still fingerprinted instead of hanging or being marked down. RESULTS then shows product and version when you click an open-port count, then an IP.</p>
+      <p class="note">An early optional <span class="ui">port-check</span> row in TOOLS is only a fast top-ports peek while DNS is still running. The mode you pick here is the main post-MERGE sweep.</p>
 
       <h3 id="h-tools">4. TOOLS -- enable or disable scanners</h3>
       <p>The same binary can appear twice (ffuf, dnsx, naabu, httpx) because each row is a different technique. Columns:</p>
@@ -179,7 +190,8 @@
         <li><span class="ui">WATCHTOWER INSTANT ALERTS</span> -- instant change alerts, or off.</li>
         <li><span class="ui">DIGEST THRESHOLD</span> -- above this many new findings, one summary message instead of a flood.</li>
         <li><span class="ui">PROXY POOL</span> -- proxies for this site only; empty = global pool.</li>
-        <li>Budgets -- time/depth caps. Empty = defaults. <span class="ui">RECON DEPTH</span> is nested DNS + vhost (1-5). <span class="ui">PASSIVE RECURSION DEPTH</span> is OSINT-only.</li>
+        <li>Budgets -- time/depth caps. Empty = defaults. Nested DNS / vhost depths are independent.</li>
+        <li><span class="ui">PORT SCAN</span> -- full, top ports, or custom nmap -p list for this site. Empty = SETTINGS. Service version is nmap -Pn -sV.</li>
         <li><span class="ui">MODULES</span> -- leave empty for defaults. Advanced operators only.</li>
         <li><span class="ui">WORDLIST OVERRIDE</span> -- per-site lists, otherwise the WORDLISTS tab.</li>
         <li><span class="ui">SCHEDULER</span> -- automatic checks for this site: inherit, on, or off, plus an optional interval (min 10). Empty = SETTINGS.</li>
@@ -230,6 +242,8 @@
       <p><span class="ui">AUTOMATIC CHECKS</span> and <span class="ui">INTERVAL (min)</span> are the default for every site (minimum 10). A site SETUP can turn checks on, change the interval, or disable them for that site only. Press <span class="ui">SAVE SETTINGS</span> after changing the global defaults.</p>
       <h4>Recon depth</h4>
       <p><span class="ui">NESTED DNS</span>, <span class="ui">NESTED VHOST</span>, and <span class="ui">PASSIVE RECURSION</span> depths are independent (1-5 / 0-5). A site SETUP can override each one.</p>
+      <h4>Port scan</h4>
+      <p>Choose <span class="ui">full</span> (all TCP ports, like nmap -p-), <span class="ui">top ports</span> (common ports), or <span class="ui">custom</span> and type an nmap -p list such as <span class="ui">22,80,443,8000-8080</span>. Service version uses nmap -Pn -sV so firewalled hosts still get product/version. See <a href="#h-ports">3b. Port scan</a>.</p>
       <h4>Network</h4>
       <ol>
         <li><span class="ui">PROXY URL</span> -- one proxy for every check. If it is unreachable, the check refuses to start (it does not silently go direct).</li>
@@ -261,6 +275,7 @@
         <li><span class="ui">offline</span> -- the dashboard process is not up.</li>
         <li><span class="ui">session expired</span> or empty tables -- SIGN IN again.</li>
         <li>Start refused -- tick Authorize, or register the site in TARGETS first.</li>
+        <li>Port scan stuck or hosts look down -- SERVICE VERSION already uses nmap -Pn. If custom mode was selected with an empty list, the sweep is skipped; pick full / top ports or fill CUSTOM PORTS.</li>
         <li>No Telegram -- Start the bot; a public channel needs the bot as a member.</li>
         <li>TOOLS / WORDLISTS empty after SET -- click the tab again and read any error row.</li>
       </ul>
@@ -337,7 +352,15 @@
             <label><span class="lbl">PARALLEL DNS PARENTS (1-8) <span class="help" tabindex="0" data-help="How many nested dnsx parent jobs run at once. Total QPS is split across them (4 at 5000 QPS = 1250 each). Does not raise origin HTTP load. Empty = global SETTINGS.">?</span></span><input id="t-b-dnsx-parents" type="number" min="1" max="8" class="mono" placeholder="inherit"></label>
             <label>PASSIVE RECURSION DEPTH<input id="t-b-depth" type="number" min="0" max="5" class="mono" placeholder="inherit"></label>
             <label>FFUF-3 MAX DEAD PROBES<input id="t-b-dead" type="number" min="1" class="mono" placeholder="inherit"></label>
-            <label>FFUF-4 MAX PORT JOBS<input id="t-b-ffuf4" type="number" min="1" class="mono" placeholder="inherit"></label>
+            <label><span class="lbl">FFUF-4 MAX PORT JOBS <span class="help" tabindex="0" data-help="0 = probe every HTTP-like listener after the port scan. A positive cap stops early and marks the run partial. Empty = global SETTINGS.">?</span></span><input id="t-b-ffuf4" type="number" min="0" class="mono" placeholder="inherit"></label>
+          </div>
+        </section>
+        <section class="tgt-card">
+          <h3>PORT SCAN <span class="hint">empty = SETTINGS</span></h3>
+          <div class="form-grid">
+            <label><span class="lbl">PORT SCAN MODE <span class="help" tabindex="0" data-help="Same idea as nmap -p. full = all TCP ports (nmap -p-). top ports = common ports (naabu --top-ports 100, like nmap --top-ports). custom = your list, same syntax as nmap -p 22,80,443,8000-8080. Empty = global SETTINGS.">?</span></span><select id="t-ps-profile"><option value="">inherit global</option><option value="full">full (nmap -p- / TCP 1-65535)</option><option value="light">top ports (like nmap --top-ports 100)</option><option value="custom">custom (nmap -p list)</option></select></label>
+            <label><span class="lbl">SERVICE VERSION (nmap -sV) <span class="help" tabindex="0" data-help="When on, open ports are fingerprinted with nmap -Pn -sV (skip ping so firewalled hosts still get product/version). Default on. Empty = global SETTINGS.">?</span></span><select id="t-ps-nmap"><option value="">inherit global</option><option value="true">on</option><option value="false">off</option></select></label>
+            <label class="span-2"><span class="lbl">CUSTOM PORTS <span class="help" tabindex="0" data-help="Required when mode is custom. Paste an nmap -p list: 22,80,443,8000-8080. Optional -p prefix and T:22 are accepted. Empty = inherit.">?</span></span><input id="t-ps-ports" class="mono" placeholder="like nmap -p 22,80,443,8000-8080"></label>
           </div>
         </section>
         <section class="tgt-card">
@@ -531,6 +554,16 @@
       <label><span class="lbl">PASSIVE RECURSION DEPTH (0-5)</span><input id="s-passive-depth" type="number" min="0" max="5" class="mono"></label>
     </div>
     <p class="hint">Defaults for every site. SCAN SETUP / TARGETS can set different values for one site only.</p>
+    </div>
+    <div class="set-card">
+    <h3>PORT SCAN <span class="help" tabindex="0" data-help="Same idea as nmap -p. full = all TCP ports. top ports = common ports. custom = your nmap -p list. Version detection is nmap -Pn -sV so ICMP-blocked hosts still get product/version. Per-site SETUP can override.">?</span></h3>
+    <div class="grid">
+      <label><span class="lbl">PORT SCAN MODE</span><select id="s-ps-profile"><option value="full">full (nmap -p- / TCP 1-65535)</option><option value="light">top ports (like nmap --top-ports 100)</option><option value="custom">custom (nmap -p list)</option></select></label>
+      <label><span class="lbl">SERVICE VERSION (nmap -Pn -sV)</span><select id="s-ps-nmap"><option value="true">on</option><option value="false">off</option></select></label>
+      <label class="span-2"><span class="lbl">CUSTOM PORTS</span><input id="s-ps-ports" class="mono" placeholder="like nmap -p 22,80,443,8000-8080"></label>
+      <label><span class="lbl">FFUF-4 MAX PORT JOBS <span class="help" tabindex="0" data-help="After the port scan, FFUF-4 probes HTTP-like listeners for extra virtual hosts. 0 = every listener so the run can complete. A positive cap stops early and marks the run partial.">?</span></span><input id="s-ffuf4-jobs" type="number" min="0" class="mono"></label>
+    </div>
+    <p class="hint">Custom ports are required only when mode is custom. Syntax matches nmap -p (commas and ranges). SCAN SETUP / TARGETS can override the mode for one site.</p>
     </div>
     <div class="set-card sched-card">
     <h3>SCHEDULER <span class="help" tabindex="0" data-help="Default automatic checks for every site. Interval is minutes between checks (minimum 10). Per-site SETUP can turn this on, change the interval, or disable it for one site.">?</span></h3>

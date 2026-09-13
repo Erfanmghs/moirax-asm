@@ -248,11 +248,37 @@ Every registered website can have its own:
 - **digest threshold** -- group alerts into one summary above N new findings;
 - **budgets** -- time limits for the check's phases (leave empty unless the
   site needs special treatment);
-- **proxy pool** -- its own outgoing IP rotation list (section 10).
+- **proxy pool** -- its own outgoing IP rotation list (section 10);
+- **port scan** -- full TCP, top ports, or a custom nmap -p list for that
+  site only (empty = SETTINGS).
 
 **Example:** your team watches `shop.example.com` and `blog.example.com`.
 Give the shop's profile the ops-team Telegram username and the blog's profile
 the content-team username -- each side gets only its own alerts.
+
+---
+
+## Port scan (like nmap -p)
+
+After names are merged, each unique IP is scanned. Pick coverage in
+**SETTINGS -> PORT SCAN**, or override one site in SCAN **SETUP** / TARGETS.
+
+| Mode | Like nmap | What it does |
+|---|---|---|
+| **full** (default) | `nmap -p-` | TCP ports 1-65535 |
+| **top ports** | `nmap --top-ports 100` | most common TCP ports (fast) |
+| **custom** | `nmap -p 22,80,443,8000-8080` | only the ports you type |
+
+Custom accepts the same list nmap `-p` does: commas, ranges, an optional
+`-p` prefix, and `T:443`. The box cannot be empty in custom mode.
+
+**Service version** (default on) then runs `nmap -Pn -sV` on those open
+ports. `-Pn` skips ping, so a host that ignores ICMP is still
+fingerprinted instead of hanging or looking down. In RESULTS, click the
+open-port count, then an IP, to see product and version.
+
+Save SETTINGS or SAVE SETUP, then START. A run already in progress keeps
+the old mode.
 
 ---
 

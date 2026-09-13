@@ -29,8 +29,6 @@ dorks/forge/*.txt
 
 # Local agent / operator working files (never publish)
 .cursor/
-!.cursor/rules/
-!.cursor/rules/author-credit.mdc
 history/
 PHASE-REPORT.md
 

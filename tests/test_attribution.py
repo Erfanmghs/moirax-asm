@@ -20,7 +20,6 @@ _REQUIRED_URL = (
     "pipeline/attribution.py",
     "dashboard/static/index.html",
     "AGENTS.md",
-    ".cursor/rules/author-credit.mdc",
 )
 _REQUIRED_WIRE = (
     ("pipeline/report_html.py", ("html_footer()", "seal_html(")),

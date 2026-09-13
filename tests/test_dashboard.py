@@ -22,6 +22,7 @@ from dashboard.service import (
     coverage_analytics,
     delete_key,
     list_keys,
+    list_operator_tools,
     load_settings,
     mask_secret,
     results_rows_for,
@@ -267,13 +268,15 @@ class TestToolsEditorPanelA(unittest.TestCase):
         reloaded = load_yaml_file(str(params.root / "tools.yaml"))
         self.assertTrue(reloaded["tools"]["naabu"]["enabled"])
 
-    def test_naabu_full_catalog_is_port_sweep_full_mode(self):
-        from dashboard.service import OPERATOR_TOOL_CATALOG
-
-        row = next(item for item in OPERATOR_TOOL_CATALOG if item[0] == "naabu-full")
-        self.assertEqual(row[2], "Port sweep -- full mode")
-        blob = " ".join(row)
-        self.assertNotIn("Always-on full TCP", blob)
+    def test_naabu_rows_defer_coverage_to_port_scan_settings(self):
+        rows = {r["id"]: r for r in list_operator_tools(_params())}
+        self.assertIn("PORT SCAN MODE", rows["naabu-full"]["controls"])
+        self.assertNotIn("Always-on full TCP", rows["naabu-full"]["controls"])
+        self.assertNotIn("cannot be turned off", rows["naabu-full"]["controls"])
+        self.assertEqual(rows["naabu-full"]["technique"], "Port sweep -- full mode")
+        self.assertTrue(rows["naabu-full"]["locked"])
+        self.assertIn("PORT SCAN MODE", rows["naabu"]["controls"])
+        self.assertIn("custom", rows["naabu-sweep"]["controls"].lower())
 
 
 class TestWordlistsEditorPanelA(unittest.TestCase):

@@ -465,7 +465,8 @@ def validate_tools_edit(tools_doc: dict[str, Any], tool: str, patch: dict[str, A
             raise DashboardError("enabled must be a boolean")
         if tool in _COVERAGE_LOCKED_TOOLS and patch["enabled"] is False:
             raise DashboardError(
-                f"{tool} is required for full TCP port coverage and cannot be disabled"
+                f"{tool} stays enabled so PORT SCAN MODE full can run; "
+                "choose top ports or custom in SETTINGS / SCAN SETUP instead of disabling this switch"
             )
         clean["enabled"] = patch["enabled"]
     if "flag_overrides" in patch:
@@ -574,9 +575,9 @@ OPERATOR_TOOL_CATALOG: tuple[tuple[str, str, str, str], ...] = (
     ("dnsx-resolve", "dnsx", "Bulk DNS resolve", "Enables or disables bulk DNS resolve of collected names"),
     ("massdns", "massdns", "Mass DNS resolve", "Enables or disables high-volume DNS resolve"),
     ("alterx", "alterx", "Name permutation", "Enables or disables generating extra name guesses from known hosts"),
-    ("naabu", "naabu", "Optional top-ports preview", "OPTIONAL fast top-ports check only; default OFF. Full TCP coverage is the always-on port sweep"),
-    ("naabu-full", "naabu", "Port sweep -- full mode", "Full-mode TCP 1-65535 sweep after MERGE; this switch cannot be turned off"),
-    ("naabu-sweep", "naabu", "Port sweep (B4)", "Enables or disables the B4 port sweep; not the other naabu rows"),
+    ("naabu", "naabu", "Optional top-ports preview", "OPTIONAL fast peek while DNS is still running (port-check). Default OFF. Post-MERGE coverage is PORT SCAN MODE in SETTINGS / SETUP (full, top ports, or custom)"),
+    ("naabu-full", "naabu", "Port sweep -- full mode", "Runs after MERGE only when PORT SCAN MODE is full (TCP 1-65535, like nmap -p-). Not used for top-ports or custom. Switch stays on so full mode can run; change coverage in SETTINGS / SETUP"),
+    ("naabu-sweep", "naabu", "Port sweep -- custom mode", "Runs after MERGE only when PORT SCAN MODE is custom (your nmap -p list). Set the list in SETTINGS / SETUP"),
     ("nmap-sv", "nmap", "Service fingerprint", "Enables or disables nmap -Pn -sV on open ports (skip ping so firewalled hosts still get product/version)"),
     ("subfinder", "subfinder", "Passive subdomain OSINT", "Enables or disables subfinder as a passive name source"),
     ("amass", "amass", "Passive subdomain OSINT", "Enables or disables amass as a passive name source"),

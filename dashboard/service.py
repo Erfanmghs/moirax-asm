@@ -575,7 +575,7 @@ OPERATOR_TOOL_CATALOG: tuple[tuple[str, str, str, str], ...] = (
     ("massdns", "massdns", "Mass DNS resolve", "Enables or disables high-volume DNS resolve"),
     ("alterx", "alterx", "Name permutation", "Enables or disables generating extra name guesses from known hosts"),
     ("naabu", "naabu", "Optional top-ports preview", "OPTIONAL fast top-ports check only; default OFF. Full TCP coverage is the always-on port sweep"),
-    ("naabu-full", "naabu", "All TCP ports (required)", "Always-on full TCP 1-65535 sweep after MERGE; this switch cannot be turned off"),
+    ("naabu-full", "naabu", "Port sweep -- full mode", "Full-mode TCP 1-65535 sweep after MERGE; this switch cannot be turned off"),
     ("naabu-sweep", "naabu", "Port sweep (B4)", "Enables or disables the B4 port sweep; not the other naabu rows"),
     ("nmap-sv", "nmap", "Service fingerprint", "Enables or disables nmap -Pn -sV on open ports (skip ping so firewalled hosts still get product/version)"),
     ("subfinder", "subfinder", "Passive subdomain OSINT", "Enables or disables subfinder as a passive name source"),

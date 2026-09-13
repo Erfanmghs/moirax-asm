@@ -267,6 +267,14 @@ class TestToolsEditorPanelA(unittest.TestCase):
         reloaded = load_yaml_file(str(params.root / "tools.yaml"))
         self.assertTrue(reloaded["tools"]["naabu"]["enabled"])
 
+    def test_naabu_full_catalog_is_port_sweep_full_mode(self):
+        from dashboard.service import OPERATOR_TOOL_CATALOG
+
+        row = next(item for item in OPERATOR_TOOL_CATALOG if item[0] == "naabu-full")
+        self.assertEqual(row[2], "Port sweep -- full mode")
+        blob = " ".join(row)
+        self.assertNotIn("Always-on full TCP", blob)
+
 
 class TestWordlistsEditorPanelA(unittest.TestCase):
     """section 9.2-a: per-task checkbox selection + SELECT-ALL per task group."""

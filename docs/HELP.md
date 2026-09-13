@@ -280,6 +280,12 @@ open-port count, then an IP, to see product and version.
 Save SETTINGS or SAVE SETUP, then START. A run already in progress keeps
 the old mode.
 
+On the **TOOLS** page, `naabu-full` is labeled **Port sweep -- full mode**.
+That row is required coverage (the switch cannot be turned off). It is not an
+always-on extra scan: SETTINGS -> PORT SCAN (or a per-site override) still
+chooses full, top ports, or custom.
+
+
 ---
 
 ## 9. API keys -- not needed, but nice

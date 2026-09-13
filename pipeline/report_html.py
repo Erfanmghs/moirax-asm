@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
+from pipeline.attribution import html_footer, seal_html
 
 _LOGO = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Attack Surface Management">
   <defs>
@@ -67,6 +66,8 @@ td{padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align
 .head-actions{display:flex;gap:8px}
 td.port-num{color:var(--accent-2)} td.version{color:var(--alive)}
 .foot{margin-top:24px;color:var(--dim);font:12px var(--mono)}
+.foot.credit a{color:var(--dim);text-decoration:none}
+.foot.credit a:hover{color:var(--accent);text-decoration:underline}
 """
 
 _JS = r"""
@@ -218,6 +219,7 @@ def render_html(bundle: dict[str, Any], diff: dict[str, Any] | None = None) -> s
     target = bundle.get("target") or ""
     stamp = bundle.get("run_timestamp") or ""
     digest = bundle.get("scope_digest") or ""
+    credit = html_footer()
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Attack Surface Management | {target}</title>
@@ -271,6 +273,7 @@ def render_html(bundle: dict[str, Any], diff: dict[str, Any] | None = None) -> s
     <tbody></tbody>
   </table></div>
   <p class="foot">Attack Surface Management — only scan assets you own or have written permission to test.</p>
+  {credit}
 </div>
 <div id="overlay" class="overlay" hidden>
   <div class="card">
@@ -291,5 +294,5 @@ def render_html(bundle: dict[str, Any], diff: dict[str, Any] | None = None) -> s
 def write_report_html(params: Any, target_dir: Path, bundle: dict[str, Any], diff: dict[str, Any] | None = None) -> Path:
     out = target_dir / str(params.require("report_dirname")) / "report.html"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(render_html(bundle, diff), encoding="utf-8")
+    out.write_text(seal_html(render_html(bundle, diff)), encoding="utf-8")
     return out

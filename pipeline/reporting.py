@@ -331,7 +331,11 @@ def write_report_md(params: Params, target_dir: Path, bundle: dict[str, Any]) ->
         count_txt = ", ".join(f"{k}={v}" for k, v in counts.items()) if counts else "see data.json"
         lines.append(f"- `{rel}` -- module **{module}**: {count_txt}")
     lines += ["", "## Pointers", "", "Each module's canonical artifact is its `data.json`; the raw stdout archive lives under `logs/raw/` (never re-parsed).", ""]
-    out.write_text("\n".join(lines), encoding="utf-8")
+    from pipeline.attribution import markdown_footer, require_present
+
+    text = "\n".join(lines) + markdown_footer()
+    require_present(text, where="report.md")
+    out.write_text(text, encoding="utf-8")
     return out
 
 
@@ -438,6 +442,12 @@ def write_report_pdf(params: Params, target_dir: Path, bundle: dict[str, Any]) -
     line("MODULES:")
     for rel, doc in list(bundle["module_docs"].items())[:25]:
         line(f"  {rel} ({doc.get('module', '')})")
+    from pipeline.attribution import ATTRIBUTION_TEXT, AUTHOR_URL
+
+    pdf.setFont("Courier", 8)
+    pdf.drawString(50, 28, ATTRIBUTION_TEXT)
+    pdf.drawString(50, 16, AUTHOR_URL)
+    pdf.linkURL(AUTHOR_URL, (48, 12, 360, 40), relative=0)
     pdf.save()
     out.write_bytes(buf.getvalue())
     return out

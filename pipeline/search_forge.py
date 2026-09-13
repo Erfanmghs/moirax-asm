@@ -239,12 +239,14 @@ class SearchForge:
         headers = [str(h).format(**values) for h in (cfg.get("headers") or [])]
         for header in headers:
             args.extend(["-H", header])
+        url = str(cfg.get("endpoint") or "")
         if method == "POST":
             body = str(cfg.get("query_body") or "").format(dork_encoded=encoded, dork_json=json_escaped, target=dork)
             args.extend(["--data", body])
+            if url:
+                args.append(url)
         else:
             query = str(cfg.get("query") or "").format(**values)
-            url = str(cfg.get("endpoint") or "")
             url = url + ("&" if "?" in url else "?") + query if query else url
             args.append(url)
         return " ".join(shlex.quote(a) for a in args), key

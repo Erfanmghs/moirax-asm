@@ -116,6 +116,9 @@ def keep_resolved_host(
         return True
     if independent and h in independent:
         return True
+    have = [str(ip) for ip in (ips or []) if ip]
+    if not have:
+        return False
     return not is_wildcard_only(ips, wildcard_ips)
 
 

@@ -40,3 +40,44 @@ class TestDockerRunnerPipes(unittest.TestCase):
         self.assertIn("-o", argv)
         canary = (params.tools.get("dnsx-canary") or {}).get("argv_template") or []
         self.assertNotIn("-silent", canary)
+
+
+class TestLocalToolImages(unittest.TestCase):
+    def test_missing_local_image_runs_build(self):
+        from unittest import mock
+
+        from pipeline.local_images import ensure_local_tool_images
+
+        params = Params(_ROOT)
+        notes: list[str] = []
+        inspect = mock.Mock(return_value=mock.Mock(returncode=1, stdout="", stderr=""))
+        build = mock.Mock(return_value=mock.Mock(returncode=0, stdout="", stderr=""))
+
+        def _run(cmd, **_kwargs):
+            if cmd[:3] == ["docker", "image", "inspect"] or (len(cmd) >= 3 and cmd[1] == "image"):
+                return inspect()
+            return build()
+
+        with mock.patch("pipeline.local_images.docker_available", return_value=True):
+            with mock.patch("pipeline.local_images.docker_prefix", return_value=["docker"]):
+                with mock.patch("pipeline.local_images.subprocess.run", side_effect=_run):
+                    built = ensure_local_tool_images(params, note=notes.append)
+        self.assertEqual(built, ["moirax-asm/passive-tools:v1", "moirax-asm/ffuf:v2.1.0"])
+        self.assertTrue(any("building missing" in n for n in notes))
+
+    def test_present_local_image_skips_build(self):
+        from unittest import mock
+
+        from pipeline.local_images import ensure_local_tool_images
+
+        params = Params(_ROOT)
+        notes: list[str] = []
+        with mock.patch("pipeline.local_images.docker_available", return_value=True):
+            with mock.patch("pipeline.local_images.docker_prefix", return_value=["docker"]):
+                with mock.patch(
+                    "pipeline.local_images.subprocess.run",
+                    return_value=mock.Mock(returncode=0, stdout="", stderr=""),
+                ) as run:
+                    built = ensure_local_tool_images(params, note=notes.append)
+        self.assertEqual(built, [])
+        self.assertTrue(all("inspect" in " ".join(c[0][0]) for c in run.call_args_list))

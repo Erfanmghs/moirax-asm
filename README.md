@@ -56,7 +56,9 @@ docker compose --profile dashboard up -d --build
 
 Open http://127.0.0.1:8080 and set an operator password (12+ characters).
 The hash is written under `dashboard/auth/`. Do not put the password in
-`.env`.
+`.env`. The first START builds missing local tool images
+(`moirax-asm/passive-tools` and `moirax-asm/ffuf`) if they are not already
+on the host; compose itself only builds the dashboard image.
 
 **Docker security is part of the default install**, not an extra profile.
 The UI binds to loopback. Compose drops all Linux capabilities except

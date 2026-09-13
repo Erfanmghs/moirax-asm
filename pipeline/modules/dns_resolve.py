@@ -922,28 +922,27 @@ def _cap_perms(
     TOTAL perm candidate set per target per run, enforced AFTER the per-host
     caps (spec v1.9, approved Option-1 item 3).
     """
-    lines = [normalize_fqdn(x) for x in read_lines(path)]
-    lines = [h for h in lines if h]
     per_host: dict[str, int] = {p: 0 for p in parents}
     out: list[str] = []
     seen: set[str] = set()
-    for host in lines:
-        if host in seen:
-            continue
-        if not gate.enforce(target_dir, host):
-            continue
-        parent = next((p for p in parents if host.endswith("." + p) or host == p), None)
-        key = parent or "_other"
-        per_host.setdefault(key, 0)
-        if per_host[key] >= cap:
-            continue
-        per_host[key] += 1
-        seen.add(host)
-        out.append(host)
     dropped_aggregate = 0
-    if aggregate and len(out) > aggregate:
-        dropped_aggregate = len(out) - aggregate
-        out = out[:aggregate]
+    with path.open("r", encoding="utf-8", errors="replace") as fh:
+        for raw in fh:
+            host = normalize_fqdn(raw.strip())
+            if not host or host in seen:
+                continue
+            if not gate.enforce(target_dir, host):
+                continue
+            parent = next((p for p in parents if host.endswith("." + p) or host == p), None)
+            key = parent or "_other"
+            per_host.setdefault(key, 0)
+            if per_host[key] >= cap:
+                continue
+            per_host[key] += 1
+            seen.add(host)
+            out.append(host)
+            if aggregate and len(out) >= aggregate:
+                break
     if path.is_file():
         atomic_write_text(path, "\n".join(out) + "\n")
     return out, dropped_aggregate

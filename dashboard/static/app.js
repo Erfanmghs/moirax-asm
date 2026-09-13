@@ -383,17 +383,20 @@ async function refreshKnownTargets() {
 }
 
 function preferredScanSite(names) {
+  const list = uniqueNames(names || []);
+  const fromScan = panelTarget("run-target");
+  if (fromScan && list.includes(fromScan)) return fromScan;
   const last = (CURRENT.target || "").trim();
-  if (last && names.includes(last)) return last;
-  if (names.length === 1) return names[0];
+  if (last && list.includes(last)) return last;
+  if (list.length === 1) return list[0];
   return "";
 }
 
 function fillSiteSelect(el, names, preferred) {
   if (!el || el.tagName !== "SELECT") return;
   const keep = el.value.trim();
-  const want = keep || preferred || "";
   const list = uniqueNames(names);
+  const want = (keep && list.includes(keep)) ? keep : (preferred || "");
   el.innerHTML = ['<option value="">Choose a site from SCAN...</option>']
     .concat(list.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`))
     .join("");
@@ -420,12 +423,15 @@ async function refreshSiteSelects() {
 }
 
 function seedPanelTargets(names) {
-  const last = CURRENT.target;
+  const last = (CURRENT.target || "").trim();
+  const known = uniqueNames(names || []);
   const el = document.getElementById("run-target");
   if (el && !el.value.trim()) {
-    if (last) el.value = last;
-    else if (names && names[0]) el.value = names[0];
+    if (last && known.includes(last)) el.value = last;
+    else if (known[0]) el.value = known[0];
   }
+  const shown = panelTarget("run-target");
+  if (shown) rememberTarget(shown);
   syncSiteSelects(names);
 }
 
@@ -1249,8 +1255,16 @@ async function loadResults(opts) {
 }
 
 async function _loadResultsBody(quiet) {
-  await refreshSiteSelects();
-  const target = panelTarget("results-target");
+  const names = await refreshSiteSelects();
+  let target = panelTarget("results-target");
+  if (!target) {
+    const pick = preferredScanSite(names);
+    if (pick) {
+      const el = $("#results-target");
+      if (el) el.value = pick;
+      target = pick;
+    }
+  }
   if (!target) {
     clearResultsView("choose a site from SCAN");
     if (!quiet) toast("Pick a site on the RESULTS page", true);
@@ -1591,8 +1605,16 @@ function renderDiff(diff) {
 /* ---------------- b2) REPORTS ---------------- */
 async function loadReports(opts) {
   const quiet = !!(opts && opts.quiet);
-  await refreshSiteSelects();
-  const target = panelTarget("rep-target");
+  const names = await refreshSiteSelects();
+  let target = panelTarget("rep-target");
+  if (!target) {
+    const pick = preferredScanSite(names);
+    if (pick) {
+      const el = $("#rep-target");
+      if (el) el.value = pick;
+      target = pick;
+    }
+  }
   if (!target) {
     const badge = $("#rep-status");
     if (badge) { badge.textContent = "|"; badge.className = "badge"; }
@@ -1670,7 +1692,7 @@ function startLogStream() {
   let bound = "";
   window.__logTimer = setInterval(async () => {
     if (!$("#panel-run") || $("#panel-run").classList.contains("hidden")) return;
-    const target = (CURRENT.target || panelTarget("run-target") || "").trim();
+    const target = (panelTarget("run-target") || CURRENT.target || "").trim();
     if (!target) return;
     if (SCAN.halted.has(target) || SCAN.stopping.has(target)) return;
     if (target !== bound) {
@@ -2480,7 +2502,7 @@ function startJournalStream() {
   pre.textContent = "";
   window.__journalTimer = setInterval(async () => {
     if (!$("#panel-run") || $("#panel-run").classList.contains("hidden")) return;
-    const target = (CURRENT.target || panelTarget("run-target") || "").trim();
+    const target = (panelTarget("run-target") || CURRENT.target || "").trim();
     if (!target) return;
     try {
       const doc = await api("GET", `/api/run/agent-journal/${encodeURIComponent(target)}?offset=${joffset}`);
@@ -2840,6 +2862,14 @@ document.querySelectorAll("#assets-table th[data-sort], #coverage-table th[data-
 });
 bind("#run-target", "keydown", (ev) => {
   if (ev.key === "Enter") { ev.preventDefault(); addScanTarget(false).catch((e) => toast(e.message, true)); }
+});
+bind("#run-target", "change", () => {
+  const target = panelTarget("run-target");
+  if (target) rememberTarget(target);
+});
+bind("#run-target", "input", () => {
+  const target = panelTarget("run-target");
+  if (target) rememberTarget(target);
 });
 const scanAddBtn = $("#scan-add");
 if (scanAddBtn) scanAddBtn.addEventListener("click", () => addScanTarget(false).catch((e) => toast(e.message, true)));

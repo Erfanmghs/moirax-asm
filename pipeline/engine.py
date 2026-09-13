@@ -190,6 +190,10 @@ def _run_pipeline_impl(
         return _finalize_crash(params, target_dir, target, RuntimeError(proxy_reason))
     if proxy_reason != "proxy unset -- direct connection (section 9.3)":
         print(f"proxy: {proxy_reason}")
+    if runner is None:
+        from pipeline.local_images import ensure_local_tool_images
+
+        ensure_local_tool_images(params)
     if assigner is not None:
         # C5 v2 health telemetry: seed per-IP outcomes from THIS target's
         # previous runs (masked keys only; corrupt state ignored -- never-fail).

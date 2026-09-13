@@ -76,6 +76,15 @@ class SearchForgeTest(unittest.TestCase):
         for name in ("google-cse", "serper", "brave", "serpapi", "yandex-xml"):
             self.assertNotIn(name, names)  # no keys in unit env -> disclosed skip
 
+    def test_post_fetch_cmd_includes_endpoint_url(self):
+        params = _params()
+        forge = SearchForge(params, load_registry(params), FakeClock(), lambda msg: None)
+        engine = next(e for e in forge.engines if e["name"] == "duckduckgo")
+        cmd, _key = forge.fetch_cmd(engine, "site:*.example.com")
+        self.assertIn("https://html.duckduckgo.com/html/", cmd)
+        self.assertIn("--data", cmd)
+        self.assertIn("curl", cmd)
+
     def test_dork_forge_templates_dedupes(self):
         params = _params()
         registry = load_dorks_registry(params)
@@ -248,6 +257,20 @@ class SubStepsTest(unittest.TestCase):
                             notes.append, lambda: 100.0, lambda cap=None: 60.0)
             self.assertEqual(meta["state"], "skipped")
             self.assertTrue(any("psv-8" in s for s in skips))
+
+    def test_psv8_ignores_fixture_cidr_for_public_apex(self):
+        params = _params()
+        gate = _gate(params, extra_includes=["172.17.0.1/32"])
+        adapter, _clock = _adapter(params, gate)
+        with tempfile.TemporaryDirectory() as tmp:
+            target_dir = Path(tmp)
+            notes: list[str] = []
+            skips: list[str] = []
+            meta = _psv8_ip(params, gate, adapter, target_dir, "example.com", {}, 1,
+                            _Candidates(gate, target_dir, params), {}, skips,
+                            notes.append, lambda: 100.0, lambda cap=None: 60.0)
+            self.assertEqual(meta["state"], "skipped")
+            self.assertTrue(any("fixture CIDR" in n for n in notes))
 
     def test_psv8_cidr_activates_and_stores_ips_as_is(self):
         params = _params()

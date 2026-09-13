@@ -24,6 +24,9 @@ resolvers/forge/*
 dorks/forge/*.txt
 !dorks/forge/.gitkeep
 
+# Local operator credential file (never publish)
+.dashboard-operator-pass
+
 # Local agent / operator working files (never publish)
 .cursor/
 history/

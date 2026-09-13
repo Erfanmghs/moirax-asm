@@ -903,6 +903,15 @@ def _psv8_ip(params, gate, adapter, target_dir, target, extra, planned,
              cands, source_files, skips, note, remaining, timeout_for) -> dict[str, Any]:
     includes = [str(i) for i in (gate.document.get("includes") or [])]
     targets = [i for i in includes if "/" in i or _RANGE_RE.match(i) or _ASN_RE.match(i)]
+    fixture_cidr = "172.17.0.1/32"
+    if "fixture-target.test" not in str(target):
+        dropped = [i for i in targets if i == fixture_cidr]
+        targets = [i for i in targets if i != fixture_cidr]
+        if dropped:
+            note(
+                "psv-8: ignored e2e fixture CIDR 172.17.0.1/32 for non-fixture target "
+                f"{target} -- skipped, never silent"
+            )
     if not targets:
         note(
             "psv-8 skipped: no CIDR/range/ASN includes in scope.yaml (pure-domain target) -- "

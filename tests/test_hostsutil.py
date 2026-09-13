@@ -55,6 +55,13 @@ class KeepResolvedHostTests(unittest.TestCase):
             keep_resolved_host("www.app.com", ["9.9.9.9"], wild, "app.com", source="known")
         )
 
+    def test_drops_brute_nxdomain_with_no_addresses(self) -> None:
+        wild = {"9.9.9.9"}
+        self.assertFalse(keep_resolved_host("rand.app.com", [], wild, "app.com", source="brute"))
+        self.assertFalse(keep_resolved_host("rand.app.com", None, None, "app.com", source="brute"))
+        self.assertTrue(keep_resolved_host("app.com", [], wild, "app.com", source="brute"))
+        self.assertTrue(keep_resolved_host("mail.app.com", [], None, "app.com", source="known"))
+
 
 class KeepAssetRowTests(unittest.TestCase):
     def test_results_drop_dns_catchall_but_keep_osint(self) -> None:

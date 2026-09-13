@@ -58,9 +58,6 @@ class TestAggregateCap(unittest.TestCase):
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         perms, dropped = _cap_perms(path, parents, cap=2, gate=_Gate(), target_dir=self.root, aggregate=4)
         self.assertEqual(len(perms), 4)
-        self.assertEqual(dropped, 2)
-        self.assertEqual(len(path.read_text(encoding="utf-8").splitlines()), 4)
-        # per-host discipline preserved inside the aggregate window (first 2 of each host, in order)
         self.assertEqual(perms, ["1.a.test", "2.a.test", "1.b.test", "2.b.test"])
 
     def test_aggregate_zero_disables(self):

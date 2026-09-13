@@ -5,7 +5,7 @@
 
 FROM docker:27.5.1-cli AS docker-cli
 
-FROM python:3.12-slim-bookworm
+FROM python:3.14-slim-bookworm
 
 WORKDIR /app
 

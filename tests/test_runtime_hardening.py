@@ -27,6 +27,17 @@ class TestDashboardImagePins(unittest.TestCase):
         self.assertIn("FROM docker:27.5.1-cli", text)
         self.assertNotIn("curl -fsSL https://download.docker.com", text)
 
+    def test_image_copies_fixture_estate_not_live_yaml(self):
+        text = (_ROOT / "docker" / "dashboard" / "Dockerfile").read_text(encoding="utf-8")
+        ignore = (_ROOT / ".dockerignore").read_text(encoding="utf-8")
+        self.assertIn("docker/dashboard/fixtures/scope.yaml", text)
+        self.assertIn("docker/dashboard/fixtures/targets.yaml", text)
+        self.assertNotIn("COPY tools.yaml tools.lock views.yaml wordlists.yaml search_engines.yaml dorks.yaml scheduler.json scope.yaml targets.yaml", text)
+        self.assertIn("\nscope.yaml\n", ignore.replace("\r\n", "\n"))
+        self.assertIn("\ntargets.yaml\n", ignore.replace("\r\n", "\n"))
+        self.assertIn(".dashboard-operator-pass", ignore)
+        self.assertIn("wordlists/custom/platform-learned.txt", ignore)
+
     def test_requirements_pins_dashboard_runtime(self):
         text = (_ROOT / "requirements.txt").read_text(encoding="utf-8")
         for name in ("fastapi==", "uvicorn==", "httpx==", "reportlab=="):

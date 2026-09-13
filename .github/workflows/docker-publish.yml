@@ -35,6 +35,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build image locally and refuse operator estate
+        run: |
+          docker build -f docker/dashboard/Dockerfile -t moirax-asm-dashboard:estate-check .
+          PYTHONPATH=. python3 ci/assert_dashboard_image_clean.py moirax-asm-dashboard:estate-check
+
       - uses: docker/build-push-action@v6
         with:
           context: .

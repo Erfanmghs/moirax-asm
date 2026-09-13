@@ -117,6 +117,10 @@ The committed `scope.yaml` is a fixture (`example.com` and the local e2e
 zone). ADD TARGET appends your apex on disk. Leave those edits, `.env`,
 `targets.yaml`, `dashboard/config.json`, and `recon/` uncommitted.
 
+The GHCR dashboard image does not contain your sites. It only has the
+fixture allow-list and empty `targets.yaml`. Compose bind-mounts this
+folder into the container so SCAN still uses your local files.
+
 DELETE on SCAN hides the site from the board and keeps warehouse history
 for the retention window.
 

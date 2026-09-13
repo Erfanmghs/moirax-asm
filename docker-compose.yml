@@ -17,6 +17,8 @@ services:
       - path: .env
         required: false
     volumes:
+      # Bind-mount is the operator workstation (recon/, live scope/targets,
+      # .env). Those files are NOT in the published GHCR image.
       - .:/app
       - ${SECLISTS_HOST_PATH:-${HOME}/seclists}:${SECLISTS_CONTAINER_PATH:-/usr/share/seclists}:ro
       - /var/run/docker.sock:/var/run/docker.sock

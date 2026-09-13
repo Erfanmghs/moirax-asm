@@ -23,7 +23,11 @@ COPY dashboard/ ./dashboard/
 COPY pipeline/ ./pipeline/
 COPY recon.sh ./
 COPY docker/dashboard/entrypoint.sh /entrypoint.sh
-COPY tools.yaml tools.lock views.yaml wordlists.yaml search_engines.yaml dorks.yaml scheduler.json scope.yaml targets.yaml ./
+COPY tools.yaml tools.lock views.yaml wordlists.yaml search_engines.yaml dorks.yaml scheduler.json ./
+# Fixture allow-list only. Live operator scope.yaml / targets.yaml are
+# dockerignored so a dirty working tree cannot bake estates into GHCR.
+COPY docker/dashboard/fixtures/scope.yaml ./scope.yaml
+COPY docker/dashboard/fixtures/targets.yaml ./targets.yaml
 RUN chmod 0755 /app/recon.sh /entrypoint.sh \
     && chmod 0755 /usr/local/bin/docker
 

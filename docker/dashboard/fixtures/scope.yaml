@@ -1,0 +1,14 @@
+engagement:
+  name: authorized-test-engagement
+  authorization_date: "2026-01-01"
+includes:
+  - example.com
+  - "*.example.com"
+  # Local E2E fixture zone (docker-compose.e2e-fixture.yml).
+  - fixture-target.test
+  - "*.fixture-target.test"
+  # E2E fixture host-gateway. Loopback/RFC1918 stay rejected everywhere
+  # else -- this is the only private include, a single address, test-runner only.
+  - 172.17.0.1/32
+excludes:
+  - out.example.com

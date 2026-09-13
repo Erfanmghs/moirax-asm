@@ -88,3 +88,9 @@ the host as a single-operator workstation.
 - Python runtime pins live in `requirements.txt`. C1 and image publish run
   `pip-audit -r requirements.txt` and fail on known CVEs. Dependabot opens
   weekly PRs for pip, the dashboard Dockerfile, and GitHub Actions.
+- The published dashboard image ships fixture `scope.yaml` (`example.com` /
+  e2e zone) and empty `targets.yaml`. Live operator allow-lists, `recon/`,
+  `.env`, and dashboard auth are dockerignored and never copied into layers.
+  `docker compose` bind-mounts the project directory so the running console
+  still sees your local sites; that host data is not in GHCR. Publish CI
+  runs `ci/assert_dashboard_image_clean.py` before push.

@@ -653,6 +653,118 @@ def _read_json_silent(path: Path) -> dict[str, Any]:
     return doc if isinstance(doc, dict) else {}
 
 
+_SOURCE_LABELS = {
+    "crtsh": "crt.sh",
+    "certspotter": "Cert Spotter",
+    "subfinder": "subfinder",
+    "amass": "amass",
+    "assetfinder": "assetfinder",
+    "findomain": "findomain",
+    "chaos": "Chaos",
+    "gau": "gau",
+    "httpx-passive": "passive HTTP probe",
+    "curl-fetch": "an HTTP data source",
+}
+
+
+def _friendly_source(module: str | None) -> str:
+    key = str(module or "").strip()
+    if not key:
+        return "a data source"
+    return _SOURCE_LABELS.get(key, key)
+
+
+def operator_run_view(
+    *,
+    run_status: str | None,
+    reason: str | None = None,
+    failing_module: str | None = None,
+    modules: dict[str, Any] | None = None,
+    modules_running: int = 0,
+    run_live: bool = False,
+) -> dict[str, Any]:
+    """Operator-facing SCAN badge. Internal run_status is unchanged."""
+    status = str(run_status or "idle")
+    going = bool(run_live) or int(modules_running or 0) > 0
+    if not going and isinstance(modules, dict):
+        going = any(
+            isinstance(row, dict) and row.get("status") == "running"
+            for row in modules.values()
+        )
+    source = _friendly_source(failing_module)
+    if status == "anomaly":
+        if going:
+            return {
+                "label": "running",
+                "tone": "new",
+                "limited": True,
+                "note": (
+                    f"{source} is paused after too many errors from that source. "
+                    "The rest of the scan continues. This is not a crash."
+                ),
+            }
+        return {
+            "label": "done (source limited)",
+            "tone": "warn",
+            "limited": True,
+            "note": (
+                f"{source} was paused after too many errors from that source. "
+                "Other steps still ran. This is a third-party source limit, not a broken scanner."
+            ),
+        }
+    notes = {
+        "partial": reason or "Some steps finished with gaps.",
+        "failed": reason or "The run failed.",
+        "stopped": reason or "Stopped by the operator.",
+    }
+    tones = {
+        "completed": "ok",
+        "running": "new",
+        "partial": "warn",
+        "failed": "alert",
+        "stopped": "dead",
+        "idle": "dead",
+    }
+    return {
+        "label": status,
+        "tone": tones.get(status, "dead"),
+        "limited": False,
+        "note": notes.get(status, "") or "",
+    }
+
+
+def _scan_still_going(
+    target_dir: Path,
+    modules: dict[str, Any] | None,
+    modules_running: int,
+) -> bool:
+    """True while the engine is still working, even if no module chip is running."""
+    if int(modules_running or 0) > 0:
+        return True
+    if isinstance(modules, dict) and any(
+        isinstance(row, dict) and row.get("status") == "running" for row in modules.values()
+    ):
+        return True
+    try:
+        from pipeline.state import run_pid_is_live
+
+        if run_pid_is_live(target_dir):
+            return True
+    except Exception:  # noqa: BLE001 -- board must still render
+        pass
+    unfinished = isinstance(modules, dict) and any(
+        isinstance(row, dict) and row.get("status") in ("pending", "running")
+        for row in modules.values()
+    )
+    if not unfinished:
+        return False
+    log = target_dir / "logs" / "run.log"
+    try:
+        return (time.time() - log.stat().st_mtime) < 120
+    except OSError:
+        return False
+
+
 def scan_target_row(params: Params, target: str, registry: dict[str, Any] | None = None) -> dict[str, Any]:
     """One SCAN-board row: status, modules, last run -- THIS target only."""
     from pipeline.factory import target_root
@@ -671,6 +783,7 @@ def scan_target_row(params: Params, target: str, registry: dict[str, Any] | None
     profile = registry.get(target) or {}
     modules = state.get("modules") if isinstance(state.get("modules"), dict) else {}
     running_n = sum(1 for row in modules.values() if isinstance(row, dict) and row.get("status") == "running")
+    live_run = _scan_still_going(target_dir, modules, running_n)
     try:
         from pipeline.live_status import live_status
 
@@ -679,6 +792,14 @@ def scan_target_row(params: Params, target: str, registry: dict[str, Any] | None
         health = {}
     live = health.get("live") if isinstance(health, dict) else {}
     issues = health.get("issues") if isinstance(health, dict) else []
+    view = operator_run_view(
+        run_status=run.get("status"),
+        reason=run.get("reason"),
+        failing_module=run.get("failing_module"),
+        modules=modules,
+        modules_running=running_n,
+        run_live=live_run,
+    )
 
     return {
         "target": target,
@@ -690,8 +811,13 @@ def scan_target_row(params: Params, target: str, registry: dict[str, Any] | None
         "run_status": run.get("status"),
         "reason": run.get("reason"),
         "failing_module": run.get("failing_module"),
+        "operator_label": view["label"],
+        "operator_tone": view["tone"],
+        "operator_limited": view["limited"],
+        "operator_note": view["note"],
         "modules": modules,
         "modules_running": running_n,
+        "run_live": live_run,
         "updated_at": state.get("updated_at"),
         "last_run": last.get("timestamp"),
         "last_counts": last.get("counts") if isinstance(last.get("counts"), dict) else {},

@@ -912,6 +912,16 @@ button.log-mode-btn.active:focus {
   background: rgba(8, 18, 28, 0.9);
 }
 .scan-live-line { margin: 0 0 6px; font-size: 12px; }
+.scan-status-note {
+  margin: 0;
+  padding: 8px 12px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dim);
+}
+.scan-status-note.is-limited { color: var(--new); }
+.scan-status-note:empty,
+.scan-status-note[hidden] { display: none; }
 .scan-issues { display: flex; flex-wrap: wrap; gap: 6px; }
   flex: 1 1 100%;
   display: flex; flex-wrap: wrap; gap: 6px; align-items: center;

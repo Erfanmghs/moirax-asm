@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from dashboard.service import DashboardError, scan_add_target, scan_board_view, scan_delete_target
+from dashboard.service import DashboardError, operator_run_view, scan_add_target, scan_board_view, scan_delete_target
 from pipeline.params import Params
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -72,6 +72,42 @@ class TestScanBoard(unittest.TestCase):
         self.assertEqual(board["alpha.example"]["run_status"], "running")
         self.assertEqual(board["beta.example"]["run_status"], "completed")
         self.assertEqual(board["alpha.example"]["modules_running"], 1)
+
+    def test_live_anomaly_reads_as_running_not_broken(self):
+        view = operator_run_view(
+            run_status="anomaly",
+            reason="error ratio exceeded circuit breaker windows",
+            failing_module="crtsh",
+            modules={"passive-recon": {"status": "running"}},
+            modules_running=1,
+        )
+        self.assertEqual(view["label"], "running")
+        self.assertEqual(view["tone"], "new")
+        self.assertTrue(view["limited"])
+        self.assertIn("crt.sh", view["note"])
+        self.assertIn("not a crash", view["note"])
+
+    def test_anomaly_with_live_pid_stays_running_between_modules(self):
+        view = operator_run_view(
+            run_status="anomaly",
+            failing_module="crtsh",
+            modules={"passive-recon": {"status": "done"}, "dns-resolve": {"status": "pending"}},
+            modules_running=0,
+            run_live=True,
+        )
+        self.assertEqual(view["label"], "running")
+        self.assertTrue(view["limited"])
+
+    def test_finished_anomaly_reads_as_source_limited(self):
+        view = operator_run_view(
+            run_status="anomaly",
+            failing_module="crtsh",
+            modules={"passive-recon": {"status": "done"}},
+            modules_running=0,
+        )
+        self.assertEqual(view["label"], "done (source limited)")
+        self.assertEqual(view["tone"], "warn")
+        self.assertNotIn("anomaly", view["label"])
 
     def test_board_row_exposes_full_profile_for_scan_setup(self):
         from dashboard.service import target_profile_upsert

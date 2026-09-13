@@ -1684,11 +1684,108 @@ async function loadReports(opts) {
 const SCAN = { expanded: new Set(), streams: {}, boardTimer: null, halted: new Set(), stopping: new Set() };
 
 function statusBadgeClass(status) {
-  if (status === "completed") return "ok";
   if (status === "failed" || status === "anomaly") return "alert";
+  if (status === "completed") return "ok";
   if (status === "running") return "new";
   if (status === "stopped") return "new";
   return "dead";
+}
+
+const SOURCE_LABELS = {
+  crtsh: "crt.sh",
+  certspotter: "Cert Spotter",
+  subfinder: "subfinder",
+  amass: "amass",
+  assetfinder: "assetfinder",
+  findomain: "findomain",
+  chaos: "Chaos",
+  gau: "gau",
+  "httpx-passive": "passive HTTP probe",
+  "curl-fetch": "an HTTP data source",
+};
+
+function scanStillGoing(row) {
+  if (row.run_live) return true;
+  if ((row.modules_running || 0) > 0) return true;
+  return Object.values(row.modules || {}).some((m) => m && m.status === "running");
+}
+
+function operatorRunView(row) {
+  if (SCAN.stopping.has(row.target)) {
+    return { label: "stopping", tone: "dead", limited: false, note: "" };
+  }
+  if (row.operator_label) {
+    return {
+      label: row.operator_label,
+      tone: row.operator_tone || statusBadgeClass(row.run_status),
+      limited: !!row.operator_limited,
+      note: row.operator_note || "",
+    };
+  }
+  const raw = row.run_status || "idle";
+  const source = SOURCE_LABELS[row.failing_module] || row.failing_module || "a data source";
+  if (raw === "anomaly") {
+    if (scanStillGoing(row)) {
+      return {
+        label: "running",
+        tone: "new",
+        limited: true,
+        note: source + " is paused after too many errors from that source. The rest of the scan continues. This is not a crash.",
+      };
+    }
+    return {
+      label: "done (source limited)",
+      tone: "warn",
+      limited: true,
+      note: source + " was paused after too many errors from that source. Other steps still ran. This is a third-party source limit, not a broken scanner.",
+    };
+  }
+  const notes = {
+    partial: row.reason || "Some steps finished with gaps.",
+    failed: row.reason || "The run failed.",
+    stopped: row.reason || "Stopped by the operator.",
+  };
+  return {
+    label: raw,
+    tone: statusBadgeClass(raw),
+    limited: false,
+    note: notes[raw] || "",
+  };
+}
+
+function paintOperatorStatus(card, row) {
+  if (!card) return;
+  const view = operatorRunView(row || { target: card.dataset.scan });
+  const badge = card.querySelector("[data-run-badge]") || card.querySelector(".scan-head > .badge");
+  if (badge) {
+    badge.textContent = view.label;
+    badge.className = "badge " + view.tone;
+    badge.setAttribute("data-run-badge", "");
+  }
+  let limited = card.querySelector("[data-limited-badge]");
+  if (view.limited) {
+    if (!limited) {
+      limited = document.createElement("span");
+      limited.className = "badge warn";
+      limited.setAttribute("data-limited-badge", "");
+      if (badge && badge.parentNode) badge.insertAdjacentElement("afterend", limited);
+    }
+    limited.textContent = "source limited";
+    limited.hidden = false;
+  } else if (limited) {
+    limited.remove();
+  }
+  let note = card.querySelector("[data-scan-note]");
+  if (!note) {
+    note = document.createElement("p");
+    note.className = "scan-status-note";
+    note.setAttribute("data-scan-note", "");
+    const head = card.querySelector(".scan-head");
+    if (head) head.insertAdjacentElement("afterend", note);
+  }
+  note.textContent = view.note || "";
+  note.classList.toggle("is-limited", !!view.limited && !!view.note);
+  note.hidden = !view.note;
 }
 
 function cardFor(target) {
@@ -1792,18 +1889,23 @@ function paintCardModules(card, target, modules) {
 
 function scanCardHtml(row) {
   const t = row.target;
-  const status = row.run_status || "idle";
+  const view = operatorRunView(row);
   const open = SCAN.expanded.has(t);
   const modules = scanModulesHtml(t, row.modules);
   const counts = row.last_counts || {};
   const countBits = Object.keys(counts).length
     ? Object.entries(counts).map(([k, v]) => `${esc(k)}=${esc(v)}`).join(" ")
     : "";
+  const limitedBadge = view.limited ? `<span class="badge warn" data-limited-badge>source limited</span>` : "";
+  const note = view.note
+    ? `<p class="scan-status-note${view.limited ? " is-limited" : ""}" data-scan-note>${esc(view.note)}</p>`
+    : `<p class="scan-status-note" data-scan-note hidden></p>`;
   return `<article class="scan-card${open ? " open" : ""}" data-scan="${esc(t)}">
     <div class="scan-head">
       <button type="button" class="scan-toggle" data-expand="${esc(t)}" aria-expanded="${open ? "true" : "false"}">${open ? "COLLAPSE" : "EXPAND"}</button>
       <span class="scan-name">${esc(t)}</span>
-      <span class="badge ${statusBadgeClass(status)}">${esc(status)}</span>
+      <span class="badge ${esc(view.tone)}" data-run-badge>${esc(view.label)}</span>
+      ${limitedBadge}
       <span class="badge ${row.inherits_globals === false ? "ok" : ""}">${esc(row.inherits_globals === false ? "custom" : "global")}</span>
       <span class="scan-desc">${esc(row.description || (row.registered ? "registered" : "workspace only"))}${row.last_run ? " | last " + esc(row.last_run) : ""}${row.run_count ? " | " + row.run_count + " runs" : ""}</span>
       <div class="scan-head-actions">
@@ -1816,6 +1918,7 @@ function scanCardHtml(row) {
       </div>
       <div class="scan-mods" data-scan-mods="${esc(t)}" aria-label="pipeline steps for ${esc(t)}">${modules}</div>
     </div>
+    ${note}
     ${scanLiveHtml(row)}
     <div class="scan-body">
       ${scanSetupHtml(t)}
@@ -1866,11 +1969,7 @@ function markScanStopping(target) {
   stopTargetStream(target);
   const card = cardFor(target);
   if (!card) return;
-  const badge = card.querySelector(".scan-head > .badge");
-  if (badge) {
-    badge.textContent = "stopping";
-    badge.className = "badge dead";
-  }
+  paintOperatorStatus(card, { target });
   const pretty = card.querySelector("[data-role=pretty]");
   if (pretty) {
     const row = document.createElement("div");
@@ -1890,11 +1989,7 @@ function markScanStopped(target) {
   stopTargetStream(target);
   const card = cardFor(target);
   if (!card) return;
-  const badge = card.querySelector(".scan-head > .badge");
-  if (badge) {
-    badge.textContent = "stopped";
-    badge.className = "badge " + statusBadgeClass("stopped");
-  }
+  paintOperatorStatus(card, { target, run_status: "stopped" });
   card.querySelectorAll("[data-scan-start],[data-scan-resume],[data-scan-restart],[data-scan-stop]").forEach((btn) => {
     btn.disabled = false;
   });
@@ -2026,6 +2121,8 @@ async function loadScanBoard() {
           inherits_globals: !(profile.settings && Object.keys(profile.settings).length),
           workspace: st.exists !== false,
           run_status: run.status || st.run_status || "",
+          reason: run.reason || "",
+          failing_module: run.failing_module || "",
           modules: st.modules || {},
           last_run: "",
           last_counts: {},
@@ -2046,17 +2143,7 @@ async function loadScanBoard() {
       for (const row of rows) {
         const card = cardFor(row.target);
         if (!card) continue;
-        const badge = card.querySelector(".scan-head > .badge");
-        const status = row.run_status || "idle";
-        if (badge) {
-          if (SCAN.stopping.has(row.target)) {
-            badge.textContent = "stopping";
-            badge.className = "badge dead";
-          } else {
-            badge.textContent = status;
-            badge.className = "badge " + statusBadgeClass(status);
-          }
-        }
+        paintOperatorStatus(card, row);
         paintCardModules(card, row.target, row.modules);
         paintCardLive(card, row);
       }
@@ -2103,11 +2190,7 @@ async function refreshScanBadges() {
     for (const row of doc.targets || []) {
       const card = cardFor(row.target);
       if (!card) continue;
-      const badge = card.querySelector(".scan-head > .badge");
-      if (badge) {
-        badge.textContent = row.run_status || "idle";
-        badge.className = "badge " + statusBadgeClass(row.run_status);
-      }
+        paintOperatorStatus(card, row);
     }
   } catch (_e) { /* keep UI */ }
 }

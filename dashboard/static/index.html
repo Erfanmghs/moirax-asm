@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Attack Surface Management | moirax-ASM</title>
 <link rel="icon" href="/static/favicon.svg?v=asm1" type="image/svg+xml" sizes="any">
-<link rel="stylesheet" href="/static/theme.css?v=asm11">
+<link rel="stylesheet" href="/static/theme.css?v=asm12">
 </head>
 <body>
 <canvas id="fx-field" aria-hidden="true"></canvas>
@@ -130,6 +130,7 @@
         <li>SETUP is optional. If you skip it, this site uses global SETTINGS / TOOLS / WORDLISTS. Uncheck inherit to pick tools (each row says what it does) and tick wordlist filenames on this same page. SHOW NAMES previews entries in a file. Automatic checks for this site are also in SETUP.</li>
         <li>START / RESUME / RESTART / STOP / DELETE on a row apply only to that site. START begins a new ladder when idle. RESUME continues done modules. RESTART stops a live scan for this site, then starts from the first module. The dashboard clears circuit-breaker pauses automatically when a run starts or the next module is due — you do not click a limiter button. DELETE hides it from SCAN immediately; warehouse records stay for 7 days, then that site's files are removed.</li>
         <li>Each SCAN row shows live dnsx parent / hit count / QPS, and warnings from the last run (false QPS collapse, canary latency, tool timeout, paused breaker). A breaker pause is cleared automatically when the next module (or the next START / RESUME) runs.</li>
+        <li>If one public source (for example crt.sh) errors too often, the row stays <span class="ui">running</span> with a <span class="ui">source limited</span> note. That is not a crash -- other steps keep going. After the run, the badge may say <span class="ui">done (source limited)</span> instead of a red anomaly.</li>
       </ol>
       <h4>SCHEDULER</h4>
       <p>Global defaults live in <span class="ui">SETTINGS</span> (automatic checks on/off and interval, minimum 10 minutes). Each site can enable, change the interval, or turn checks off in <span class="ui">SETUP</span> / TARGETS. Empty per-site fields inherit SETTINGS. Example: 720 minutes is about twice a day.</p>
@@ -639,6 +640,6 @@
 <div id="toast" class="toast hidden"></div>
 <div id="help-pop" class="help-pop hidden" role="tooltip"></div>
 <script src="/static/motion.js?v=asm4"></script>
-<script src="/static/app.js?v=asm11"></script>
+<script src="/static/app.js?v=asm12"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@ alwaysApply: true
 Generated reports (HTML, Markdown, PDF) and the dashboard page footer must
 keep this visible credit, linking to the author's LinkedIn:
 
-- text: `minimal by Erfan Moghis`
+- text: `Attack Surface Management by Erfan Moghis`
 - URL: `https://www.linkedin.com/in/erfanmoghis/`
 - source of truth: `pipeline/attribution.py`
 

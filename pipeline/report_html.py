@@ -272,7 +272,6 @@ def render_html(bundle: dict[str, Any], diff: dict[str, Any] | None = None) -> s
     <thead><tr><th>vhost</th><th>base host</th><th>ip</th><th>port</th><th>alive</th></tr></thead>
     <tbody></tbody>
   </table></div>
-  <p class="foot">Attack Surface Management — only scan assets you own or have written permission to test.</p>
   {credit}
 </div>
 <div id="overlay" class="overlay" hidden>

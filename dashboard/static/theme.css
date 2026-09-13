@@ -1161,7 +1161,7 @@ button.log-mode-btn.active:focus {
   text-align: center; color: var(--dim); font-size: 11px; padding: 8px 0 24px;
   position: relative; z-index: 1;
 }
-.page-foot a.credit { display: block; margin-top: 6px; color: var(--dim); text-decoration: none; }
+.page-foot a.credit { color: var(--dim); text-decoration: none; }
 .page-foot a.credit:hover { color: var(--accent); text-decoration: underline; }
 
 .help {

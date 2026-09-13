@@ -9,7 +9,7 @@ from __future__ import annotations
 
 AUTHOR_NAME = "Erfan Moghis"
 AUTHOR_URL = "https://www.linkedin.com/in/erfanmoghis/"
-ATTRIBUTION_TEXT = f"minimal by {AUTHOR_NAME}"
+ATTRIBUTION_TEXT = f"Attack Surface Management by {AUTHOR_NAME}"
 CREDIT_MARK = "data-credit=\"moirax-author\""
 
 

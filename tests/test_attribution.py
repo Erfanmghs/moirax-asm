@@ -31,7 +31,7 @@ _REQUIRED_WIRE = (
 class TestAttributionContract(unittest.TestCase):
     def test_constants(self):
         self.assertEqual(AUTHOR_URL, "https://www.linkedin.com/in/erfanmoghis/")
-        self.assertEqual(ATTRIBUTION_TEXT, "minimal by Erfan Moghis")
+        self.assertEqual(ATTRIBUTION_TEXT, "Attack Surface Management by Erfan Moghis")
         self.assertIn(AUTHOR_URL, html_footer())
         self.assertIn(ATTRIBUTION_TEXT, html_footer())
         self.assertIn("moirax-author", html_footer())

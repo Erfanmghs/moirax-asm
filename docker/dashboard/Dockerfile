@@ -3,7 +3,7 @@
 # (no curl|tar). The process starts as root only to join docker.sock GID,
 # then setpriv drops to RECON_HOST_UID/GID.
 
-FROM docker:27.5.1-cli AS docker-cli
+FROM docker:29.8.0-cli AS docker-cli
 
 FROM python:3.12-slim-bookworm
 

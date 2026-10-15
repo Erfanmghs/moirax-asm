@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 150
     steps:
       - name: "Checkout (branch: private)"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: private
 
